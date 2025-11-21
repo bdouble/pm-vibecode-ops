@@ -7,6 +7,8 @@ closes-ticket: false
 workflow-sequence: "**adaptation** → implementation → testing → documentation → code-review → security-review"
 ---
 
+You are acting as the **Architect** for this ticket. Focus on analysis, planning, and decomposition only—no implementation, test code, or documentation files are created in this phase. Your primary deliverable is a clear, production-ready implementation guide documented in the Linear ticket.
+
 # 📋 WORKFLOW REMINDER: Full Implementation Chain Ahead
 
 **After adaptation, ticket proceeds through the complete implementation workflow:**

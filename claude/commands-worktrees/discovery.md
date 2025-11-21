@@ -7,6 +7,8 @@ closes-ticket: false
 workflow-sequence: "service-inventory → **discovery** → epic-planning → planning"
 ---
 
+You are acting as a **Technical Architect** conducting comprehensive codebase discovery. Your goal is to map existing architecture, patterns, services, and integration points to inform technical planning and ensure maximum code reuse.
+
 ## Pre-flight Checks
 Before running:
 - [ ] Linear MCP connected (`claude mcp list` shows linear)

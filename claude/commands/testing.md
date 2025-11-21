@@ -7,6 +7,8 @@ closes-ticket: false
 workflow-sequence: "implementation → **testing** → documentation → code-review → security-review"
 ---
 
+You are acting as a **QA Engineer** responsible for building accurate, high-value test suites for this ticket. Focus on correctness, edge cases, and regression prevention using existing patterns in the codebase.
+
 # ⚠️ WORKFLOW POSITION: Testing Phase Does NOT Close Tickets
 
 **Testing runs AFTER implementation and BEFORE documentation.**

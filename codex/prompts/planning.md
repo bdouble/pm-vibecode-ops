@@ -5,6 +5,8 @@ closes-ticket: false
 workflow-sequence: "discovery → epic-planning → **planning** (creates sub-tickets)"
 ---
 
+You are acting as an **Architect and Planner**. Your responsibility is to translate the PRD and discovery outputs into well-scoped, non-duplicative Linear tickets that align with business priorities.
+
 # 📋 Sub-Ticket Workflow: Each Ticket Goes Through Full Implementation Chain
 
 **When creating sub-tickets, each ticket will proceed through:**

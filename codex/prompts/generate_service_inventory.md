@@ -1,7 +1,5 @@
 ---
-description: Generate or update service inventory files for frontend and backend to track reusable components and prevent duplication
-allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash
-argument-hint: [frontend|backend|both] [update|regenerate]
+description: Generate or update service inventory files for frontend and backend to track reusable components and prevent duplication.
 workflow-phase: project-setup
 closes-ticket: false
 workflow-sequence: "**service-inventory** → discovery → epic-planning → planning"
@@ -9,10 +7,18 @@ workflow-sequence: "**service-inventory** → discovery → epic-planning → pl
 
 # Service Inventory Generation Command
 
-Generate or update comprehensive service inventory files (`service-inventory.yaml`) for tracking existing services, utilities, middleware, and patterns to prevent code duplication.
+You are acting as the **architect and platform engineer** for this project. Your goal is to scan the codebase and maintain accurate service inventory files that other phases (discovery, planning, implementation, security review) can rely on to avoid duplication and enforce reuse.
 
-**Target**: ${1:-"both"}
-**Mode**: ${2:-"update"}
+Ask the user which parts of the system to target:
+- Frontend only
+- Backend only
+- Both frontend and backend (default)
+
+Also confirm whether to:
+- Incrementally **update** existing inventories (default), or
+- Fully **regenerate** them from scratch when they are stale or incorrect.
+
+Generate or update comprehensive service inventory files (`service-inventory.yaml`) for tracking existing services, utilities, middleware, and patterns to prevent code duplication.
 
 ## Purpose
 
@@ -610,98 +616,12 @@ services:
 EOF
 ```
 
-### Backend Test Infrastructure Scanning
+### Test Infrastructure Scanning (Conceptual)
 
-```bash
-echo "=== Scanning Backend Test Infrastructure ==="
-
-# Core test utilities
-echo "Scanning core test utilities..."
-find backend/src/common/tests/utils -name "*.ts" ! -name "*.spec.ts" ! -name "*.test.ts" | while read file; do
-  UTIL_NAME=$(basename "$file" .ts)
-  echo "  - Found test utility: $UTIL_NAME at $file"
-
-  # Extract exported functions using grep
-  EXPORTS=$(grep -E "^export (function|const|class)" "$file" | sed 's/export //' | cut -d' ' -f2 | cut -d'(' -f1 | cut -d'=' -f1)
-
-  if [ ! -z "$EXPORTS" ]; then
-    echo "    Exports: $(echo $EXPORTS | tr '\n' ', ' | sed 's/,$//')"
-  fi
-done
-
-# Test fixtures
-echo "Scanning test fixtures..."
-find backend/src/common/tests -name "*-test-utils.ts" -o -name "*-test-helpers.ts" | while read file; do
-  echo "  - Found fixture: $(basename $file)"
-done
-
-# Module-specific test utilities
-echo "Scanning module-specific test utilities..."
-find backend/src/modules -path "*/tests/*-test-utils.ts" | while read file; do
-  MODULE=$(echo $file | cut -d'/' -f4)
-  echo "  - Found $MODULE test utility: $(basename $file)"
-done
-
-# Testing modules
-echo "Scanning testing modules..."
-find backend/src/common/tests -name "*-testing.module.ts" | while read file; do
-  echo "  - Found testing module: $(basename $file)"
-done
-
-# Check for test documentation
-if [ -f "backend/src/common/tests/CLAUDE.md" ]; then
-  echo "  ✓ Test guidelines found: backend/src/common/tests/CLAUDE.md"
-fi
-
-if [ -f "backend/src/common/tests/TEST_UTILITIES.md" ]; then
-  echo "  ✓ Test utilities doc found: backend/src/common/tests/TEST_UTILITIES.md"
-fi
-```
-
-### Frontend Test Infrastructure Scanning
-
-```bash
-echo "=== Scanning Frontend Test Infrastructure ==="
-
-# Core test utilities
-echo "Scanning frontend test utilities..."
-find frontend/tests/utils -name "*.ts" -o -name "*.tsx" | while read file; do
-  UTIL_NAME=$(basename "$file" | sed 's/\.[^.]*$//')
-  echo "  - Found test utility: $UTIL_NAME at $file"
-
-  # Extract exported functions
-  EXPORTS=$(grep -E "^export (function|const)" "$file" | sed 's/export //' | cut -d' ' -f2 | cut -d'(' -f1 | cut -d'=' -f1)
-
-  if [ ! -z "$EXPORTS" ]; then
-    echo "    Exports: $(echo $EXPORTS | tr '\n' ', ' | sed 's/,$//')"
-  fi
-done
-
-# Test setup files
-echo "Scanning test setup files..."
-find frontend/__tests__ -name "test-utils.*" -o -name "setup.*" | while read file; do
-  echo "  - Found test setup: $(basename $file)"
-done
-
-# Mock factories
-echo "Scanning mock factories..."
-if [ -f "frontend/tests/utils/mockFactories.ts" ]; then
-  echo "  ✓ Mock factories found: frontend/tests/utils/mockFactories.ts"
-
-  # Extract factory functions
-  FACTORIES=$(grep "export.*create" frontend/tests/utils/mockFactories.ts | cut -d' ' -f4 | cut -d'(' -f1)
-  echo "    Factories: $(echo $FACTORIES | tr '\n' ', ' | sed 's/,$//')"
-fi
-
-# Check for test documentation
-if [ -f "frontend/tests/CLAUDE.md" ]; then
-  echo "  ✓ Test guidelines found: frontend/tests/CLAUDE.md"
-fi
-
-if [ -f "frontend/tests/ISOLATION_PATTERNS.md" ]; then
-  echo "  ✓ Isolation patterns found: frontend/tests/ISOLATION_PATTERNS.md"
-fi
-```
+You do not need to implement the full Bash scripts above. Instead, conceptually:
+- Scan `backend/src/common/tests` and `frontend/tests` for shared test utilities and fixtures.
+- Record their locations, exported helpers, and any test documentation files into the `testing` sections of the inventories.
+- Treat these as **first-class reusable services** for QA, just like runtime services for implementation.
 
 ## Usage by Other Commands
 

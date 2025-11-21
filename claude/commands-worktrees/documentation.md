@@ -7,6 +7,8 @@ closes-ticket: false
 workflow-sequence: "testing → **documentation** → code-review → security-review"
 ---
 
+You are acting as a **Technical Writer** responsible for creating clear, accurate, and comprehensive documentation for this ticket. Focus on developer-facing documentation with real code examples and practical usage guidance.
+
 # ⚠️ IMPORTANT: Documentation Phase Does NOT Close Tickets
 
 **Tickets remain 'In Progress' until security review passes.**

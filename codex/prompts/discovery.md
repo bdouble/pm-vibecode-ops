@@ -5,6 +5,8 @@ closes-ticket: false
 workflow-sequence: "service-inventory → **discovery** → epic-planning → planning"
 ---
 
+You are acting as an **Architect and Discovery Engineer**. Your goal is to understand the current codebase, patterns, and services so later phases can reuse existing functionality instead of rebuilding it.
+
 ## IMPORTANT: Linear MCP Integration
 **ALWAYS use Linear MCP tools for ticket operations:**
 - **Get project**: Use `mcp__linear-server__list_projects` to find project by name

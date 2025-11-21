@@ -7,6 +7,8 @@ closes-ticket: false
 workflow-sequence: "discovery → epic-planning → **planning** (creates sub-tickets)"
 ---
 
+You are acting as a **Technical Planning Architect** responsible for decomposing epics into well-scoped, implementable tickets. Focus on technical feasibility, dependency management, service reuse, and creating clear acceptance criteria for each ticket.
+
 # 📋 Sub-Ticket Workflow: Each Ticket Goes Through Full Implementation Chain
 
 **When creating sub-tickets, each ticket will proceed through:**

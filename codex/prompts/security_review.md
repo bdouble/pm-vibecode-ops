@@ -1,9 +1,11 @@
 ---
-description: Complete a security review of the pending changes on the current branch and update Linear ticket with findings
+description: Complete a security review of the pending changes on the current branch and update Linear ticket with findings.
 workflow-phase: security-review
 closes-ticket: true
 workflow-sequence: "code-review → **security-review** (FINAL GATE - closes ticket)"
 ---
+
+You are acting as a **Security Engineer** responsible for reviewing the changes in this ticket for vulnerabilities, misconfigurations, and policy violations. Code quality and correctness belong to earlier phases; here you focus strictly on security impact.
 
 # 🚨 CRITICAL: Security Review is the FINAL GATE
 
@@ -31,18 +33,19 @@ Ask the user to provide a Linear ticket ID. The user may also provide context to
 
 You are a senior security engineer conducting a focused security review of the changes on this branch for the provided ticket.
 
-## CRITICAL: Linear Ticket and Comments Retrieval
+## Repository and Branch Context (Simple Mode)
 
-**BEFORE ANY OTHER WORK**, retrieve the Linear ticket details AND all comments:
-1. Use `mcp__linear-server__get_issue` with the provided ticket ID to get full ticket details  
-2. Use `mcp__linear-server__list_comments` with the provided ticket ID to get ALL comments
-3. Analyze both the ticket body AND comments for:
-   - Security requirements or constraints mentioned
-   - Sensitive data handling requirements
-   - Authentication/authorization specifications
-   - Compliance requirements (GDPR, SOC2, etc.)
-   - Previous security concerns raised
-   - Any security-related decisions or guidelines
+In this workflow, all work happens on a standard git feature branch in a single working copy of the repository.
+
+Before running security review:
+
+```bash
+# Ensure you're in the project root
+git rev-parse --show-toplevel
+
+# Verify current branch (should be the feature branch for this ticket)
+git branch --show-current
+```
 
 **Wait for the Linear MCP responses before proceeding with security review.**
 
@@ -295,51 +298,9 @@ CONFIDENCE SCORING:
 FINAL REMINDER:
 Focus on HIGH and MEDIUM findings only. Better to miss some theoretical issues than flood the report with false positives. Each finding should be something a security engineer would confidently raise in a PR review.
 
-## Worktree Context Setup
+## Scope of Security Review
 
-Before performing security review, load the worktree context where implementation was done:
-
-```bash
-TICKET_ID="$1"  # From command argument
-
-# Get worktree path (adaptation uses consistent pattern)
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-WORKTREE_PATH="${REPO_ROOT}/.worktrees/${TICKET_ID}"
-
-echo "Loading worktree context for security review..."
-echo "Expected worktree: $WORKTREE_PATH"
-
-# Validate worktree exists
-if [ ! -d "$WORKTREE_PATH" ]; then
-    echo "❌ ERROR: Worktree not found at $WORKTREE_PATH"
-    echo ""
-    echo "Security review requires the worktree created by adaptation phase"
-    echo "Run adaptation phase for $TICKET_ID first"
-    exit 1
-fi
-
-# Validate it's a git worktree
-if [ ! -f "$WORKTREE_PATH/.git" ]; then
-    echo "❌ ERROR: Directory exists but is not a valid git worktree"
-    exit 1
-fi
-
-# Navigate to worktree
-ORIGINAL_DIR=$(pwd)
-cd "$WORKTREE_PATH"
-
-# Verify we're in the worktree
-CURRENT_DIR=$(pwd)
-CURRENT_BRANCH=$(git branch --show-current)
-
-echo "✅ Worktree context loaded"
-echo "   Directory: $CURRENT_DIR"
-echo "   Branch: $CURRENT_BRANCH"
-echo ""
-
-# CRITICAL: All security review operations happen in this worktree
-# If security review PASSES, worktree will be merged and removed (see cleanup section)
-```
+Focus only on the changes introduced for this ticket and their security implications. Do not attempt to refactor or “clean up” unrelated code; log those issues for future tickets instead.
 
 ---
 
@@ -397,7 +358,7 @@ START ANALYSIS:
 Begin your analysis now. Do this in 13 steps:
 
 1. **Linear Context**: Retrieve and analyze Linear ticket and comments
-2. **Worktree Context Loading**: Navigate to ticket's isolated worktree (see Worktree Context Setup section above)
+2. **Repository Context Confirmation**: Ensure you are on the correct feature branch and project root
 3. **Branch Verification**: Confirm on feature branch (NOT main) using `git branch --show-current`
 4. **PR Discovery**: Find existing PR for the provided ticket ID using GitHub CLI (`gh pr list --search "[TICKET-ID]" --state open`)
 5. **Enhanced PR Security Comment Analysis**: Categorize and track security feedback:
@@ -645,8 +606,8 @@ Your final reply must contain the detailed vulnerability report, confirmation of
 When security review passes, the workflow completes with these steps:
 
 1. **Add security review comment** with detailed report
-2. **Merge worktree branch to main**
-3. **Clean up worktree**
+2. **Merge feature branch to merge target (main or parent feature branch)**
+3. **Optionally clean up the feature branch**
 4. **Close Linear ticket**
 
 ```bash
@@ -675,12 +636,9 @@ echo "📍 Merge target: $MERGE_TARGET"
 echo "   (Extracted from Linear ticket or defaulting to main)"
 echo ""
 
-# Get branch name from worktree
+# Get branch name
 BRANCH_NAME=$(git branch --show-current)
 echo "Feature branch: $BRANCH_NAME"
-
-# Navigate to repo root (exit worktree)
-cd "$REPO_ROOT"
 
 # Ensure we're on merge target branch
 git checkout "$MERGE_TARGET"
@@ -729,11 +687,6 @@ if [ $? -eq 0 ]; then
             echo "⚠️  NOTE: Merged to feature branch $MERGE_TARGET"
             echo "   Remember to merge $MERGE_TARGET to main when ready"
         fi
-
-        # Delete remote branch (cleanup)
-        echo "Cleaning up remote branch..."
-        git push origin --delete "$BRANCH_NAME" 2>/dev/null || echo "Note: Remote branch already deleted or doesn't exist"
-
     else
         echo "❌ ERROR: Failed to push to origin/$MERGE_TARGET"
         echo "Local merge was successful but push failed"
@@ -758,25 +711,12 @@ else
     exit 1
 fi
 
-# Step 3: Clean up worktree
+# Step 3: (Optional) Clean up feature branch
 echo ""
-echo "=== Cleaning up worktree ==="
-
-# Remove worktree using git
-git worktree remove "$WORKTREE_PATH"
-
-if [ $? -eq 0 ]; then
-    echo "✅ Worktree removed: $WORKTREE_PATH"
-
-    # Prune any stale worktree references
-    git worktree prune
-    echo "✅ Worktree references pruned"
-else
-    echo "⚠️  WARNING: Failed to remove worktree automatically"
-    echo "Manual cleanup may be needed: git worktree remove --force \"$WORKTREE_PATH\""
-fi
-
-# Delete local feature branch (now merged)
+echo "=== Cleaning up feature branch (optional) ==="
+echo "You may now delete the feature branch after verifying the merge:"
+echo "  git branch -d \"$BRANCH_NAME\""
+echo "  git push origin --delete \"$BRANCH_NAME\"  # if remote branch exists"
 git branch -d "$BRANCH_NAME" 2>/dev/null || echo "Note: Local branch already deleted"
 
 echo ""

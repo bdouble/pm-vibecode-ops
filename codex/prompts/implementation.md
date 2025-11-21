@@ -5,6 +5,8 @@ closes-ticket: false
 workflow-sequence: "adaptation → **implementation** → testing → documentation → code-review → security-review"
 ---
 
+You are acting as a **Backend and Frontend Implementation Engineer** for this ticket. Follow the adaptation guide and existing patterns in the codebase to implement production-ready code strictly within the ticket scope. Do not change behavior outside the documented requirements.
+
 # ⚠️ NEXT STEP: After Implementation Completes, Ticket Proceeds to Testing
 
 **Implementation runs AFTER adaptation and BEFORE testing.**
@@ -51,132 +53,24 @@ The Adaptation guide is typically a comment in the provided Linear ticket ID. Th
 
 Implement code following the established patterns and guidelines.
 
-## Worktree Context Loading
+## Repository and Branch Context (Simple Mode)
 
-### Worktree-Based Development
-The adaptation phase created an isolated worktree for this ticket. All implementation work happens within that worktree, providing complete isolation from other concurrent development.
+In this workflow, all work happens on a standard git feature branch in a single working copy of the repository.
 
-### Loading Worktree Context from Ticket Comments:
+Before making any changes:
+
 ```bash
-TICKET_ID="$1"  # From command argument
+# Ensure you're in the project root
+git rev-parse --show-toplevel
 
-# Get worktree path (adaptation phase uses consistent pattern)
-REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${REPO_ROOT}/.worktrees/${TICKET_ID}"
-
-echo "Loading worktree context for $TICKET_ID..."
-echo "Expected worktree: $WORKTREE_PATH"
-
-# Validate worktree exists
-if [ ! -d "$WORKTREE_PATH" ]; then
-    echo "❌ ERROR: Worktree not found at $WORKTREE_PATH"
-    echo ""
-    echo "This usually means:"
-    echo "1. The adaptation phase hasn't been run yet for $TICKET_ID"
-    echo "2. The worktree was manually deleted"
-    echo "3. There's a mismatch between ticket ID and worktree path"
-    echo ""
-    echo "Solutions:"
-    echo "- Run adaptation phase for $TICKET_ID"
-    echo "- Check ticket comments for documented worktree path"
-    echo "- List active worktrees: git worktree list"
-    exit 1
-fi
-
-# Validate it's a git worktree
-if [ ! -f "$WORKTREE_PATH/.git" ]; then
-    echo "❌ ERROR: Directory exists but is not a valid git worktree"
-    echo "Path: $WORKTREE_PATH"
-    echo ""
-    echo "Solution:"
-    echo "- Remove directory: rm -rf \"$WORKTREE_PATH\""
-    echo "- Re-run adaptation phase for $TICKET_ID"
-    exit 1
-fi
-
-# Check if registered with git
-if ! git worktree list | grep -q "$WORKTREE_PATH"; then
-    echo "⚠️  WARNING: Worktree exists but not registered"
-    echo "Attempting to repair..."
-    git worktree repair "$WORKTREE_PATH"
-
-    if [ $? -eq 0 ]; then
-        echo "✅ Worktree repaired"
-    else
-        echo "❌ Failed to repair worktree - manual intervention required"
-        exit 1
-    fi
-fi
-
-echo "✅ Worktree validated: $WORKTREE_PATH"
+# Verify current branch
+git branch --show-current
 ```
 
-### Navigating to Worktree:
-```bash
-# Save current directory and navigate to worktree
-ORIGINAL_DIR=$(pwd)
-echo "Switching to worktree context..."
-echo "  From: $ORIGINAL_DIR"
-echo "  To: $WORKTREE_PATH"
-
-cd "$WORKTREE_PATH"
-
-# Verify we're in the worktree
-CURRENT_DIR=$(pwd)
-CURRENT_BRANCH=$(git branch --show-current)
-
-echo "✅ Now working in worktree"
-echo "  Directory: $CURRENT_DIR"
-echo "  Branch: $CURRENT_BRANCH"
-```
-
-**Important**: All implementation work happens in the worktree. At the end, return to original directory: `cd "$ORIGINAL_DIR"`
-
-## Worktree Safety Check
-
-Before making ANY commits, verify you're in the correct worktree:
-```bash
-# CRITICAL: Verify we're in a worktree (not main repo)
-CURRENT_DIR=$(pwd)
-REPO_ROOT=$(git rev-parse --show-toplevel)
-
-# Check if we're in .worktrees/ subdirectory
-if [[ "$CURRENT_DIR" != *"/.worktrees/"* ]]; then
-    echo "❌ ERROR: Not in a worktree!"
-    echo "Current directory: $CURRENT_DIR"
-    echo "Repository root: $REPO_ROOT"
-    echo ""
-    echo "Implementation MUST happen in worktree, not main repository."
-    echo "Expected path: $REPO_ROOT/.worktrees/$TICKET_ID"
-    echo ""
-    echo "Solution: Run the worktree navigation steps above"
-    exit 1
-fi
-
-# Check current branch
-current_branch=$(git branch --show-current)
-echo "Worktree: $CURRENT_DIR"
-echo "Branch: $current_branch"
-
-# CRITICAL: Verify NOT on main/master
-if [[ "$current_branch" == "main" ]] || [[ "$current_branch" == "master" ]]; then
-    echo "❌ ERROR: Worktree is on main branch!"
-    echo "This should not happen - worktrees should be on feature branches"
-    echo "Check adaptation process - something went wrong"
-    exit 1
-fi
-
-# Verify on a feature branch
-if [[ "$current_branch" =~ ^(feature|feat|fix|hotfix|bugfix)/ ]] || \
-   [[ "$current_branch" =~ ^[A-Z]+-[0-9]+ ]]; then
-    echo "✅ Safe to commit"
-    echo "   Worktree: ✓"
-    echo "   Feature branch: $current_branch ✓"
-else
-    echo "⚠️  WARNING: Unusual branch name: $current_branch"
-    echo "Confirm this is correct before committing"
-fi
-```
+Implementation must:
+- Run on a **feature branch**, not `main` or `master`.
+- Follow the branch naming conventions defined in your team (for example `feature/TICKET-123-description` or `TICKET-123`).
+- Use the branch specified in the adaptation guide whenever it provides a branch name.
 
 ## Code Quality Standards - NO WORKAROUNDS OR FALLBACKS
 

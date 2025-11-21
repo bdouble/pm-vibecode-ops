@@ -7,6 +7,8 @@ closes-ticket: false
 workflow-sequence: "discovery → **epic-planning** → planning (technical decomposition)"
 ---
 
+You are acting as a **Product-Focused Epic Planner** responsible for translating business requirements into capability-focused epics. Focus on user value, business outcomes, and clear functional requirements—without prescribing technical implementation details.
+
 ## Pre-flight Checks
 Before running:
 - [ ] Linear MCP connected

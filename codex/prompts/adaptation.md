@@ -5,6 +5,8 @@ closes-ticket: false
 workflow-sequence: "**adaptation** → implementation → testing → documentation → code-review → security-review"
 ---
 
+You are acting as the **Architect** for this ticket. Focus on analysis, planning, and decomposition only—no implementation, test code, or documentation files are created in this phase. Your primary deliverable is a clear, production-ready implementation guide documented in the Linear ticket.
+
 # 📋 WORKFLOW REMINDER: Full Implementation Chain Ahead
 
 **After adaptation, ticket proceeds through the complete implementation workflow:**
@@ -337,146 +339,12 @@ Before creating ANY new code, verify:
 
 **REMINDER**: The Linear ticket comment is the PRIMARY deliverable. External files are EXCEPTIONS requiring strong justification. Actual code implementation happens in the implementation phase.
 
-## Git Worktree and Branch Creation Strategy
+## Branch Strategy (Simple Mode)
 
-### Overview: Worktrees for Concurrent Development
-
-This workflow uses **git worktrees** to enable concurrent development with complete isolation. Each ticket gets its own working directory in `.worktrees/[ticket-id]`, allowing multiple agents/developers to work simultaneously without conflicts.
-
-**Key Benefits:**
-- ✅ Complete isolation between concurrent tickets
-- ✅ No branch switching or context switching required
-- ✅ Clean commit history per ticket
-- ✅ Automatic cleanup after merge
-
-**Worktree Location:** `.worktrees/[ticket-id]` inside the repository (gitignored)
-
----
-
-### Git Worktree and Branch Management Commands:
-
-```bash
-TICKET_ID="$1"  # From command argument
-REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${REPO_ROOT}/.worktrees/${TICKET_ID}"
-BRANCH_NAME="feature/${TICKET_ID}-[brief-description]"
-
-echo "Creating worktree for $TICKET_ID..."
-echo "Repository: $REPO_ROOT"
-echo "Worktree: $WORKTREE_PATH"
-echo "Branch: $BRANCH_NAME"
-
-# STEP 1: Check for existing worktree
-if [ -d "$WORKTREE_PATH" ]; then
-    echo "⚠️  Existing worktree found for $TICKET_ID"
-
-    # Get worktree status
-    cd "$WORKTREE_PATH"
-    EXISTING_BRANCH=$(git branch --show-current)
-    UNCOMMITTED=$(git status --porcelain | wc -l)
-
-    echo "  Branch: $EXISTING_BRANCH"
-    echo "  Uncommitted changes: $UNCOMMITTED files"
-    cd "$REPO_ROOT"
-
-    # Prompt user for action:
-    # Options:
-    # 1. "Reuse existing worktree" - Continue with current work
-    # 2. "Remove and recreate" - Start fresh (⚠️  DESTROYS changes)
-    # 3. "Cancel operation" - Stop and investigate manually
-
-    # Based on user choice:
-    # - If "Reuse": Skip worktree creation, use existing
-    # - If "Remove and recreate": git worktree remove "$WORKTREE_PATH" --force
-    # - If "Cancel": Exit adaptation
-fi
-
-# STEP 2: Detect parent branch and determine merge target
-# This allows worktrees to merge back to feature branches, not just main
-PARENT_BRANCH=$(git branch --show-current)
-
-# Determine if current branch is a feature branch that should be the merge target
-if [[ "$PARENT_BRANCH" =~ ^(feature|feat|project)/ ]] && \
-   [[ "$PARENT_BRANCH" != "main" ]] && \
-   [[ "$PARENT_BRANCH" != "master" ]]; then
-    # We're on a feature branch - use it as merge target
-    MERGE_TARGET="$PARENT_BRANCH"
-    BASE_BRANCH="$PARENT_BRANCH"
-    echo "✅ Parent feature branch detected: $PARENT_BRANCH"
-    echo "   This ticket will merge back to: $MERGE_TARGET (NOT main)"
-    echo "   Worktree will be created from: $BASE_BRANCH"
-else
-    # Default: merge to main
-    MERGE_TARGET="main"
-    BASE_BRANCH="origin/main"
-    echo "📍 Merge target: $MERGE_TARGET"
-    echo "   Worktree will be created from: $BASE_BRANCH"
-fi
-
-# STEP 3: Create worktree with new branch
-mkdir -p "${REPO_ROOT}/.worktrees"
-
-# Ensure .gitignore excludes .worktrees/
-if [ -f "${REPO_ROOT}/.gitignore" ]; then
-    if ! grep -q "^\.worktrees/" "${REPO_ROOT}/.gitignore"; then
-        echo "Adding .worktrees/ to .gitignore..."
-        echo ".worktrees/" >> "${REPO_ROOT}/.gitignore"
-        echo ".worktree-registry.json" >> "${REPO_ROOT}/.gitignore"
-    fi
-else
-    cat > "${REPO_ROOT}/.gitignore" << 'EOF'
-# Git worktrees for concurrent development
-.worktrees/
-.worktree-registry.json
-EOF
-fi
-
-# Fetch latest changes
-git fetch origin
-
-# Create worktree with new branch from parent branch or main
-if git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "$BASE_BRANCH"; then
-    echo "✅ Worktree created successfully!"
-    echo "   Path: $WORKTREE_PATH"
-    echo "   Branch: $BRANCH_NAME"
-
-    # Validate worktree
-    cd "$WORKTREE_PATH"
-    VERIFY_BRANCH=$(git branch --show-current)
-    if [ "$VERIFY_BRANCH" = "$BRANCH_NAME" ]; then
-        echo "✅ Worktree validation passed"
-    else
-        echo "❌ WARNING: Branch mismatch in worktree"
-    fi
-    cd "$REPO_ROOT"
-else
-    echo "❌ ERROR: Failed to create worktree"
-    echo "Common causes:"
-    echo "  - Branch '$BRANCH_NAME' already exists"
-    echo "  - Worktree path conflicts"
-    echo "Troubleshooting:"
-    echo "  - List worktrees: git worktree list"
-    echo "  - List branches: git branch -a"
-    echo "  - Prune stale: git worktree prune"
-    exit 1
-fi
-
-# STEP 4: Document worktree path for downstream commands
-# This will be added to Linear ticket comment
-WORKTREE_INFO="**Worktree Path**: \`$WORKTREE_PATH\`"
-
-# IMPORTANT: Do NOT cd into worktree during adaptation
-# Implementation phase will work within the worktree
-# Adaptation stays in the main repository directory
-```
-
-### Worktree Management Guidelines:
-- **ALWAYS create worktree** for single tickets (provides isolation)
-- **ASK user** when existing worktree detected (reuse vs recreate)
-- **DOCUMENT worktree path** in Linear ticket comment (required for downstream commands)
-- **STAY in main repo** during adaptation (don't cd into worktree)
-- **VALIDATE .gitignore** excludes .worktrees/ directory
-- **VERIFY worktree** is created correctly before proceeding
+When preparing for implementation:
+- Decide whether a **new feature branch** is required or an existing one should be reused.
+- Propose a clear branch naming convention (for example: `feature/TICKET-123-description` or `TICKET-123`).
+- Document the expected branch name in the Linear adaptation comment so later phases can use it consistently.
 
 ## Linear Adaptation Report Format
 
@@ -543,21 +411,13 @@ After completing the adaptation analysis, add the following structured comment t
 - **Common Utilities**: [Helpers, formatters, processors already available]
 
 ### 🛠️ Development Environment
-- **Worktree Path**: `[absolute-path-to-worktree]` ⚠️ **CRITICAL: All downstream commands read this path**
-- **Branch**: `[branch-name]` (created in worktree)
+- **Feature Branch**: `[branch-name]` (created from main or parent feature branch)
 - **Parent Branch**: `[parent-branch-name]` (what this branch was created from)
-- **Merge Target**: `[merge-target-branch]` ⚠️ **CRITICAL: Security review will merge to this branch**
-  - [If feature branch]: `feature/large-feature` (merges to parent feature branch, NOT main)
-  - [If main]: `main` (merges directly to main)
-- **Worktree Status**:
-  - [If new worktree created]: ✅ New worktree created and validated
-  - [If reusing worktree]: ♻️ Reusing existing worktree (user confirmed)
+- **Merge Target**: `[merge-target-branch]` (where this feature branch will be merged)
+  - [If feature branch]: `feature/large-feature` (merged into parent feature branch, NOT main)
+  - [If main]: `main` (merged directly to main)
 - **Build Requirements**: [Any new build steps or configuration changes]
 - **Environment Variables**: [Reusing existing env vars where possible]
-
-**Important**: Implementation, testing, documentation, code review, and security review phases will automatically work within this worktree. User does not need to manually navigate to worktree.
-
-**Merge Flow**: When security review passes, the worktree branch will be merged to **`[merge-target-branch]`**, then the worktree will be removed. If merging to a feature branch, that feature branch must eventually be merged to main separately.
 
 ### ✅ Implementation Readiness Checklist
 - [x] Requirements fully understood and documented

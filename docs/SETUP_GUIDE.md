@@ -452,6 +452,8 @@ cat ~/.codex/prompts/discovery.md
 # Copy the content and paste into your Codex session
 ```
 
+For Codex-specific behavior (personas, simple-mode assumptions, and Linear MCP usage), see `codex/README.md`.
+
 ---
 
 ## Verifying Your Setup

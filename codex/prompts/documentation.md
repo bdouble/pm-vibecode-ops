@@ -5,6 +5,8 @@ closes-ticket: false
 workflow-sequence: "testing → **documentation** → code-review → security-review"
 ---
 
+You are acting as a **Technical Writer** embedded in the engineering team. Your responsibility is to produce focused, accurate documentation for this ticket’s changes, avoiding duplication and over-documentation while ensuring developers and PMs can understand and use the new behavior.
+
 # ⚠️ IMPORTANT: Documentation Phase Does NOT Close Tickets
 
 **Tickets remain 'In Progress' until security review passes.**
@@ -47,50 +49,18 @@ The user may also add one or more of the following when providing the Linear tic
 
 Create **minimal viable documentation (MVD)**: focused, essential docs that provide value without redundancy or over-documentation.
 
-## Worktree Context Setup
+## Repository and Branch Context (Simple Mode)
 
-Before generating documentation, load the worktree context where implementation was done:
+In this workflow, all work happens on a standard git feature branch in a single working copy of the repository.
+
+Before updating documentation:
 
 ```bash
-TICKET_ID="$1"  # From command argument
+# Ensure you're in the project root
+git rev-parse --show-toplevel
 
-# Get worktree path (adaptation uses consistent pattern)
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-WORKTREE_PATH="${REPO_ROOT}/.worktrees/${TICKET_ID}"
-
-echo "Loading worktree context for documentation..."
-echo "Expected worktree: $WORKTREE_PATH"
-
-# Validate worktree exists
-if [ ! -d "$WORKTREE_PATH" ]; then
-    echo "❌ ERROR: Worktree not found at $WORKTREE_PATH"
-    echo ""
-    echo "Documentation requires the worktree created by adaptation phase"
-    echo "Run adaptation phase for $TICKET_ID first"
-    exit 1
-fi
-
-# Validate it's a git worktree
-if [ ! -f "$WORKTREE_PATH/.git" ]; then
-    echo "❌ ERROR: Directory exists but is not a valid git worktree"
-    exit 1
-fi
-
-# Navigate to worktree
-ORIGINAL_DIR=$(pwd)
-cd "$WORKTREE_PATH"
-
-# Verify we're in the worktree
-CURRENT_DIR=$(pwd)
-CURRENT_BRANCH=$(git branch --show-current)
-
-echo "✅ Worktree context loaded"
-echo "   Directory: $CURRENT_DIR"
-echo "   Branch: $CURRENT_BRANCH"
-echo ""
-
-# CRITICAL: All documentation operations happen in this worktree
-# At end of command, return to original directory: cd "$ORIGINAL_DIR"
+# Verify current branch (should be the feature branch for this ticket)
+git branch --show-current
 ```
 
 ---
@@ -98,7 +68,7 @@ echo ""
 ## Documentation Workflow
 
 1. **Linear Context Loading**: Load ticket details and all comments
-2. **Worktree Context Loading**: Navigate to ticket's isolated worktree (see above section)
+2. **Repository Context Confirmation**: Ensure you are on the correct feature branch and project root
 3. **Branch Verification**: Confirm on feature branch (NOT main) using `git branch --show-current`
 4. **PR Discovery**: Find existing PR for the ticket using GitHub CLI
 5. **JSDoc Audit**: Review existing JSDoc from implementation phase, identify gaps and areas for enhancement

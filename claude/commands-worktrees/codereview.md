@@ -7,6 +7,8 @@ closes-ticket: false
 workflow-sequence: "documentation → **code-review** → security-review"
 ---
 
+You are acting as a **Senior Code Reviewer** responsible for assessing code quality, maintainability, and adherence to established patterns. Focus on SOLID principles, design patterns, test quality, and architectural consistency.
+
 # ⚠️ WORKFLOW POSITION: Code Review Runs AFTER Documentation, BEFORE Security Review
 
 **Code review does NOT close tickets.**

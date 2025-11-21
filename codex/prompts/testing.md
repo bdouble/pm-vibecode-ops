@@ -5,6 +5,8 @@ closes-ticket: false
 workflow-sequence: "implementation → **testing** → documentation → code-review → security-review"
 ---
 
+You are acting as a **QA Engineer** responsible for building accurate, high-value test suites for this ticket. Focus on correctness, edge cases, and regression prevention using existing patterns in the codebase.
+
 # ⚠️ WORKFLOW POSITION: Testing Phase Does NOT Close Tickets
 
 **Testing runs AFTER implementation and BEFORE documentation.**
@@ -17,17 +19,32 @@ workflow-sequence: "implementation → **testing** → documentation → code-re
 
 ---
 
-## IMPORTANT: Linear Integration
-**Retrieve Linear ticket details for testing context:**
-- **Fetch ticket**: Retrieve the Linear ticket details via Linear API or web interface
-- **Update status**: Update ticket status to reflect testing progress
-- **Add comments**: Add testing summary and results as a comment to the Linear ticket
-- **List comments**: Review existing ticket comments for test requirements or concerns
+## IMPORTANT: Linear MCP Integration
+**ALWAYS use Linear MCP tools for ticket operations:**
+- **Fetch ticket**: Use `mcp__linear-server__get_issue` with ticket ID
+- **Update status**: Use `mcp__linear-server__update_issue` to reflect testing progress
+- **Add comments**: Use `mcp__linear-server__create_comment` for testing summary and results
+- **List comments**: Use `mcp__linear-server__list_comments` to review test requirements or concerns
+- **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools when available
 
 Ask the user to provide the following information:
 - **Linear ticket ID** (REQUIRED) - The ticket containing implementation to test
 - **Minimum coverage target** (optional, default: 70-75% from test config)
 - **Test types** (optional, default: unit, integration, security)
+
+## Repository and Branch Context (Simple Mode)
+
+In this workflow, all work happens on a standard git feature branch in a single working copy of the repository.
+
+Before running tests:
+
+```bash
+# Ensure you're in the project root
+git rev-parse --show-toplevel
+
+# Verify current branch (should be the feature branch for this ticket)
+git branch --show-current
+```
 
 Generate **accurate, compilable** test suites that use the actual API implementation.
 
@@ -143,14 +160,13 @@ During test generation and implementation, the agent MUST enforce different stan
    ```bash
    # Find all test files related to the modules touched by this ticket
    # Use the ticket description and implementation files to identify relevant test suites
-   grep -r "describe\|it\|test" src/modules/[affected-module]/**/*.spec.ts
-   grep -r "describe\|it\|test" src/modules/[affected-module]/**/*.test.ts
+   rg "describe\\(|it\\(|test\\(" src/modules/[affected-module]
    ```
 
 2. **Run Existing Tests FIRST**:
    ```bash
    # Run tests for the affected modules to identify failures
-   npm test -- --testPathPattern="[affected-module]" --run
+   npm test -- --testPathPattern="[affected-module]"
 
    # Document ALL failures - these MUST be fixed before writing new tests
    ```
@@ -167,7 +183,7 @@ During test generation and implementation, the agent MUST enforce different stan
 4. **Verify Complete Pass**:
    ```bash
    # All existing tests MUST pass before proceeding
-   npm test -- --testPathPattern="[affected-module]" --run
+   npm test -- --testPathPattern="[affected-module]"
 
    # Success criteria: 100% of existing tests passing
    ```
@@ -198,51 +214,9 @@ During test generation and implementation, the agent MUST enforce different stan
 
 **If the answer to any of these is "no", don't write the test.**
 
-## Worktree Context Setup
+## Test Scope and Responsibilities
 
-Before running any tests, load the worktree context where implementation was done:
-
-```bash
-TICKET_ID="$1"  # From command argument
-
-# Get worktree path (adaptation uses consistent pattern)
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-WORKTREE_PATH="${REPO_ROOT}/.worktrees/${TICKET_ID}"
-
-echo "Loading worktree context for testing..."
-echo "Expected worktree: $WORKTREE_PATH"
-
-# Validate worktree exists
-if [ ! -d "$WORKTREE_PATH" ]; then
-    echo "❌ ERROR: Worktree not found at $WORKTREE_PATH"
-    echo ""
-    echo "Testing requires the worktree created by adaptation phase"
-    echo "Run adaptation phase for $TICKET_ID first"
-    exit 1
-fi
-
-# Validate it's a git worktree
-if [ ! -f "$WORKTREE_PATH/.git" ]; then
-    echo "❌ ERROR: Directory exists but is not a valid git worktree"
-    exit 1
-fi
-
-# Navigate to worktree
-ORIGINAL_DIR=$(pwd)
-cd "$WORKTREE_PATH"
-
-# Verify we're in the worktree
-CURRENT_DIR=$(pwd)
-CURRENT_BRANCH=$(git branch --show-current)
-
-echo "✅ Worktree context loaded"
-echo "   Directory: $CURRENT_DIR"
-echo "   Branch: $CURRENT_BRANCH"
-echo ""
-
-# CRITICAL: All test operations happen in this worktree
-# At end of command, return to original directory: cd "$ORIGINAL_DIR"
-```
+Focus test creation and remediation on the code changed for this ticket and the modules it directly touches. Avoid expanding test scope into unrelated areas of the codebase unless required by clear dependencies.
 
 ---
 
@@ -250,9 +224,9 @@ echo ""
 
 1. **Linear Context Loading**: Load ticket details and all comments
 
-2. **Worktree Context Loading**: Navigate to ticket's isolated worktree (see above section)
+2. **Repository Context Confirmation**: Ensure you are on the correct feature branch and project root
 
-3. **PR Discovery**: Find existing PR for the ticket using GitHub CLI
+3. **PR Discovery**: Find existing PR for the ticket using GitHub CLI (if used in your workflow)
 4. **🚨 EXISTING TEST VALIDATION (MANDATORY - Gate #0 - DO THIS FIRST)**:
    - **Step 1**: Identify all existing tests in affected modules
    - **Step 2**: Run existing tests to find failures

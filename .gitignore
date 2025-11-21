@@ -1,5 +1,6 @@
 # Claude Code configuration
 CLAUDE.md
+AGENTS.md
 .claude/
 
 # Git worktrees (created per-ticket)

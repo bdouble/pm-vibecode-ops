@@ -141,14 +141,14 @@ ls .claude/agents/
 
 ### For OpenAI Codex
 
-Codex uses prompts instead of slash commands. The prompts are platform-agnostic and don't reference Claude-specific agents.
+Codex uses prompts instead of slash commands. The prompts in `codex/prompts/` are **platform-agnostic** (no Claude-specific agents) but assume a similar workflow and MCP-style Linear integration when available.
 
 ```bash
 # 1. Clone this repository
 git clone https://github.com/your-org/pm-vibecode-ops.git
 cd pm-vibecode-ops
 
-# 2. Set up Codex configuration (if using custom prompt directory)
+# 2. (Optional) Create a Codex prompt directory
 mkdir -p ~/.codex/prompts
 
 # 3. Copy prompts or reference them directly
@@ -172,8 +172,10 @@ Unlike Claude Code's slash commands, Codex prompts are used by copying their con
 cat codex/prompts/discovery.md
 
 # Copy the content and paste into your Codex session
-# Or reference the file path in your Codex configuration
+# Or reference the file path in your own Codex configuration or wrapper
 ```
+
+See `codex/README.md` for Codex-specific guidance, personas, and simple-mode assumptions.
 
 ### Verification
 

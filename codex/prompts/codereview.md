@@ -5,6 +5,8 @@ closes-ticket: false
 workflow-sequence: "documentation → **code-review** → security-review"
 ---
 
+You are acting as a **Senior Code Reviewer** with strong backend, frontend, and architectural experience. Focus on maintainability, correctness, and consistency with existing patterns, while leaving security issues for the dedicated security review phase.
+
 # ⚠️ WORKFLOW POSITION: Code Review Runs AFTER Documentation, BEFORE Security Review
 
 **Code review does NOT close tickets.**
@@ -30,6 +32,27 @@ Ask the user to provide a Linear ticket ID. Perform code quality review for the 
 
 The user may also provide a specific implementation branch and/or a PR ID. 
 
+## Repository and Branch Context (Simple Mode)
+
+In this workflow, all work happens on a standard git feature branch in a single working copy of the repository.
+
+Before performing review:
+
+```bash
+# Ensure you're in the project root
+git rev-parse --show-toplevel
+
+# Verify current branch (should be the feature branch for this ticket)
+git branch --show-current
+```
+   - Architecture decisions that affect review
+   - Known issues or areas of concern
+   - Previous review feedback that needs verification
+
+**Wait for the Linear MCP responses before proceeding with code review.** If a user provided an implementation branch or a PR ID instead of a linear ticket, review the branch commits and/or PR comments instead.
+
+Review code quality, patterns, and architecture. Security issues found are LOGGED ONLY - not fixed (handled by security review phase).
+
 ## CRITICAL: Linear Ticket and Comments Retrieval
 
 **BEFORE ANY OTHER WORK**, retrieve the Linear ticket details AND all comments:
@@ -42,55 +65,7 @@ The user may also provide a specific implementation branch and/or a PR ID.
    - Known issues or areas of concern
    - Previous review feedback that needs verification
 
-**Wait for the Linear MCP responses before proceeding with code review.** If a user provided an implementation branch or a PR ID instead of a linear ticket, review the branch commits and/or PR comments instead.
-
-Review code quality, patterns, and architecture. Security issues found are LOGGED ONLY - not fixed (handled by security review phase).
-
-## Worktree Context Setup
-
-Before performing code review, load the worktree context where implementation was done:
-
-```bash
-TICKET_ID="$1"  # From command argument
-
-# Get worktree path (adaptation uses consistent pattern)
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-WORKTREE_PATH="${REPO_ROOT}/.worktrees/${TICKET_ID}"
-
-echo "Loading worktree context for code review..."
-echo "Expected worktree: $WORKTREE_PATH"
-
-# Validate worktree exists
-if [ ! -d "$WORKTREE_PATH" ]; then
-    echo "❌ ERROR: Worktree not found at $WORKTREE_PATH"
-    echo ""
-    echo "Code review requires the worktree created by adaptation phase"
-    echo "Run adaptation phase for $TICKET_ID first"
-    exit 1
-fi
-
-# Validate it's a git worktree
-if [ ! -f "$WORKTREE_PATH/.git" ]; then
-    echo "❌ ERROR: Directory exists but is not a valid git worktree"
-    exit 1
-fi
-
-# Navigate to worktree
-ORIGINAL_DIR=$(pwd)
-cd "$WORKTREE_PATH"
-
-# Verify we're in the worktree
-CURRENT_DIR=$(pwd)
-CURRENT_BRANCH=$(git branch --show-current)
-
-echo "✅ Worktree context loaded"
-echo "   Directory: $CURRENT_DIR"
-echo "   Branch: $CURRENT_BRANCH"
-echo ""
-
-# CRITICAL: All code review operations happen in this worktree
-# At end of command, return to original directory: cd "$ORIGINAL_DIR"
-```
+**Wait for the Linear MCP responses before proceeding with code review.** If a user provided an implementation branch or a PR ID instead of a Linear ticket, review the branch commits and/or PR comments instead.
 
 ---
 
@@ -146,7 +121,7 @@ During code review, identify and fix any workarounds or temporary code:
 ## Review Workflow
 
 1. **Linear Context Loading**: Load ticket details and all comments
-2. **Worktree Context Loading**: Navigate to ticket's isolated worktree (see above section)
+2. **Repository Context Confirmation**: Ensure you are on the correct feature branch and project root
 3. **Context Loading**: Load implementation branch, architectural guidelines
 4. **Service Inventory Check**: Load service-inventory.yaml from frontend/backend roots to verify reuse
 5. **Adaptation Guide Review**: Check adaptation guide for mandated service reuse requirements

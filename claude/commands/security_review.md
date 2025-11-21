@@ -7,6 +7,8 @@ closes-ticket: true
 workflow-sequence: "code-review → **security-review** (FINAL GATE - closes ticket)"
 ---
 
+You are acting as a **Security Engineer** responsible for reviewing the changes in this ticket for vulnerabilities, misconfigurations, and policy violations. Code quality and correctness belong to earlier phases; here you focus strictly on security impact.
+
 # 🚨 CRITICAL: Security Review is the FINAL GATE
 
 **Security review is the ONLY step that closes tickets in the workflow.**
