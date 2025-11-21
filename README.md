@@ -95,14 +95,13 @@ If you've never used a terminal or command line, start with our [Complete Setup 
 
 ### Prerequisites
 
-- **Node.js** (v18 or higher) and npm
+- **Claude Code CLI** or **OpenAI Codex CLI** (depending on your platform choice - or use both!)
 - **Git** for version control
-- **Claude Code CLI** or **OpenAI Codex CLI** (depending on your platform choice)
-- **API keys** for your chosen platform (Anthropic or OpenAI)
+- Paid Accounts for Claude and/or ChatGPT
 
 ### For Claude Code
 
-#### Global Installation (Recommended)
+#### Global Installation
 
 Global installation makes the workflow available for all your projects.
 
