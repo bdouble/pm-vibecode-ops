@@ -68,12 +68,7 @@ A complete, battle-tested workflow that enables Product Managers to leverage AI 
 - Product Managers leading technical teams who want to move faster
 - Technical PMs who want to accelerate routine development work
 - Solo founders building their MVP with AI
-- Engineering leaders standardizing AI-powered workflows
-
-❌ **Not ideal for:**
-- Pure research or exploration projects (this is for production code)
-- Teams without any technical oversight
-- Projects where you can't use AI coding assistants
+- Engineering leaders standardizing AI-powered workflows for non-technical staff to contribute
 
 ## Why This Matters
 
@@ -109,7 +104,9 @@ This workflow helps non-technical PMs build software that works in production—
 - Systems requiring deep performance optimization
 - Integration with complex legacy systems
 
-**The honest truth:** AI-assisted development with proper quality gates produces reliable software for many use cases. It does not replace the judgment of experienced engineers for complex systems. Use this workflow for appropriate projects, and involve engineering expertise when the stakes demand it.
+**The honest truth:** AI-assisted development with proper quality gates produces reliable software for many use cases. It does not replace the judgment of experienced engineers for complex systems. 
+
+**Use this workflow for appropriate projects, and involve engineering expertise when the stakes demand it.**
 
 ---
 
@@ -121,7 +118,7 @@ A comprehensive suite of AI-powered commands and agents for orchestrating the co
 
 This repository includes two implementations:
 - **`claude/`** - Claude-specific commands and agent configurations optimized for Claude Code
-- **`codex/`** - Platform-agnostic prompts compatible with OpenAI Codex and other AI platforms (agent references removed)
+- **`codex/`** - Platform-agnostic prompts compatible with OpenAI Codex and other AI platforms (Claude-specific agent references removed)
 
 ## Workflow Overview
 
@@ -163,13 +160,13 @@ graph TD
 ```
 
 **PM Involvement Points**:
-- 📝 **Write PRD** - You define requirements (1-2 hours)
-- 🎯 **Epic Planning** - You review and approve epics (20-30 min)
-- ✅ **Commit & Deploy** - You approve final deployment (5-10 min)
+- 📝 **Write PRD** - You define requirements 
+- 🎯 **Epic Planning** - You review and approve epics 
+- ✅ **Commit & Deploy** - You approve final deployment 
 
 **AI-Powered Automation**:
-- 🔍 Service Inventory - Automated codebase scanning
-- 🔬 Discovery - Automated pattern analysis
+- 🔍 Service Inventory - Automated codebase scanning, useful on existing codebases
+- 🔬 Discovery - Automated technical discovery
 - 🎨 Adaptation - Creates implementation guide for ticket (reuse analysis, pattern selection)
 - 🔨 Implementation - AI writes production code following adaptation guide
 - 🧪 Testing - QA agent builds comprehensive test suite, runs and fixes until passing
