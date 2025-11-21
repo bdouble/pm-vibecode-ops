@@ -699,17 +699,6 @@ pm-vibecode-ops/
 └── README.md                    # This file
 ```
 
-## Recent Updates
-
-### December 2024
-- **Enhanced Duplicate Prevention**: Epic-planning command now includes comprehensive duplicate detection with pre-flight checks, similarity scoring, and user approval workflow
-- **Removed Pseudo-Code**: All commands updated to remove non-executable JavaScript/TypeScript examples, replaced with:
-  - Executable bash scripts
-  - MCP tool invocation instructions
-  - Step-by-step process descriptions
-  - Clearly marked template examples for implementation reference
-- **Improved Command Reliability**: Commands now use only tools they can actually execute via MCP servers
-
 ## Getting Started
 
 ### Prerequisites
