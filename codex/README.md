@@ -71,6 +71,23 @@ Each prompt starts with a short **persona paragraph** describing the role:
 
 These personas mirror the **Claude agents** but stay within a single prompt so Codex can use them without extra configuration.
 
+## Context Window Best Practice
+
+**Important:** Run each prompt in a fresh Codex session. After completing a workflow phase and reviewing the output, close your Codex session and start a new one for the next prompt.
+
+**Why this matters:**
+- Each workflow phase generates substantial context (discovery findings, code analysis, test results, etc.)
+- Running multiple prompts in sequence can overflow the context window
+- Cross-phase context pollution reduces effectiveness (e.g., security review seeing implementation details)
+- Fresh context ensures each phase works optimally
+
+**In practice:**
+1. Open Codex → Paste adaptation prompt → Review output → Close Codex
+2. Open new Codex session → Paste implementation prompt → Review output → Close Codex
+3. Open new Codex session → Paste testing prompt → Continue...
+
+Each prompt creates persistent artifacts (Linear tickets, code commits, PRs), so you won't lose progress when starting fresh sessions.
+
 ## Recommended Usage Patterns
 
 ### Direct Copy-Paste
@@ -86,6 +103,7 @@ Then, in Codex:
 - Paste the prompt.
 - Provide the required inputs (e.g., ticket ID, PRD path).
 - Let Codex respond and follow its instructions.
+- **Close the session after completion** and start fresh for the next prompt.
 
 ### Alias-Based Usage
 

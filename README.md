@@ -30,6 +30,27 @@ Write a PRD → Run 10 commands → Get production-ready code with tests, docs, 
 
 ---
 
+## Best Practice: Run Each Command in a Fresh Context Window
+
+**Important:** Each workflow command should be run in a separate, fresh Claude Code session or context window. Do not chain multiple commands together in the same session.
+
+**Why this matters:**
+- Prevents context window overflow (each phase generates significant context)
+- Avoids cross-phase context pollution (security review shouldn't see implementation discussions)
+- Ensures optimal performance for each phase
+- Each phase performs best with focused, relevant context
+
+**Example workflow:**
+1. Open Claude Code → Run `/discovery` → Review output → Close session
+2. Open new Claude Code session → Run `/epic-planning` → Review output → Close session
+3. Open new Claude Code session → Run `/planning` → Review output → Close session
+4. Continue this pattern for each subsequent command...
+
+**For ticket-level phases (adaptation through security_review):**
+Run each command in its own fresh session for best results.
+
+---
+
 ## Choose Your Platform and Mode
 
 This repository supports both Claude Code and OpenAI Codex:

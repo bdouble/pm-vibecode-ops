@@ -22,6 +22,7 @@ Questions from Product Managers using AI-powered development workflows.
 - [Can I switch between modes?](#can-i-switch-between-modes)
 
 **Workflow Questions**
+- [Should I run multiple commands in the same session?](#should-i-run-multiple-commands-in-the-same-session)
 - [How long does each phase take?](#how-long-does-each-phase-take)
 - [Can I skip steps to move faster?](#can-i-skip-steps-to-move-faster)
 - [What if my team doesn't use Linear?](#what-if-my-team-doesnt-use-linear)
@@ -298,6 +299,62 @@ See [Worktree Migration Guide](docs/WORKTREE_MIGRATION_GUIDE.md) for detailed st
 ---
 
 ## Workflow Questions
+
+### Should I run multiple commands in the same session?
+
+**Short answer:** No. Run each command in a fresh, separate Claude Code session.
+
+**Why this matters:**
+
+Each workflow command generates substantial context—discovery findings, code analysis, security reports, test results, etc. When you chain multiple commands in the same session:
+
+1. **Context overflow:** You'll hit Claude's context window limits, causing degraded performance or errors
+2. **Context pollution:** Later phases see irrelevant details from earlier phases (e.g., security review doesn't need implementation discussions)
+3. **Reduced effectiveness:** Each phase works best with focused, relevant context
+
+**Best practice workflow:**
+
+```bash
+# Session 1
+claude
+/discovery prd.md ProjectName ./src
+# Review output
+exit
+
+# Session 2 (fresh context)
+claude
+/epic-planning prd.md discovery-report.md
+# Review output
+exit
+
+# Session 3 (fresh context)
+claude
+/planning EPIC-123
+# Review output
+exit
+
+# Continue this pattern...
+```
+
+**Benefits you'll see:**
+- Commands run faster with clean context
+- More accurate results (no context confusion)
+- Better recommendations (focused on current phase)
+- Fewer errors or unexpected behaviors
+
+**"But doesn't this lose my progress?"**
+
+No! Each command creates persistent artifacts:
+- Discovery creates Linear tickets with findings
+- Epic planning creates epics in your project management tool
+- Implementation creates code commits and PRs
+- Documentation creates committed docs
+
+Starting a fresh session just gives the AI clean context to work with—all your progress is saved in your repository and ticketing system.
+
+**Time cost:** Starting a new session takes 5-10 seconds. The quality improvement is worth it.
+
+---
 
 ### How long does each phase take?
 

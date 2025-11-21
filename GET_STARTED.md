@@ -140,6 +140,17 @@ You need:
 
 ## Your First Feature (2-4 Hours)
 
+### Context Window Best Practice
+
+**Important:** Run each command in a fresh Claude Code session. Close the session after each command completes and reviewing the output. This prevents context overflow and ensures each phase works with clean, focused context.
+
+**Why:** Each workflow phase generates substantial context. Running multiple commands in one session can:
+- Overflow your available context window
+- Pollute context across phases (e.g., security review seeing implementation details)
+- Reduce the effectiveness of each phase
+
+**How:** After completing each command below, close Claude Code and start a new session before running the next command.
+
 ### Phase 1: Preparation (10 minutes)
 1. Write a simple PRD (see [PM_GUIDE.md - Writing AI-Friendly PRDs](PM_GUIDE.md#writing-ai-friendly-prds))
 2. Choose a small feature (CRUD operation ideal for first time)
@@ -157,13 +168,17 @@ You need:
 4. Run `/planning` to create sub-tickets
 
 ### Phase 4: Execution (25-30 minutes)
-1. Run `/adaptation` (Creates implementation guide for ticket)
-2. Run `/implementation` (AI writes code following adaptation guide)
-3. Run `/testing` (QA agent builds test suite, runs and fixes until passing)
-4. Run `/documentation` (Technical writer creates comprehensive docs)
-5. Run `/codereview` for quality check
-6. Run `/security_review` for vulnerabilities (final gate, closes ticket on success)
-7. Review all reports
+
+**Remember:** Start a fresh Claude Code session for each command below.
+
+1. **New session** → Run `/adaptation` → Review output → Close session
+2. **New session** → Run `/implementation` → Review output → Close session
+3. **New session** → Run `/testing` → Review output → Close session
+4. **New session** → Run `/documentation` → Review output → Close session
+5. **New session** → Run `/codereview` → Review output → Close session
+6. **New session** → Run `/security_review` → Review output → Close session
+
+Each command builds on artifacts created by previous commands (tickets, PRs, code), so starting fresh doesn't lose progress—it just gives each phase clean context to work with.
 
 ### Phase 5: Ship It! (5 minutes)
 1. Verify security review passed (ticket marked as "Done")

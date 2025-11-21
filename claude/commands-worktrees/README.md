@@ -39,6 +39,24 @@ repo/                           # Main repository
 | Must wait for one ticket to finish | Start new tickets anytime |
 | Complex branch switching | Each ticket is fully isolated |
 
+## Context Window Best Practice
+
+**Important:** Run each command in a separate, fresh Claude Code session.
+
+Even with worktree isolation for files, each command should run in its own fresh Claude Code session to prevent context overflow and ensure optimal performance.
+
+**Why:**
+- Each workflow phase generates substantial context (analysis, findings, reports)
+- Running multiple commands sequentially can overflow the context window
+- Fresh context ensures each phase works with focused, relevant information
+
+**Example workflow:**
+1. Open Claude Code → Run `/adaptation TICKET-123` → Review → Close
+2. Open new session → Run `/implementation TICKET-123` → Review → Close
+3. Open new session → Run `/testing TICKET-123` → Continue...
+
+The worktree isolation handles file conflicts; fresh sessions handle context management. Both work together for optimal results.
+
 ## Commands
 
 | Command | Description |
@@ -54,6 +72,8 @@ repo/                           # Main repository
 | `/documentation` | Generate docs in worktree |
 | `/codereview` | Quality assessment in worktree |
 | `/security_review` | Final gate - merges worktree, closes ticket |
+
+**Remember:** Run each command in its own fresh session for best results.
 
 ## Additional Documentation
 

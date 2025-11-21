@@ -28,6 +28,17 @@ This guide will walk you through using AI coding agents to build production-read
 
 ## Core Concepts
 
+### Best Practice: One Command Per Session
+
+**Important:** Run each workflow command in a separate, fresh session. Don't chain commands together in the same session—this ensures optimal performance and prevents context pollution.
+
+Think of it like this: each workflow phase is a focused task. Just as you wouldn't write a PRD, conduct a security review, and implement code all in one uninterrupted work session, the AI works best when each phase gets its own clean context.
+
+**In practice:**
+- Finish one command → Review the results → Close Claude Code
+- Start a new Claude Code session for the next command
+- This takes only seconds but dramatically improves quality
+
 ### What is "Vibe Coding"?
 
 Traditional coding requires you to know syntax, patterns, frameworks, and best practices. **Vibe coding** means you describe *what* you want in natural language, and AI agents handle the *how*—but with structure and quality gates to ensure production readiness.

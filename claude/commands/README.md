@@ -23,6 +23,24 @@ main ─────────────────────────
        ╲──── feature/TICKET-123 ────────────────╱
 ```
 
+## Context Window Best Practice
+
+**Important:** Run each command in a separate, fresh Claude Code session.
+
+After completing a command and reviewing its output, close Claude Code and start a new session for the next command. This prevents context overflow and ensures optimal performance for each phase.
+
+**Why:**
+- Each command generates substantial context (discovery findings, code analysis, etc.)
+- Running multiple commands in one session can overflow your context window
+- Fresh context = better performance and more accurate results
+
+**Example:**
+1. Open Claude Code → Run `/discovery` → Review → Close
+2. Open new session → Run `/epic-planning` → Review → Close
+3. Open new session → Run `/planning` → Continue...
+
+All progress is saved in tickets, PRs, and code—starting fresh sessions doesn't lose work.
+
 ## Commands
 
 | Command | Description |
@@ -37,6 +55,8 @@ main ─────────────────────────
 | `/documentation` | Generate docs |
 | `/codereview` | Quality assessment |
 | `/security_review` | Final gate - closes ticket |
+
+**Remember:** Run each command in its own fresh session for best results.
 
 ## Switching to Worktree Mode
 

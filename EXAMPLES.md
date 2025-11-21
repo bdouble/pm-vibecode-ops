@@ -165,10 +165,19 @@ so that I know what went wrong and how to fix it.
 
 ### Workflow Execution
 
+**Note:** In all examples below, each command was run in a fresh Claude Code session. After completing each step, the PM closed Claude Code and opened a new session for the next command. This prevented context overflow and ensured optimal performance.
+
 #### Step 1: Service Inventory (5 minutes)
 
+**Session 1:**
 ```bash
+# Open Claude Code
+claude
+
+# Run service inventory
 /generate_service_inventory ./src services-inventory.md
+
+# Review output, then close Claude Code
 ```
 
 **Findings**:
@@ -181,8 +190,15 @@ so that I know what went wrong and how to fix it.
 
 #### Step 2: Discovery (10 minutes)
 
+**Session 2 (fresh context):**
 ```bash
+# Open new Claude Code session
+claude
+
+# Run discovery
 /discovery csv-export-prd.md Analytics ./src "reporting, data export"
+
+# Review findings, then close Claude Code
 ```
 
 **Discovery Findings** (from Linear ticket):

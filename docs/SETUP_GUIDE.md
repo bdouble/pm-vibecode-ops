@@ -659,9 +659,11 @@ Now that your setup is complete:
 
 2. **Read the PM Guide** — See [PM_GUIDE.md](../PM_GUIDE.md) to understand the workflow
 
-3. **Try your first feature** — Follow the 30-minute quick start in the PM Guide
+3. **Important: Context Window Best Practice** — Run each workflow command in a fresh Claude Code session. After completing a command and reviewing its output, close Claude Code and start a new session for the next command. This prevents context overflow and ensures optimal performance. Each command creates persistent artifacts (tickets, code, PRs), so you won't lose progress.
 
-4. **Bookmark these resources**:
+4. **Try your first feature** — Follow the quick start in the PM Guide, remembering to start fresh sessions between commands
+
+5. **Bookmark these resources**:
    - [FAQ.md](../FAQ.md) — Common questions
    - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — When things go wrong
    - [GLOSSARY.md](../GLOSSARY.md) — Technical terms explained
