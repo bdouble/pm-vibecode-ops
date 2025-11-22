@@ -19,12 +19,12 @@ This guide will walk you through setting up everything you need to use this work
 
 ### What You'll Need
 
-**Time**: 45-60 minutes for first-time setup
+**Time**: 30-45 minutes for first-time setup
 
 **Required**:
 - A computer (Mac, Windows, or Linux)
 - Internet connection
-- An Anthropic API key (for Claude Code) — [Get one here](https://console.anthropic.com/)
+- Claude Code account (Pro, Max, or API access via console.anthropic.com)
 - A Linear account with API access — [Sign up here](https://linear.app/)
 
 **Helpful but optional**:
@@ -34,9 +34,9 @@ This guide will walk you through setting up everything you need to use this work
 ### What We'll Install
 
 1. **Terminal** — Your command center for running commands
-2. **Node.js** — Required to run Claude Code and MCP servers
-3. **Git** — Version control for your code
-4. **Claude Code** — The AI coding assistant
+2. **Claude Code** — The AI coding assistant (includes authentication)
+3. **Node.js** — Required for MCP servers (Linear, Perplexity, etc.)
+4. **Git** — Version control for your code
 5. **This workflow** — Commands and agents that orchestrate development
 
 ---
@@ -236,71 +236,63 @@ While you don't need to write code, having a code editor helps you:
 
 ## Installing Claude Code
 
-### Step 1: Get Your Anthropic API Key
+Claude Code is Anthropic's official CLI tool. Installation is straightforward and **does not require manual API key setup**—authentication happens automatically when you first run it.
 
-1. Go to [console.anthropic.com](https://console.anthropic.com/)
-2. Sign up or log in
-3. Navigate to "API Keys"
-4. Click "Create Key"
-5. Copy the key (starts with `sk-ant-...`)
-6. **Save this key securely** — you'll need it in a moment
+### Step 1: Install Claude Code
 
-### Step 2: Install Claude Code
+**For complete, official installation instructions, visit:**
+👉 **[https://code.claude.com/docs/en/setup](https://code.claude.com/docs/en/setup)**
 
-In your terminal, run:
+**Quick install options**:
 
+**macOS/Linux (Homebrew - Recommended)**:
+```bash
+brew install --cask claude-code
+```
+
+**macOS/Linux/WSL (Script)**:
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+**Windows (PowerShell)**:
+```powershell
+irm https://claude.ai/install.ps1 | iex
+```
+
+**Alternative (NPM)**:
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
 
-**What this does**: Installs Claude Code globally so you can use it from anywhere.
+### Step 2: Verify Installation
 
-**If you see permission errors on Mac/Linux**:
-```bash
-sudo npm install -g @anthropic-ai/claude-code
-```
-Enter your computer password when prompted (you won't see characters as you type—that's normal).
-
-### Step 3: Configure Your API Key
-
-**Option A: Set Environment Variable (Recommended)**
-
-**On Mac/Linux**, add to your shell profile:
-```bash
-# Open your profile file
-nano ~/.zshrc   # or ~/.bashrc if using bash
-
-# Add this line at the bottom:
-export ANTHROPIC_API_KEY="sk-ant-your-key-here"
-
-# Save: Ctrl+O, Enter, then Ctrl+X to exit
-# Reload:
-source ~/.zshrc
-```
-
-**On Windows (PowerShell)**:
-```powershell
-# Set permanently
-[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-ant-your-key-here", "User")
-
-# Restart PowerShell
-```
-
-**Option B: Pass Key Each Session**
-
-If you prefer not to save the key permanently:
-```bash
-export ANTHROPIC_API_KEY="sk-ant-your-key-here"
-```
-You'll need to run this each time you open a new terminal.
-
-### Step 4: Verify Claude Code Installation
+After installation, check that Claude Code is available:
 
 ```bash
 claude --version
 ```
 
-You should see a version number. Then test it:
+You should see a version number (e.g., `1.2.3` or similar).
+
+### Step 3: First Run and Authentication
+
+When you first run Claude Code, it will guide you through authentication:
+
+```bash
+claude
+```
+
+You'll be prompted to authenticate via one of these methods:
+- **Claude Console** (requires active billing at console.anthropic.com)
+- **Claude App** (for Pro or Max subscribers)
+- **Enterprise Platforms** (Amazon Bedrock, Google Vertex AI, or Microsoft Foundry)
+
+**No manual API key setup is required**—just follow the prompts.
+
+### Step 4: Test Claude Code
+
+Once authenticated, try a simple command:
 
 ```bash
 claude "Hello, are you working?"
@@ -594,19 +586,16 @@ npm config set prefix '~/.npm-global'
 export PATH=~/.npm-global/bin:$PATH
 ```
 
-### API Key Not Working
+### Authentication Issues
 
-**Problem**: Claude Code says API key is invalid
+**Problem**: Claude Code says authentication failed or can't connect
 
 **Solutions**:
-1. Check for extra spaces when copying the key
-2. Ensure the key starts with `sk-ant-`
-3. Verify the key in [Anthropic Console](https://console.anthropic.com/)
-4. Check the environment variable is set:
-```bash
-echo $ANTHROPIC_API_KEY
-# Should show your key
-```
+1. Run `claude` again and follow the authentication prompts
+2. Verify you have an active Claude Pro/Max subscription OR active billing on console.anthropic.com
+3. Check your internet connection
+4. Try logging out and back in to Claude Console or Claude App
+5. For API access, verify your API keys are active at [Anthropic Console](https://console.anthropic.com/)
 
 ### Slash Commands Not Appearing
 

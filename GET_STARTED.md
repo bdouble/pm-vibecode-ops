@@ -125,7 +125,7 @@ This workflow enables you to:
 ### 2. Check Prerequisites
 
 You need:
-- [ ] Claude Code installed ([get it here](https://claude.ai/code))
+- [ ] Claude Code installed ([installation guide](https://code.claude.com/docs/en/setup))
 - [ ] Ticketing system with MCP integration ([Linear](https://linear.app) or [Jira](https://www.atlassian.com/software/jira))
 - [ ] Access to a codebase (or start a new project)
 - [ ] A feature idea to implement

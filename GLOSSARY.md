@@ -67,9 +67,9 @@ Acceptance Criteria:
 ---
 
 ### API Key
-A secret code that authenticates your access to a service. Think of it like a password for apps to talk to each other. You'll need API keys for Claude (Anthropic), Linear, and optionally Perplexity.
+A secret code that authenticates your access to a service. Think of it like a password for apps to talk to each other. You'll need API keys for MCP servers like Linear and Perplexity. Claude Code authentication is handled separately through the CLI.
 
-**Example**: `sk-ant-abc123...` (Anthropic) or `lin_api_xyz...` (Linear)
+**Example**: `lin_api_xyz...` (Linear) or `pplx-abc123...` (Perplexity)
 
 ---
 
@@ -315,7 +315,7 @@ Epic: User Profile Customization
 ### Environment Variable
 A way to store configuration values (like API keys) that programs can access. Set once and all programs can use them, keeping sensitive info out of your code.
 
-**Example**: `export ANTHROPIC_API_KEY="sk-ant-..."` sets the key for Claude Code
+**Example**: `export LINEAR_API_KEY="lin_api_..."` sets the Linear API key for MCP servers
 
 ---
 
