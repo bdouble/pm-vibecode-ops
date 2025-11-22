@@ -519,15 +519,31 @@ If you're using OpenAI's Codex instead of Claude Code, this workflow provides pl
 
 ### Step 1: Install Codex CLI
 
+**For complete, official installation instructions, visit:**
+👉 **[OpenAI Codex CLI Documentation](https://developers.openai.com/codex/cli)**
+👉 **[OpenAI Help Center - Getting Started](https://help.openai.com/en/articles/11096431-openai-codex-cli-getting-started)**
+
+**Quick install via npm**:
 ```bash
-npm install -g @openai/codex
+npm i -g @openai/codex
 ```
 
-### Step 2: Configure OpenAI API Key
+**Verify installation**:
+```bash
+codex --version
+```
+
+### Step 2: Authenticate
+
+When you first run Codex, you'll be prompted to authenticate:
 
 ```bash
-export OPENAI_API_KEY="sk-your-openai-key-here"
+codex
 ```
+
+**Authentication requires**: ChatGPT Plus, Pro, Business, Edu, or Enterprise account
+
+Follow the prompts to sign in with your ChatGPT account. No manual API key setup is required for standard usage.
 
 ### Step 3: Use Platform-Agnostic Prompts
 
@@ -549,6 +565,8 @@ cat codex/prompts/discovery.md
 
 # Copy the content and use it in your Codex session
 ```
+
+For detailed Codex-specific behavior (personas, simple-mode assumptions, and Linear MCP usage), see `codex/README.md`.
 
 ---
 

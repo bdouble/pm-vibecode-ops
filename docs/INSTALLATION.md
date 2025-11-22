@@ -24,7 +24,7 @@ Complete installation instructions for PM Vibe Code Operations on all platforms 
 
 **AI Coding Tool**:
 - **Claude Code** (recommended) - [Official installation guide](https://code.claude.com/docs/en/setup)
-- **OR OpenAI Codex CLI** - Follow OpenAI's installation guide
+- **OR OpenAI Codex CLI** - [Official installation guide](https://developers.openai.com/codex/cli)
 
 **Project Management**:
 - **Linear** (recommended) with MCP - [Get Linear MCP](https://github.com/QuantGeekDev/linear-mcp)
@@ -41,7 +41,7 @@ Complete installation instructions for PM Vibe Code Operations on all platforms 
 - **Enterprise platform** (Amazon Bedrock, Google Vertex AI, Microsoft Foundry)
 
 **For Codex Users**:
-- ChatGPT Plus or API access
+- ChatGPT Plus, Pro, Business, Edu, or Enterprise account
 
 ### System Requirements
 
@@ -214,6 +214,33 @@ ls .claude/agents/
 ## OpenAI Codex Installation
 
 Codex uses prompts instead of slash commands. The prompts in `codex/prompts/` are platform-agnostic (no Claude-specific agents) but assume similar workflow.
+
+### Step 0: Install Codex CLI First
+
+Before installing this workflow, make sure you have OpenAI Codex installed.
+
+**👉 For complete installation instructions, visit the official guides:**
+- **[OpenAI Codex CLI Documentation](https://developers.openai.com/codex/cli)**
+- **[OpenAI Help Center - Getting Started](https://help.openai.com/en/articles/11096431-openai-codex-cli-getting-started)**
+
+**Quick install**:
+```bash
+npm i -g @openai/codex
+```
+
+**Verify installation**:
+```bash
+codex --version
+```
+
+**First run** (authentication):
+```bash
+codex
+```
+
+Follow the prompts to authenticate with your ChatGPT account. **Requires**: ChatGPT Plus, Pro, Business, Edu, or Enterprise account. No manual API key setup needed for standard usage.
+
+---
 
 ### Step 1: Clone Repository
 

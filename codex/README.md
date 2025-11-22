@@ -6,7 +6,23 @@ description: Codex-specific usage guide for PM Vibe Code Operations prompts.
 
 This directory contains **platform-agnostic prompts** designed for use with the OpenAI Codex CLI (and similar tools). They mirror the Claude Code workflow but use plain Markdown prompts instead of slash commands or agent configs.
 
-Key goals:
+## Prerequisites
+
+Before using these prompts, you need OpenAI Codex installed:
+
+**Installation** (see [official docs](https://developers.openai.com/codex/cli)):
+```bash
+npm i -g @openai/codex
+codex --version  # Verify installation
+codex            # Authenticate (requires ChatGPT Plus/Pro/Business/Edu/Enterprise)
+```
+
+For complete installation instructions, see:
+- [OpenAI Codex CLI Documentation](https://developers.openai.com/codex/cli)
+- [OpenAI Help Center - Getting Started](https://help.openai.com/en/articles/11096431-openai-codex-cli-getting-started)
+
+## Key Goals
+
 - Keep behavior as close as possible to the Claude Code workflow.
 - Use **simple mode** only: standard git branches.
 - Assume MCP-style integrations for ticketing (Linear) when available.

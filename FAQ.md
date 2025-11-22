@@ -99,6 +99,20 @@ cp claude/agents/*.md ~/.claude/agents/
 ```
 
 **For OpenAI Codex**:
+
+First, install Codex CLI (see [official installation guide](https://developers.openai.com/codex/cli)):
+```bash
+# Install Codex
+npm i -g @openai/codex
+
+# Verify installation
+codex --version
+
+# Authenticate (requires ChatGPT Plus/Pro/Business/Edu/Enterprise)
+codex
+```
+
+Then clone and access prompts:
 ```bash
 # Clone repository
 git clone https://github.com/YOUR_ORG/pm-vibecode-ops.git
