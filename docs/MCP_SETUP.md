@@ -377,7 +377,11 @@ docker run --rm -i mcp/sequentialthinking
 
 Playwright MCP allows Claude Code to control a web browser for automated testing, visual testing, and E2E testing. It revolutionizes browser automation by providing AI systems with semantic accessibility information rather than raw screenshots.
 
+**For complete official documentation, visit:**
+👉 **[https://github.com/microsoft/playwright-mcp](https://github.com/microsoft/playwright-mcp)**
+
 **Official Package**: `@playwright/mcp` (maintained by Microsoft)
+**Requirements**: Node.js 18 or newer
 
 ### Key Capabilities
 
@@ -385,7 +389,7 @@ Playwright MCP allows Claude Code to control a web browser for automated testing
 - **Accessibility-based interaction**: Uses semantic element descriptions (roles, labels) instead of screenshots
 - **Test generation**: Generate automated tests from natural language descriptions
 - **Visual testing**: Take screenshots and PDFs
-- **Multi-browser support**: Chromium, Firefox, WebKit
+- **Multi-browser support**: Chromium, Firefox, WebKit, Microsoft Edge
 - **File upload handling**: Automate file upload scenarios
 
 ### When to Install
@@ -403,45 +407,53 @@ Playwright MCP allows Claude Code to control a web browser for automated testing
 
 ### Installation
 
-**Using Claude Code CLI:**
+Playwright MCP is distributed as an npm package and runs as a subprocess communicating via standard input/output.
+
+**Using Claude Code CLI (Recommended):**
 ```bash
 claude mcp add playwright --scope user
 ```
 
-**Using official package with isolated browser profile:**
+**Using VS Code CLI:**
 ```bash
-claude mcp add --transport stdio playwright npx @playwright/mcp@latest -- --isolated
+code --add-mcp '{"name":"playwright","command":"npx","args":["@playwright/mcp@latest"]}'
 ```
 
-**Using persistent browser state:**
+**Using official package directly:**
 ```bash
-claude mcp add --transport stdio playwright npx @playwright/mcp@latest -- --isolated --storage-state=/path/to/storage.json
+claude mcp add --transport stdio playwright npx @playwright/mcp@latest
 ```
 
 ### Alternative: Manual Configuration
 
-**For Claude Desktop (Mac/Linux) - Isolated Mode:**
+**For Claude Desktop (Mac/Linux):**
 ```json
 {
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--isolated"]
+      "args": ["@playwright/mcp@latest"]
     }
   }
 }
 ```
 
-**For Claude Desktop (Windows) - Isolated Mode:**
+**For Claude Desktop (Windows):**
 ```json
 {
   "mcpServers": {
     "playwright": {
       "command": "cmd",
-      "args": ["/c", "npx", "@playwright/mcp@latest", "--isolated"]
+      "args": ["/c", "npx", "@playwright/mcp@latest"]
     }
   }
 }
+```
+
+**For Cursor IDE:**
+Go to Cursor Settings → MCP → Add new MCP Server. Use command type with the command:
+```
+npx @playwright/mcp@latest
 ```
 
 **For Docker Deployment (Headless Only):**
@@ -463,6 +475,32 @@ claude mcp add --transport stdio playwright npx @playwright/mcp@latest -- --isol
 }
 ```
 
+### Configuration Options
+
+Playwright MCP server supports optional command-line arguments for advanced configuration:
+
+```bash
+npx @playwright/mcp@latest --help
+
+Options:
+  --browser <type>           Browser to use: chrome, firefox, webkit, msedge (default: chromium)
+  --caps <features>          Enable capabilities: vision, pdf
+  --allowed-hosts <hosts>    Comma-separated list of allowed hosts
+  --cdp-endpoint <url>       Chrome DevTools Protocol endpoint URL
+```
+
+**Example with options:**
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--browser", "firefox", "--caps", "vision,pdf"]
+    }
+  }
+}
+```
+
 ### First-Time Setup
 
 After installing Playwright MCP, you may need to install browser binaries:
@@ -472,7 +510,7 @@ After installing Playwright MCP, you may need to install browser binaries:
 npx playwright install
 ```
 
-**Note**: The `--isolated` flag creates a fresh browser profile for each session, ensuring clean test environments.
+Browser binaries are downloaded on first use if not already present.
 
 ---
 
@@ -508,7 +546,7 @@ Here's a complete config file with all recommended MCP servers:
     },
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--isolated"]
+      "args": ["@playwright/mcp@latest"]
     }
   }
 }
@@ -544,7 +582,7 @@ Here's a complete config file with all recommended MCP servers:
     },
     "playwright": {
       "command": "cmd",
-      "args": ["/c", "npx", "@playwright/mcp@latest", "--isolated"]
+      "args": ["/c", "npx", "@playwright/mcp@latest"]
     }
   }
 }
@@ -598,7 +636,7 @@ If you prefer manual configuration, edit `~/.claude.json`:
     },
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--isolated"]
+      "args": ["@playwright/mcp@latest"]
     }
   }
 }
