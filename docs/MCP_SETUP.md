@@ -68,136 +68,105 @@ When you run a command like `/epic-planning`, Claude Code uses the Linear MCP se
 
 Linear MCP is **required** for this workflow. It allows Claude Code to create and manage issues, projects, and comments in Linear.
 
-### Step 1: Get Your Linear API Key
+**For complete official documentation, visit:**
+👉 **[https://linear.app/docs/mcp](https://linear.app/docs/mcp)**
 
-1. Log in to [Linear](https://linear.app)
-2. Click your profile icon (bottom left)
-3. Go to **Settings** → **API**
-4. Click **Create Key**
-5. Give it a name like "Claude Code"
-6. Copy the key (starts with `lin_api_...`)
+### Step 1: Install Linear MCP
 
-**Important**: Save this key securely. You won't be able to see it again.
-
-### Step 2: Set the Environment Variable
-
-**On Mac/Linux:**
-```bash
-# Add to your shell profile (~/.zshrc or ~/.bashrc)
-export LINEAR_API_KEY="lin_api_your_key_here"
-
-# Reload your profile
-source ~/.zshrc
-```
-
-**On Windows (PowerShell):**
-```powershell
-[Environment]::SetEnvironmentVariable("LINEAR_API_KEY", "lin_api_your_key_here", "User")
-# Restart PowerShell
-```
-
-### Step 3: Install Linear MCP
+Linear provides an **official remote MCP server** that is centrally hosted and managed. Authentication uses OAuth 2.1 with dynamic client registration.
 
 **Method A: Using Claude Code CLI (Recommended)**
 
 ```bash
-claude mcp add linear --scope user
+claude mcp add --transport http linear-server https://mcp.linear.app/mcp
 ```
 
-When prompted, confirm the installation. This will automatically configure the Linear MCP server for Claude Code.
+Then run `/mcp` in a Claude Code session to authenticate via OAuth.
 
-**Method B: Using Official Linear Remote Server**
+**Method B: Using Claude Desktop**
 
-Linear provides an official remote MCP server (as of 2025) that doesn't require local installation:
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) or equivalent:
 
-For Claude Desktop config:
 ```json
 {
   "mcpServers": {
     "linear": {
-      "url": "https://mcp.linear.app/sse",
-      "transport": "sse",
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
-      }
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.linear.app/mcp"]
     }
   }
 }
 ```
 
-**Method C: Community Implementation (Alternative)**
+**Method C: Using Cursor**
 
-Using the community-maintained package:
-```bash
-claude mcp add --transport stdio linear npx -y @larryhudson/linear-mcp-server
+Install via [deeplink](cursor://anysphere.cursor-deeplink/mcp/install?name=Linear&config=eyJ1cmwiOiJodHRwczovL21jcC5saW5lYXIuYXBwL3NzZSJ9) or search "Linear" in MCP tools.
+
+**Method D: Using VSCode/Windsurf/Zed**
+
+Use the command configuration:
+```json
+{
+  "mcpServers": {
+    "linear": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.linear.app/mcp"]
+    }
+  }
+}
 ```
 
-### Step 4: Verify Connection
+### Step 2: Authenticate
 
+The official Linear MCP server uses **OAuth 2.1 authentication** (no API key required in configuration files).
+
+**For Claude Code:**
+After installation, run:
 ```bash
-# Check MCP status
+claude
+# Then in the session:
+/mcp
+```
+
+Follow the OAuth prompts to authenticate with your Linear account.
+
+**For Claude Desktop/Cursor/VSCode:**
+Authentication happens automatically when you first use Linear tools. Follow the OAuth prompts in your browser.
+
+**Troubleshooting Authentication:**
+If you need to re-authenticate or clear auth cache:
+```bash
+rm -rf ~/.mcp-auth
+```
+
+### Step 3: Verify Connection
+
+**For Claude Code:**
+```bash
 claude mcp list
 ```
 
-You should see `linear` in the list of active servers with status "running".
+You should see `linear-server` in the list of active servers.
 
-### Alternative: Manual Configuration
+**For Claude Desktop/Cursor:**
+Test by asking Claude to list your Linear teams or projects.
 
-If automatic installation doesn't work, you can configure manually.
+### Alternative: Community MCP Servers (Advanced Users)
 
-**Configuration file locations:**
-- **Mac (Claude Desktop)**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows (Claude Desktop)**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux (Claude Desktop)**: `~/.config/claude/claude_desktop_config.json`
-- **Claude Code**: `~/.claude.json`
+If you prefer community implementations or need API key-based authentication:
 
-**For Claude Desktop (Mac/Linux):**
+**Community server using API keys:**
+```bash
+# Get your Linear API key from: https://linear.app/settings/api
 
-```json
-{
-  "mcpServers": {
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
-      }
-    }
-  }
-}
+# Set environment variable
+export LINEAR_API_KEY="lin_api_your_key_here"
+
+# Install community server
+claude mcp add --transport stdio linear npx -y @larryhudson/linear-mcp-server
 ```
 
-**For Claude Desktop (Windows):**
-```json
-{
-  "mcpServers": {
-    "linear": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
-      }
-    }
-  }
-}
-```
-
-**For Claude Code (all platforms):**
-```json
-{
-  "mcpServers": {
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
-      }
-    }
-  }
-}
-```
-
-**Note**: After editing configuration files, you must restart Claude Desktop or Claude Code for changes to take effect.
+**Note**: Community implementations may have different features and support levels. The official Linear MCP server is recommended for most users.
 
 ---
 
@@ -493,10 +462,7 @@ Here's a complete config file with all recommended MCP servers:
   "mcpServers": {
     "linear": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
-      }
+      "args": ["-y", "mcp-remote", "https://mcp.linear.app/mcp"]
     },
     "perplexity": {
       "command": "npx",
@@ -521,6 +487,8 @@ Here's a complete config file with all recommended MCP servers:
 }
 ```
 
+**Note**: Linear MCP uses OAuth 2.1 authentication—no API key needed in configuration.
+
 ### Claude Desktop Configuration (Windows)
 
 **File**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -530,10 +498,7 @@ Here's a complete config file with all recommended MCP servers:
   "mcpServers": {
     "linear": {
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
-      }
+      "args": ["/c", "npx", "-y", "mcp-remote", "https://mcp.linear.app/mcp"]
     },
     "perplexity": {
       "command": "cmd",
@@ -558,19 +523,36 @@ Here's a complete config file with all recommended MCP servers:
 }
 ```
 
+**Note**: Linear MCP uses OAuth 2.1 authentication—no API key needed in configuration.
+
 ### Claude Code Configuration (All Platforms)
 
-**File**: `~/.claude.json`
+**Recommended**: Use `claude mcp add` commands instead of manual configuration:
+
+```bash
+# Linear (OAuth-based, no API key needed)
+claude mcp add --transport http linear-server https://mcp.linear.app/mcp
+
+# Perplexity (requires API key)
+claude mcp add perplexity --scope user
+
+# Sequential Thinking (no API key needed)
+claude mcp add sequential-thinking --scope user
+
+# Playwright (no API key needed)
+claude mcp add playwright --scope user
+```
+
+**Alternative: Manual Configuration File**
+
+If you prefer manual configuration, edit `~/.claude.json`:
 
 ```json
 {
   "mcpServers": {
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
-      }
+    "linear-server": {
+      "transport": "http",
+      "url": "https://mcp.linear.app/mcp"
     },
     "perplexity": {
       "command": "npx",
@@ -595,26 +577,26 @@ Here's a complete config file with all recommended MCP servers:
 }
 ```
 
-**Note for Windows users running Claude Code**: The Claude Code CLI handles Windows command wrapping automatically, so you don't need `cmd /c` in the `~/.claude.json` file.
+**Note**: Linear MCP uses OAuth 2.1 authentication—authenticate via `/mcp` command in Claude Code. No API key configuration required.
 
 ### Environment Variables Setup
 
-Create or update your shell profile with the required MCP server API keys.
+Only Perplexity MCP requires an API key to be set as an environment variable. Linear uses OAuth authentication (no environment variable needed).
 
 **Note**: Claude Code authentication is handled separately—you don't need to set an ANTHROPIC_API_KEY environment variable.
 
 **Mac/Linux** (`~/.zshrc` or `~/.bashrc`):
 ```bash
-# MCP Server API Keys
-export LINEAR_API_KEY="lin_api_your-linear-key"
+# Perplexity API Key (required for Perplexity MCP)
 export PERPLEXITY_API_KEY="pplx-your-perplexity-key"
 ```
 
 **Windows** (run in PowerShell as Administrator):
 ```powershell
-[Environment]::SetEnvironmentVariable("LINEAR_API_KEY", "lin_api_your-linear-key", "User")
 [Environment]::SetEnvironmentVariable("PERPLEXITY_API_KEY", "pplx-your-perplexity-key", "User")
 ```
+
+**Linear Authentication**: Linear MCP uses OAuth 2.1. Authenticate via `/mcp` command in Claude Code or through browser prompts in Claude Desktop/Cursor.
 
 ---
 
@@ -640,7 +622,12 @@ Active MCP Servers:
 ### Step 2: Test Linear Connection
 
 Start Claude Code and run:
-```
+```bash
+claude
+# Authenticate with Linear first:
+/mcp
+
+# Then ask:
 Can you list my Linear teams?
 ```
 
@@ -683,30 +670,34 @@ Claude should use `mcp__sequential-thinking__sequentialthinking` for structured 
    npx clear-npx-cache
    ```
 
-3. **Try manual npx run**:
+3. **For Linear MCP, try testing the remote server**:
    ```bash
-   npx -y @modelcontextprotocol/server-linear
+   curl https://mcp.linear.app/mcp
    ```
-   This should start the server. If it fails, you'll see the actual error.
+   Should return a response (not an error).
 
-4. **Check environment variables**:
+4. **Check authentication**:
+   For Linear: Authenticate via `/mcp` in Claude Code or follow OAuth prompts.
+   For Perplexity: Check environment variable:
    ```bash
-   echo $LINEAR_API_KEY
    echo $PERPLEXITY_API_KEY
    ```
-   Should show your keys, not empty strings.
+   Should show your key (starts with `pplx-`), not empty string.
 
 ### "Invalid API Key" Errors
 
 **For Linear**:
-- Verify key starts with `lin_api_`
-- Check for extra spaces when copying
-- Try generating a new key
+Linear MCP uses OAuth 2.1 authentication, not API keys. If you see authentication errors:
+- Clear auth cache: `rm -rf ~/.mcp-auth`
+- Re-authenticate via `/mcp` command in Claude Code
+- Ensure you have access to the Linear workspace
+- Check that OAuth succeeded (you should see a browser confirmation)
 
 **For Perplexity**:
 - Verify key starts with `pplx-`
-- Check your Perplexity account has API access enabled
-- Verify billing is set up if on paid tier
+- Check for extra spaces when copying the key
+- Verify your Perplexity account has API access enabled
+- Ensure billing is set up if on paid tier
 
 ### Windows-Specific Issues
 
@@ -865,12 +856,12 @@ More specific configurations always override global defaults.
 
 ## Quick Reference
 
-| MCP Server | Required? | API Key Needed? | Official Package | What It Does |
-|------------|-----------|-----------------|------------------|--------------|
-| Linear | **Yes** | Yes (`lin_api_...`) | `@modelcontextprotocol/server-linear` | Creates/manages tickets and projects |
-| Perplexity | Recommended | Yes (`pplx-...`) | `@perplexity-ai/mcp-server` | Web search and deep research |
-| Sequential Thinking | Recommended | No | `@modelcontextprotocol/server-sequential-thinking` | Enhanced multi-step reasoning |
-| Playwright | Optional | No | `@playwright/mcp` | Browser automation and testing |
+| MCP Server | Required? | Authentication | Official Package/Server | What It Does |
+|------------|-----------|----------------|------------------------|--------------|
+| Linear | **Yes** | OAuth 2.1 (no API key) | Official remote server: `https://mcp.linear.app/mcp` | Creates/manages tickets and projects |
+| Perplexity | Recommended | API Key (`pplx-...`) | `@perplexity-ai/mcp-server` | Web search and deep research |
+| Sequential Thinking | Recommended | None | `@modelcontextprotocol/server-sequential-thinking` | Enhanced multi-step reasoning |
+| Playwright | Optional | None | `@playwright/mcp` | Browser automation and testing |
 
 **Install command pattern**:
 ```bash

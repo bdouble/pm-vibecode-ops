@@ -9,7 +9,7 @@ Before diving into specific issues, try these universal fixes:
 1. **Restart Claude Code** - Close and reopen the application
 2. **Restart your terminal** - Close all terminal windows and open fresh
 3. **Check your internet** - MCP servers need connectivity
-4. **Verify API keys** - Run `echo $LINEAR_API_KEY` to check if set
+4. **Verify MCP authentication** - For Linear: authenticate via `/mcp` command. For Perplexity: check `echo $PERPLEXITY_API_KEY`
 
 ---
 
@@ -60,33 +60,55 @@ source ~/.zshrc
 **Symptoms**: "Linear server not running" or can't create tickets
 
 **Fixes**:
-1. Check your API key is set:
+1. Authenticate with OAuth:
    ```bash
-   echo $LINEAR_API_KEY
+   claude
+   # In Claude Code session:
+   /mcp
    ```
-   Should show your key (starts with `lin_api_`)
+   Follow the OAuth prompts to authenticate with Linear.
 
-2. Reinstall the server:
+2. Clear authentication cache and retry:
    ```bash
-   claude mcp remove linear
-   claude mcp add linear --scope user
+   rm -rf ~/.mcp-auth
+   ```
+   Then authenticate again via `/mcp`.
+
+3. Verify Linear MCP is installed:
+   ```bash
+   claude mcp list
+   ```
+   Should show `linear-server` in the list.
+
+4. Reinstall if needed:
+   ```bash
+   claude mcp remove linear-server
+   claude mcp add --transport http linear-server https://mcp.linear.app/mcp
    ```
 
-3. Test directly:
+5. Test the remote server:
    ```bash
-   npx -y @modelcontextprotocol/server-linear
+   curl https://mcp.linear.app/mcp
    ```
-   If this fails, you'll see the actual error
+   Should return a response (not an error).
 
 ### "Invalid API Key" Errors
 
+**For Linear**:
+Linear uses OAuth 2.1, not API keys. If you see authentication errors:
+- Clear auth cache: `rm -rf ~/.mcp-auth`
+- Re-authenticate via `/mcp` command in Claude Code
+- Ensure you have access to the Linear workspace
+- Verify OAuth succeeded (you should see browser confirmation)
+
+**For Perplexity** (which does use API keys):
 - Check for extra spaces when you copied the key
-- Verify the key in your Linear/Perplexity account settings
+- Verify the key in your Perplexity account settings
 - Try generating a new key
 - Make sure environment variable is exported (not just set):
   ```bash
-  export LINEAR_API_KEY="your-key"  # Correct
-  LINEAR_API_KEY="your-key"          # Wrong - not exported
+  export PERPLEXITY_API_KEY="your-key"  # Correct
+  PERPLEXITY_API_KEY="your-key"          # Wrong - not exported
   ```
 
 ### MCP Servers Keep Disconnecting
@@ -247,8 +269,8 @@ git --version
 claude --version
 
 # MCP Environment Variables
-echo $LINEAR_API_KEY | head -c 10  # Shows first 10 chars
-echo $PERPLEXITY_API_KEY | head -c 10
+# Note: Linear uses OAuth (no API key needed)
+echo $PERPLEXITY_API_KEY | head -c 10  # Shows first 10 chars
 
 # MCP status
 claude mcp list

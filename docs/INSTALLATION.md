@@ -345,11 +345,13 @@ Model Context Protocol (MCP) servers provide AI tools for ticketing, web search,
 
 **Quick Linear MCP Setup**:
 ```bash
-# Install Linear MCP
-npm install -g @modelcontextprotocol/server-linear
+# Install Linear MCP (uses OAuth 2.1 - no API key needed)
+claude mcp add --transport http linear-server https://mcp.linear.app/mcp
 
-# Get your Linear API key from: https://linear.app/settings/api
-# Configure in Claude Code settings
+# Authenticate via /mcp command in Claude Code session
+# Or follow OAuth prompts in Claude Desktop/Cursor
+
+# See: https://linear.app/docs/mcp for official documentation
 ```
 
 ---
@@ -419,9 +421,9 @@ chmod +r ~/.claude/agents/*.md
 **Problem**: Commands can't create Linear tickets or access MCP tools
 
 **Solution**:
-1. Verify MCP server is installed: `npm list -g @modelcontextprotocol/server-linear`
-2. Check API key is configured correctly
-3. Test MCP connection in Claude Code
+1. Verify Linear MCP is installed: `claude mcp list` (should show `linear-server`)
+2. Authenticate via OAuth: Run `/mcp` command in Claude Code session
+3. Test MCP connection: Ask Claude to list your Linear teams
 4. See [MCP_SETUP.md](MCP_SETUP.md) for detailed troubleshooting
 
 ### Git Not Found

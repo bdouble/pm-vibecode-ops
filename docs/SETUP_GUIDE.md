@@ -25,7 +25,7 @@ This guide will walk you through setting up everything you need to use this work
 - A computer (Mac, Windows, or Linux)
 - Internet connection
 - Claude Code account (Pro, Max, or API access via console.anthropic.com)
-- A Linear account with API access — [Sign up here](https://linear.app/)
+- A Linear account — [Sign up here](https://linear.app/) (Linear MCP uses OAuth, no API key needed)
 
 **Helpful but optional**:
 - A code editor like VS Code (we'll install this)
