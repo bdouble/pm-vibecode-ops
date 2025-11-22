@@ -145,11 +145,11 @@ See [Setup Guide](docs/SETUP_GUIDE.md) for detailed instructions.
 - **Linear MCP** - For creating and managing tickets
 
 **Recommended**:
-- **Perplexity MCP** - For web research during discovery
+- **Perplexity MCP** - For web search, conversational AI, deep research, and reasoning ([Official Docs](https://docs.perplexity.ai/guides/mcp-server))
 - **Sequential Thinking MCP** - For complex reasoning tasks
 
 **Optional**:
-- **Playwright MCP** - For browser-based testing
+- **Playwright MCP** - For browser-based testing ([Microsoft GitHub](https://github.com/microsoft/playwright-mcp))
 
 See [MCP Setup Guide](docs/MCP_SETUP.md) for installation instructions.
 

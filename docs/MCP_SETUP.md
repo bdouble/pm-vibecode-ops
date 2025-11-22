@@ -178,6 +178,20 @@ Perplexity MCP allows Claude Code to search the web for current information and 
 - Finding solutions to common problems
 - Conducting comprehensive analysis on complex topics
 
+**For complete official documentation, visit:**
+👉 **[https://docs.perplexity.ai/guides/mcp-server](https://docs.perplexity.ai/guides/mcp-server)**
+
+**Official Package**: `@perplexity-ai/mcp-server` (maintained by Perplexity AI)
+
+### Available Tools
+
+Perplexity MCP provides four distinct AI-powered tools:
+
+1. **perplexity_search** - Web search returning ranked results with metadata
+2. **perplexity_ask** - Conversational AI using sonar-pro model
+3. **perplexity_research** - Deep analysis using sonar-deep-research model with citations
+4. **perplexity_reason** - Advanced problem-solving via sonar-reasoning-pro model
+
 ### Step 1: Get Your Perplexity API Key
 
 1. Go to [Perplexity API Platform](https://www.perplexity.ai/api-platform)
@@ -185,8 +199,6 @@ Perplexity MCP allows Claude Code to search the web for current information and 
 3. Navigate to API keys in your account settings
 4. Generate an API key
 5. Copy the key (starts with `pplx-`)
-
-**Official Package**: `@perplexity-ai/mcp-server` (maintained by Perplexity AI)
 
 ### Pricing Information (as of 2025)
 
@@ -229,15 +241,19 @@ Add to your shell profile (`~/.zshrc` or `~/.bashrc`) for permanence.
 
 ### Step 3: Install Perplexity MCP
 
-**Using Claude Code CLI:**
+**Method A: Using Claude Code CLI (Recommended)**
 ```bash
 claude mcp add perplexity --scope user
 ```
 
-**Using official package directly:**
+**Method B: Using official package directly**
 ```bash
 claude mcp add --transport stdio perplexity npx -y @perplexity-ai/mcp-server
 ```
+
+**Method C: One-Click Installation (Cursor/VS Code)**
+
+Cursor and VS Code offer automated setup through direct integration. Search for "Perplexity" in the MCP tools marketplace or extensions.
 
 ### Alternative: Manual Configuration
 
@@ -701,10 +717,10 @@ Claude should use `mcp__linear-server__list_teams` and show your Linear teams.
 ### Step 3: Test Perplexity Connection
 
 ```
-Search the web for "best practices for REST API design 2024"
+Search the web for "best practices for REST API design 2025"
 ```
 
-Claude should use `mcp__perplexity__search` and return current information.
+Claude should use one of the Perplexity tools (`mcp__perplexity__search`, `mcp__perplexity__ask`, `mcp__perplexity__research`, or `mcp__perplexity__reason`) and return current information.
 
 ### Step 4: Test Sequential Thinking
 
@@ -924,7 +940,7 @@ More specific configurations always override global defaults.
 | MCP Server | Required? | Authentication | Official Package/Server | What It Does |
 |------------|-----------|----------------|------------------------|--------------|
 | Linear | **Yes** | OAuth 2.1 (no API key) | Official remote server: `https://mcp.linear.app/mcp` | Creates/manages tickets and projects |
-| Perplexity | Recommended | API Key (`pplx-...`) | `@perplexity-ai/mcp-server` | Web search and deep research |
+| Perplexity | Recommended | API Key (`pplx-...`) | `@perplexity-ai/mcp-server` | Web search, conversational AI, deep research, and reasoning |
 | Sequential Thinking | Recommended | None | `@modelcontextprotocol/server-sequential-thinking` | Enhanced multi-step reasoning |
 | Playwright | Optional | None | `@playwright/mcp` | Browser automation and testing |
 

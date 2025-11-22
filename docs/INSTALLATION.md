@@ -335,11 +335,11 @@ Model Context Protocol (MCP) servers provide AI tools for ticketing, web search,
 - **Linear** (or Jira) - For creating and managing tickets
 
 **Recommended MCP Servers**:
-- **Perplexity** - For web research during discovery
+- **Perplexity** - For web search, conversational AI, deep research, and reasoning ([Docs](https://docs.perplexity.ai/guides/mcp-server))
 - **Sequential Thinking** - For complex reasoning tasks
 
 **Optional MCP Servers**:
-- **Playwright** - For browser-based testing
+- **Playwright** - For browser-based testing ([Docs](https://github.com/microsoft/playwright-mcp))
 
 **Complete MCP setup guide**: [MCP_SETUP.md](MCP_SETUP.md)
 
