@@ -287,6 +287,9 @@ Sequential Thinking MCP enhances Claude's reasoning for complex, multi-step prob
 
 **No API key required** — this runs locally.
 
+**For complete official documentation, visit:**
+👉 **[https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking)**
+
 **Official Package**: `@modelcontextprotocol/server-sequential-thinking` (maintained by Anthropic)
 
 ### How It Works
@@ -300,7 +303,9 @@ The Sequential Thinking tool enables:
 
 ### Installation
 
-**Using Claude Code CLI:**
+The Sequential Thinking MCP server is available as an npm package and can be run locally without any API keys or authentication.
+
+**Using Claude Code CLI (Recommended):**
 ```bash
 claude mcp add sequential-thinking --scope user
 ```
@@ -310,9 +315,14 @@ claude mcp add sequential-thinking --scope user
 claude mcp add --transport stdio sequential-thinking npx -y @modelcontextprotocol/server-sequential-thinking
 ```
 
+**Using Docker:**
+```bash
+docker run --rm -i mcp/sequentialthinking
+```
+
 ### Alternative: Manual Configuration
 
-**For Claude Desktop (Mac/Linux):**
+**For Claude Desktop (Mac/Linux) - NPX:**
 ```json
 {
   "mcpServers": {
@@ -327,7 +337,7 @@ claude mcp add --transport stdio sequential-thinking npx -y @modelcontextprotoco
 }
 ```
 
-**For Claude Desktop (Windows):**
+**For Claude Desktop (Windows) - NPX:**
 ```json
 {
   "mcpServers": {
@@ -342,7 +352,24 @@ claude mcp add --transport stdio sequential-thinking npx -y @modelcontextprotoco
 }
 ```
 
-**Note**: Set `DISABLE_THOUGHT_LOGGING` to `"true"` if you want to suppress thought logging for privacy or performance reasons.
+**For Claude Desktop (Mac/Linux/Windows) - Docker:**
+```json
+{
+  "mcpServers": {
+    "sequentialthinking": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "mcp/sequentialthinking"
+      ]
+    }
+  }
+}
+```
+
+**Note**: Set `DISABLE_THOUGHT_LOGGING` to `"true"` if you want to suppress thought logging for privacy or performance reasons. Docker configuration does not support environment variables in this format.
 
 ---
 
@@ -647,7 +674,7 @@ Claude should use `mcp__perplexity__search` and return current information.
 Think through the architectural implications of adding real-time notifications to a monolithic application.
 ```
 
-Claude should use `mcp__sequential-thinking__sequentialthinking` for structured reasoning.
+Claude should use `mcp__sequential-thinking__sequentialthinking` for structured reasoning with step-by-step thought process, revisions, and dynamic planning.
 
 ---
 
