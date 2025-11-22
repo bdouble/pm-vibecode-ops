@@ -73,6 +73,8 @@ A secret code that authenticates your access to a service. Think of it like a pa
 
 **Note**: Linear MCP uses OAuth 2.1, not API keys—authenticate via `/mcp` command or browser prompts.
 
+**See**: [Perplexity MCP Setup](https://docs.perplexity.ai/guides/mcp-server) for official documentation on obtaining and using Perplexity API keys.
+
 ---
 
 ### Architecture
@@ -440,7 +442,13 @@ DELETE /api/users/123    → Delete user 123
 ---
 
 ### MCP (Model Context Protocol)
-A standard for connecting AI assistants to external services. MCP "servers" give Claude Code new capabilities—like creating Linear tickets or searching the web.
+A standard for connecting AI assistants to external services. MCP "servers" give Claude Code new capabilities—like creating Linear tickets, searching the web, performing deep research, and enhanced reasoning.
+
+**Official MCP Servers Used**:
+- **Linear MCP**: Project management integration ([Linear Docs](https://linear.app/docs/mcp))
+- **Perplexity MCP**: Web search and AI research ([Perplexity Docs](https://docs.perplexity.ai/guides/mcp-server))
+- **Sequential Thinking MCP**: Enhanced reasoning capabilities
+- **Playwright MCP**: Browser automation ([Microsoft GitHub](https://github.com/microsoft/playwright-mcp))
 
 **See**: [MCP Setup Guide](docs/MCP_SETUP.md)
 
