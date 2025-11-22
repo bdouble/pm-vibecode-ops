@@ -250,7 +250,6 @@ You'll know you're successful when:
 1. Check [FAQ.md](FAQ.md) - 50+ questions answered
 2. Review similar scenario in [EXAMPLES.md](EXAMPLES.md)
 3. Open an issue on GitHub
-4. Ask in the community (Discord/Slack when available)
 
 ---
 
