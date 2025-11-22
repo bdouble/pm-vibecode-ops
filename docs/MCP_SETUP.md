@@ -599,19 +599,19 @@ Here's a complete config file with all recommended MCP servers:
 
 ### Environment Variables Setup
 
-Create or update your shell profile with all required variables:
+Create or update your shell profile with the required MCP server API keys.
+
+**Note**: Claude Code authentication is handled separately—you don't need to set an ANTHROPIC_API_KEY environment variable.
 
 **Mac/Linux** (`~/.zshrc` or `~/.bashrc`):
 ```bash
-# Claude Code API Keys
-export ANTHROPIC_API_KEY="sk-ant-your-anthropic-key"
+# MCP Server API Keys
 export LINEAR_API_KEY="lin_api_your-linear-key"
 export PERPLEXITY_API_KEY="pplx-your-perplexity-key"
 ```
 
 **Windows** (run in PowerShell as Administrator):
 ```powershell
-[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-ant-your-anthropic-key", "User")
 [Environment]::SetEnvironmentVariable("LINEAR_API_KEY", "lin_api_your-linear-key", "User")
 [Environment]::SetEnvironmentVariable("PERPLEXITY_API_KEY", "pplx-your-perplexity-key", "User")
 ```

@@ -246,9 +246,9 @@ npm --version
 git --version
 claude --version
 
-# Environment
-echo $ANTHROPIC_API_KEY | head -c 10  # Shows first 10 chars
-echo $LINEAR_API_KEY | head -c 10
+# MCP Environment Variables
+echo $LINEAR_API_KEY | head -c 10  # Shows first 10 chars
+echo $PERPLEXITY_API_KEY | head -c 10
 
 # MCP status
 claude mcp list

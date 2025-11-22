@@ -23,7 +23,7 @@ Complete installation instructions for PM Vibe Code Operations on all platforms 
 ### Required for All Platforms
 
 **AI Coding Tool**:
-- **Claude Code** (recommended) - [Get it here](https://claude.ai/code)
+- **Claude Code** (recommended) - [Official installation guide](https://code.claude.com/docs/en/setup)
 - **OR OpenAI Codex CLI** - Follow OpenAI's installation guide
 
 **Project Management**:
@@ -35,21 +35,30 @@ Complete installation instructions for PM Vibe Code Operations on all platforms 
 - **Git** - [Install Git](https://git-scm.com/downloads)
 - Git repository for your project (or create new one)
 
-**Paid Accounts**:
-- Claude Pro or API access (for Claude Code)
-- ChatGPT Plus or API access (for Codex)
+**Claude Code Authentication** (one of these):
+- **Claude Pro** or **Claude Max** subscription
+- **API access** via console.anthropic.com (requires active billing)
+- **Enterprise platform** (Amazon Bedrock, Google Vertex AI, Microsoft Foundry)
+
+**For Codex Users**:
+- ChatGPT Plus or API access
 
 ### System Requirements
 
 **Operating Systems**:
 - macOS 10.15+
 - Linux (Ubuntu 20.04+, Debian 10+)
-- Windows 10/11 (via WSL2 recommended)
+- Windows 10/11 (WSL2 recommended for best experience)
 
 **Software**:
-- Node.js 18+ and npm (for MCP servers)
-- Terminal application
-- Text editor (VS Code, Sublime, Vim, etc.)
+- Node.js 18+ and npm (for MCP servers like Linear, Perplexity)
+- Terminal application (Terminal.app on macOS, Windows Terminal, etc.)
+- Text editor (VS Code, Sublime, Vim, etc.) - optional but helpful
+
+**For Claude Code**:
+- At least 4GB RAM
+- Active internet connection
+- Compatible shell (Bash, Zsh, or Fish)
 
 ---
 
@@ -76,7 +85,52 @@ Codex users use platform-agnostic prompts from `codex/prompts/` directory.
 
 ---
 
-## Claude Code Installation
+## Install Claude Code First
+
+Before installing this workflow, make sure you have Claude Code installed.
+
+**👉 For complete installation instructions, visit the official guide:**
+**[https://code.claude.com/docs/en/setup](https://code.claude.com/docs/en/setup)**
+
+**Quick install**:
+
+**macOS/Linux (Homebrew)**:
+```bash
+brew install --cask claude-code
+```
+
+**macOS/Linux/WSL (Script)**:
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+**Windows (PowerShell)**:
+```powershell
+irm https://claude.ai/install.ps1 | iex
+```
+
+**Alternative (NPM)**:
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+**Verify installation**:
+```bash
+claude --version
+```
+
+**First run** (authentication):
+```bash
+claude
+```
+
+Follow the prompts to authenticate via Claude Console, Claude App, or Enterprise platform. No manual API key setup required.
+
+---
+
+## Workflow Installation
+
+Now that Claude Code is installed, you can install this workflow's commands and agents.
 
 ### Step 1: Clone Repository
 
