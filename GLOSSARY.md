@@ -67,9 +67,11 @@ Acceptance Criteria:
 ---
 
 ### API Key
-A secret code that authenticates your access to a service. Think of it like a password for apps to talk to each other. You'll need API keys for MCP servers like Linear and Perplexity. Claude Code authentication is handled separately through the CLI.
+A secret code that authenticates your access to a service. Think of it like a password for apps to talk to each other. Some MCP servers require API keys (like Perplexity), while others use OAuth authentication (like Linear). Claude Code authentication is handled separately through the CLI.
 
-**Example**: `lin_api_xyz...` (Linear) or `pplx-abc123...` (Perplexity)
+**Example**: `pplx-abc123...` (Perplexity API key)
+
+**Note**: Linear MCP uses OAuth 2.1, not API keys—authenticate via `/mcp` command or browser prompts.
 
 ---
 
@@ -412,8 +414,9 @@ DELETE /api/users/123    → Delete user 123
 
 **Why this workflow needs MCP integration**: MCP (Model Context Protocol) allows AI agents to create and update tickets automatically. Linear and Jira both have MCP servers available.
 
+**Linear MCP**: Official remote server using OAuth 2.1 authentication (no API key needed). See [Linear MCP Documentation](https://linear.app/docs/mcp).
+
 **Alternatives**:
-- **Linear** (recommended): [Linear MCP](https://github.com/QuantGeekDev/linear-mcp)
 - **Jira** (supported): [Jira MCP](https://github.com/zcaceres/jira-mcp)
 - **Others**: Any ticketing system with MCP integration
 
