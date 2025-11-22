@@ -5,6 +5,100 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-11-22
+
+### Changed
+
+**Major Installation Documentation Overhaul**
+- Updated all installation and setup documentation to reference official sources
+- Removed outdated manual API key setup instructions across all platforms
+- Aligned documentation with official installation guides for better accuracy
+
+**Claude Code Installation (docs/SETUP_GUIDE.md, docs/INSTALLATION.md)**
+- Removed manual ANTHROPIC_API_KEY setup (authentication now automatic via OAuth)
+- Added official installation guide reference: https://code.claude.com/docs/en/setup
+- Updated to native installation methods (Homebrew, install scripts, NPM as alternative)
+- Clarified authentication options (Console, App, Enterprise platforms)
+- Updated troubleshooting sections for OAuth-based authentication
+
+**OpenAI Codex Installation (docs/SETUP_GUIDE.md, docs/INSTALLATION.md, FAQ.md, codex/README.md)**
+- Removed incorrect OPENAI_API_KEY environment variable setup
+- Updated installation command to official: `npm i -g @openai/codex`
+- Added official documentation links: https://developers.openai.com/codex/cli
+- Clarified authentication requires ChatGPT Plus/Pro/Business/Edu/Enterprise subscription
+- Added verification and first-run authentication steps
+
+**Linear MCP Setup (docs/MCP_SETUP.md, docs/INSTALLATION.md, docs/TROUBLESHOOTING.md, GLOSSARY.md)**
+- **Critical correction**: Linear MCP uses OAuth 2.1 authentication, not API keys
+- Replaced API key setup with official OAuth browser flow
+- Updated to official remote server: https://mcp.linear.app/mcp
+- Removed LINEAR_API_KEY environment variable requirements
+- Changed installation to remote transport method
+- Updated server name from `linear` to `linear-server`
+- Simplified setup process (no npm install or env vars needed)
+- Added official documentation: https://linear.app/docs/mcp
+
+**Sequential Thinking MCP (docs/MCP_SETUP.md)**
+- Added prominent link to official Anthropic documentation
+- Added Docker installation method (previously missing)
+- Enhanced installation section with clearer structure (NPX vs Docker)
+- Added Docker configuration examples for Claude Desktop
+- Improved manual configuration with labeled sections
+- Official documentation: https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking
+
+**Playwright MCP (docs/MCP_SETUP.md)**
+- Updated to official Microsoft package: `@playwright/mcp`
+- Added official documentation: https://github.com/microsoft/playwright-mcp
+- Added Node.js 18+ requirement (official prerequisite)
+- Removed non-standard `--isolated` flag (not in official docs)
+- Added VS Code CLI installation method (`code --add-mcp`)
+- Added Cursor IDE installation instructions
+- Documented official command-line options (`--browser`, `--caps`, `--allowed-hosts`, `--cdp-endpoint`)
+- Added multi-browser support documentation (Chrome, Firefox, WebKit, Edge)
+
+**Perplexity MCP (docs/MCP_SETUP.md, GLOSSARY.md, FAQ.md, docs/INSTALLATION.md)**
+- Added official documentation: https://docs.perplexity.ai/guides/mcp-server
+- Documented all four Perplexity tools (search, ask, research, reason)
+- Added one-click installation method for Cursor/VS Code
+- Updated Quick Reference table with complete capabilities
+- Confirmed `@perplexity-ai/mcp-server` package and PERPLEXITY_API_KEY requirement
+
+### Fixed
+
+**Troubleshooting Documentation (docs/TROUBLESHOOTING.md)**
+- Removed ANTHROPIC_API_KEY from diagnostic commands
+- Updated to show only MCP-specific environment variables
+- Rewrote Linear MCP troubleshooting for OAuth authentication
+- Added OAuth auth cache clearing instructions
+
+**Glossary Updates (GLOSSARY.md)**
+- Updated API Key definition to clarify Linear uses OAuth, not API keys
+- Changed examples from ANTHROPIC_API_KEY to LINEAR_API_KEY
+- Added official documentation links for all MCP servers
+
+### Benefits
+
+**For Users:**
+- Accurate installation instructions matching official sources
+- Simpler setup processes (OAuth vs manual API keys where applicable)
+- Direct access to official documentation for troubleshooting
+- Clear authentication requirements for each platform
+- Consistent documentation style across all platforms
+
+**For Maintainability:**
+- Single source of truth (official documentation)
+- Reduced custom/undocumented configuration
+- Better alignment with platform updates
+- Clear separation between platforms requiring API keys vs OAuth
+
+**Authentication Summary:**
+- Claude Code: OAuth via Console/App/Enterprise (no manual API key)
+- OpenAI Codex: ChatGPT subscription (automatic authentication)
+- Linear MCP: OAuth 2.1 (no manual API key)
+- Perplexity MCP: Requires PERPLEXITY_API_KEY
+- Sequential Thinking MCP: None (runs locally)
+- Playwright MCP: None (runs locally)
+
 ## [1.0.2] - 2025-11-22
 
 ### Changed
