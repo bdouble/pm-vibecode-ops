@@ -641,6 +641,28 @@ A list of directories where your computer looks for programs. If you get "comman
 
 ---
 
+### Skill (Claude Code Skill)
+**PM Definition**: Auto-activated quality enforcement that Claude applies during development without explicit invocation.
+
+**How it differs from commands**:
+- **Commands**: You explicitly run (`/implementation`, `/testing`)
+- **Skills**: Activate automatically based on context
+
+**Available skills in this workflow**:
+- **production-code-standards**: Blocks workarounds, temporary code
+- **service-reuse**: Requires checking inventory before creating services
+- **testing-philosophy**: Requires fixing broken tests first
+- **mvd-documentation**: Enforces documentation standards
+- **security-patterns**: Applies OWASP patterns during code writing
+
+**Why PMs care**: Skills prevent issues during development, reducing problems that reach review phases. Think of them as guardrails that are always on.
+
+**Analogy**: Like spell-check that runs automatically as you type, not just when you click "Check Spelling."
+
+**See also**: [SKILLS.md](SKILLS.md) for workflow-specific skills, [Claude Code Skills Documentation](https://code.claude.com/docs/en/skills) for official reference.
+
+---
+
 ### Sprint
 **PM Definition**: Fixed time period (usually 1-2 weeks) for completing planned work.
 

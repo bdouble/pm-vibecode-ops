@@ -2,6 +2,8 @@
 
 Skills are contextual capabilities that Claude automatically activates based on what you're doing. Unlike slash commands (which you explicitly invoke with `/command`), skills activate proactively when relevant.
 
+**Official Documentation**: [Claude Code Skills](https://code.claude.com/docs/en/skills)
+
 ## How Skills Work
 
 **Commands** = Explicit workflow phases you invoke (`/implementation`, `/testing`)

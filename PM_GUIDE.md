@@ -66,6 +66,19 @@ This workflow provides the **structure** that makes vibe coding reliable:
 **AI's job**: Handle the middle layer (writing production-quality code)
 **Built-in**: Bottom layer ensures quality without you becoming a technical expert
 
+### Auto-Enforced Quality (Skills)
+
+The workflow includes **skills**—quality standards that AI enforces automatically as it works. You don't invoke these; they activate contextually:
+
+- **Production Standards**: AI refuses to write temporary code, workarounds, or TODO comments
+- **Service Reuse**: AI checks existing services before creating new ones
+- **Security Patterns**: AI applies OWASP security best practices while writing code
+- **Testing Philosophy**: AI fixes broken tests before writing new ones
+
+**Why this matters for PMs**: Issues are prevented during development, not just caught at review. Fewer problems make it to code review and security review phases.
+
+**Learn more**: [SKILLS.md](SKILLS.md) | [Official Skills Documentation](https://code.claude.com/docs/en/skills)
+
 ### Key Terminology (PM Translation)
 
 | Technical Term | PM Translation | Why You Care |
