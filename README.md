@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 
 ## What This Is
 
@@ -35,7 +35,10 @@ Your ticketing system (Linear/Jira) becomes AI's external memory. Discovery find
 **4. Specialized Agent Workflow**
 Instead of one generic AI, you work with expert agents—architect, backend engineer, QA, security, technical writer. Each focuses on their specialty with strict boundaries to prevent scope creep.
 
-**5. Production-First Quality**
+**5. Auto-Activated Quality Skills**
+Skills enforce standards during development, not just at review time. Production code standards, security patterns, and testing philosophy activate automatically as Claude writes code—preventing issues before they're created.
+
+**6. Production-First Quality**
 Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based testing focuses on code that matters. Inline documentation AI can't miss.
 
 ### What You Get
@@ -131,9 +134,10 @@ git clone https://github.com/your-org/pm-vibecode-ops.git
 cd pm-vibecode-ops
 
 # Global installation
-mkdir -p ~/.claude/commands ~/.claude/agents
+mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
 cp claude/commands/*.md ~/.claude/commands/
 cp claude/agents/*.md ~/.claude/agents/
+cp -r claude/skills/* ~/.claude/skills/
 ```
 
 **Complete installation guide**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
@@ -168,6 +172,7 @@ Start here if you don't have a development background:
 Detailed command syntax and architecture:
 
 - **[TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md)** - Complete command documentation, agent specifications, architecture details
+- **[SKILLS.md](SKILLS.md)** - Auto-activated quality enforcement (production standards, security patterns, testing philosophy)
 - **[INSTALLATION.md](docs/INSTALLATION.md)** - Comprehensive installation guide for all platforms and modes
 - **[WORKTREE_GUIDE.md](docs/WORKTREE_GUIDE.md)** - Git worktrees for concurrent development (advanced)
 

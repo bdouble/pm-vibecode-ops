@@ -5,6 +5,60 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-11-26
+
+### Added
+
+**Auto-Activated Quality Enforcement Skills**
+
+Introduced 5 new skills that automatically activate during development to enforce standards and prevent issues before they occur. Skills shift enforcement LEFT—catching problems during creation rather than at review phases.
+
+**New Skills:**
+
+- **production-code-standards** - Blocks workarounds, temporary solutions, fallback logic hiding errors, TODO/FIXME/HACK comments, mocked services in production code, and silent error suppression. Activates when writing code in src/, lib/, app/ directories.
+
+- **service-reuse** - Enforces checking service inventory before creating new services, utilities, or helpers. Prevents code duplication by mandating reuse of existing authentication, validation, and data access patterns.
+
+- **testing-philosophy** - Requires fixing existing broken tests BEFORE writing new tests. Enforces accuracy-first testing: accurate tests that run > high coverage with broken tests.
+
+- **mvd-documentation** - Enforces Minimal Viable Documentation standards. Documents the "why" not the "what"—TypeScript already shows the "what". Requires documentation for security-sensitive code.
+
+- **security-patterns** - Enforces OWASP Top 10 patterns during development. Covers: broken access control, cryptographic failures, injection, insecure design, misconfiguration, vulnerable components, authentication failures, data integrity, logging failures, and SSRF.
+
+**New Documentation:**
+
+- `SKILLS.md` - Comprehensive guide explaining skills vs commands vs agents, installation instructions, and how to create custom skills
+
+**Skill Design:**
+
+- All skills follow skill-creator best practices with concise frontmatter triggers
+- Workflow overviews at the start of each skill for clear enforcement steps
+- BLOCK/REQUIRE labeling for prohibited vs required patterns
+- Code examples demonstrating correct and incorrect approaches
+
+### Benefits
+
+**For Developers:**
+- Proactive issue prevention during coding (not just at review time)
+- Clear guidance on prohibited patterns with working alternatives
+- Consistent enforcement of production-ready standards
+- Security patterns applied automatically when writing sensitive code
+
+**For Code Quality:**
+- Reduced code review cycles (fewer issues to catch)
+- Consistent application of OWASP security standards
+- Enforced service reuse preventing duplicate implementations
+- Test accuracy prioritized over coverage metrics
+
+**Workflow Integration:**
+```
+Traditional:
+  /implementation → code with issues → /codereview catches issues → fix
+
+With Skills:
+  /implementation → skill prevents issues → /codereview (fewer issues)
+```
+
 ## [1.0.3] - 2025-11-22
 
 ### Changed
@@ -351,5 +405,8 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
-[1.0.1]: https://github.com/your-org/pm-vibecode-ops/releases/tag/v1.0.1
-[1.0.0]: https://github.com/your-org/pm-vibecode-ops/releases/tag/v1.0.0
+[1.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.1.0
+[1.0.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.0.3
+[1.0.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.0.2
+[1.0.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.0.1
+[1.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.0.0
