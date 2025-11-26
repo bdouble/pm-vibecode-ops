@@ -121,13 +121,7 @@ Node.js is required to run Claude Code and MCP servers.
 
 #### On Mac
 
-**Option A: Direct Download (Simplest)**
-1. Go to [nodejs.org](https://nodejs.org/)
-2. Download the "LTS" version (the one that says "Recommended")
-3. Run the installer, click through all the prompts
-4. Restart your terminal
-
-**Option B: Using Homebrew (Recommended for Mac users who want more control)**
+**Option A: Using [Homebrew](https://brew.sh) (Recommended for Mac users)**
 ```bash
 # First, install Homebrew if you don't have it
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -136,6 +130,11 @@ Node.js is required to run Claude Code and MCP servers.
 brew install node
 ```
 
+**Option B: Direct Download**
+1. Go to [nodejs.org](https://nodejs.org/)
+2. Download the "LTS" version (the one that says "Recommended")
+3. Run the installer, click through all the prompts
+4. Restart your terminal
 #### On Windows
 
 1. Go to [nodejs.org](https://nodejs.org/)
