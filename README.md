@@ -88,11 +88,11 @@ The honest truth: AI-assisted development with proper quality gates produces rel
 
 The workflow consists of two phases:
 
-### Project-Level Setup (Once Per Project)
-1. `/generate_service_inventory` - Catalog existing code
-2. `/discovery` - Analyze patterns and architecture
-3. `/epic-planning` - Create business-focused epics
-4. `/planning` - Decompose epics into engineering tickets
+### Project-Level Commands (Recurring)
+1. `/generate_service_inventory` - Catalog existing code *(run after major codebase updates)*
+2. `/discovery` - Analyze patterns and architecture *(run before each epic planning phase)*
+3. `/epic-planning` - Create business-focused epics *(run for each new feature, PRD, or major initiative)*
+4. `/planning` - Decompose epics into engineering tickets *(run for each new epic)*
 
 ### Ticket-Level Execution (For Each Feature)
 5. `/adaptation` - Create implementation guide (reuse analysis, pattern selection)

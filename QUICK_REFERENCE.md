@@ -17,14 +17,14 @@
 
 ## Workflow Commands (Run in Order)
 
-### Project-Level (Run Once Per Project)
+### Project-Level (Recurring)
 
-| # | Command | Purpose | Your Action |
+| # | Command | Purpose | When to Run |
 |---|---------|---------|-------------|
-| 1 | `/generate_service_inventory [path]` | Catalog existing code | Review inventory |
-| 2 | `/discovery [ticket] [path] [areas]` | Analyze patterns | Review findings |
-| 3 | `/epic-planning [prd] [discovery] [context]` | Create business epics | **Approve epics** |
-| 4 | `/planning [epic-ids]` | Break into tickets | Review breakdown |
+| 1 | `/generate_service_inventory [path]` | Catalog existing code | After major codebase updates |
+| 2 | `/discovery [ticket] [path] [areas]` | Analyze patterns | Before each epic planning phase |
+| 3 | `/epic-planning [prd] [discovery] [context]` | Create business epics | For each new feature/PRD/initiative |
+| 4 | `/planning [epic-ids]` | Break into tickets | For each new epic |
 
 ### Ticket-Level (Run for Each Ticket)
 

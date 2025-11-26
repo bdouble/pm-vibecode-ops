@@ -21,7 +21,7 @@ Complete command documentation, agent specifications, and architecture details f
 
 ### Project-Level Commands
 
-These commands run once per project to establish context and planning.
+These commands run at recurring intervals throughout the project lifecycle—not just once at setup. Service inventory runs after major codebase changes, discovery runs before each epic planning phase, epic planning runs for each new feature or PRD, and planning runs for each new epic.
 
 #### `/generate_service_inventory`
 

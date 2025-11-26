@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.1] - 2025-11-26
 
+### Fixed
+
+**Workflow Timing Documentation**
+
+- Corrected project-level command timing guidance across README.md, QUICK_REFERENCE.md, and TECHNICAL_REFERENCE.md
+- Previously stated these commands run "once per project" which was incorrect
+- Now accurately documents recurring usage:
+  - `/generate_service_inventory` - Run after major codebase updates
+  - `/discovery` - Run before each epic planning phase
+  - `/epic-planning` - Run for each new feature, PRD, or major initiative
+  - `/planning` - Run for each new epic
+- Aligns with existing correct guidance in PM_GUIDE.md and GLOSSARY.md
+
 ### Added
 
 **Model-Aware Behavior Skill**
