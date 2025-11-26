@@ -84,6 +84,8 @@ Before starting, choose your AI platform and workflow mode:
 
 ### For Claude Code Users
 
+**Model Recommendation**: Use **Claude Opus 4.5** for this workflow. See [Model Recommendations](README.md#model-recommendations) for phase-specific guidance. Haiku 4.5 is not recommended.
+
 | Mode | Best For | Commands Location |
 |------|----------|-------------------|
 | **Simple Mode** | Most users, beginners, one ticket at a time | `claude/commands/` |

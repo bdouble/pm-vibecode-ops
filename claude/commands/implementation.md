@@ -146,6 +146,14 @@ During implementation, the agent MUST deliver production-quality code:
 - Document the exact fix needed as a prerequisite
 - Create a separate ticket for the blocking bug if needed
 
+## Code Exploration Before Changes
+
+Before proposing ANY code changes:
+1. Read all files mentioned in the adaptation guide
+2. Read files imported/referenced by those files
+3. Understand existing patterns before writing new code
+4. Do not speculate about code you have not inspected
+
 ## Pre-Implementation Validation (MANDATORY)
 
 ### CRITICAL: Service Reuse Verification

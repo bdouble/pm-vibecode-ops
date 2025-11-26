@@ -119,6 +119,14 @@ The adaptation phase must create implementation guides that result in production
 4. **Create ONE project-level branch** for ALL work (format: `project/[project-name]`)
 5. **All subtickets share the same branch** - no individual ticket branches
 
+## Code Exploration Requirements
+
+Before making ANY recommendations:
+1. Read all relevant existing files in the codebase
+2. Do not speculate about code you have not inspected
+3. Search for existing implementations before suggesting new ones
+4. Understand existing patterns before recommending approaches
+
 ## Adaptation Workflow
 
 1. **Context Loading**: Use `mcp__linear-server__get_issue` and `mcp__linear-server__list_comments` to fetch ticket details and requirements
