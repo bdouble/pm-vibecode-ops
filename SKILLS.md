@@ -1,0 +1,203 @@
+# Skills: Auto-Activated Quality Enforcement
+
+Skills are contextual capabilities that Claude automatically activates based on what you're doing. Unlike slash commands (which you explicitly invoke with `/command`), skills activate proactively when relevant.
+
+## How Skills Work
+
+**Commands** = Explicit workflow phases you invoke (`/implementation`, `/testing`)
+**Skills** = Standards that auto-activate during development
+
+```
+Skills (preventive)     →  Your Work  →  Commands (verification)
+"Enforce while working"    [code/docs]    "Review what was done"
+```
+
+Skills shift enforcement LEFT - catching issues during creation rather than at review phases.
+
+## Available Skills
+
+### 1. production-code-standards
+
+**Activates when**: Writing code, implementing features, fixing bugs, creating services
+
+**Enforces**:
+- No workarounds or temporary solutions
+- No fallback logic that hides errors
+- No TODO/FIXME/HACK comments
+- No mocked services in production code
+- Fail-fast error handling
+- Repository pattern for data access
+
+**Example trigger**: "Implement the user registration endpoint"
+
+### 2. service-reuse
+
+**Activates when**: Creating new services, utilities, helpers, middleware, guards, infrastructure
+
+**Enforces**:
+- Check service inventory before creating anything new
+- Reuse existing authentication services
+- Reuse existing validation utilities
+- Extend existing base classes
+- Use event-driven patterns over direct coupling
+
+**Example trigger**: "Create a new email notification service"
+
+### 3. testing-philosophy
+
+**Activates when**: Writing tests, debugging test failures, improving coverage
+
+**Enforces**:
+- Fix existing broken tests BEFORE writing new tests
+- Verify actual API via code reading before testing
+- Tests must compile (zero TypeScript errors)
+- Tests must execute (zero runtime errors)
+- Strategic test creation (quality over coverage)
+
+**Example trigger**: "Write tests for the payment module"
+
+### 4. mvd-documentation
+
+**Activates when**: Writing JSDoc, README files, API docs, inline comments
+
+**Enforces**:
+- Document "why", not "what" (TypeScript shows "what")
+- No type duplication in JSDoc for TypeScript
+- Security-sensitive functions require documentation
+- No placeholder content (TODO, TBD)
+- Complete documentation or none
+
+**Example trigger**: "Document the authentication API"
+
+### 5. security-patterns
+
+**Activates when**: Writing auth code, input handling, API endpoints, database queries
+
+**Enforces**:
+- Authentication on every protected endpoint
+- Authorization checks on data access
+- Parameterized queries (no SQL injection)
+- Input validation at system boundaries
+- No sensitive data in error responses
+- Security event logging
+
+**Example trigger**: "Add login endpoint with password validation"
+
+## Skills vs Commands vs Agents
+
+| Aspect | Skills | Commands | Agents |
+|--------|--------|----------|--------|
+| **Invocation** | Auto (contextual) | Explicit (`/command`) | Via commands |
+| **Purpose** | Enforce standards | Execute workflow phases | Provide expertise |
+| **Timing** | During work | Deliberate phases | During phases |
+| **Output** | Inline guidance | Deliverables | Task completion |
+
+## How Skills Complement the Workflow
+
+The pm-vibecode-ops workflow has 10 phases. Skills add a proactive enforcement layer:
+
+```
+Traditional:
+  /implementation → code with issues → /codereview catches issues → fix
+
+With Skills:
+  /implementation → skill prevents issues → /codereview (fewer issues)
+```
+
+**Example flow**:
+
+1. You run `/implementation` for a ticket
+2. **production-code-standards** skill activates as Claude writes code
+3. Claude refuses to add a TODO comment (skill enforcement)
+4. Claude uses existing auth service (service-reuse skill)
+5. You run `/codereview`
+6. Fewer issues found because skills prevented them
+
+## Skill Strictness
+
+All skills in this repo use **strict enforcement**:
+- Skills actively block prohibited patterns
+- Claude will refuse to write code that violates skills
+- No "warnings only" - violations are blocked
+
+## Installation
+
+Skills must be installed to your Claude Code skills directory to be active.
+
+### Global Installation (All Projects)
+
+```bash
+# From the pm-vibecode-ops directory
+mkdir -p ~/.claude/skills
+cp -r claude/skills/* ~/.claude/skills/
+```
+
+### Project-Specific Installation
+
+```bash
+# From your target project directory
+mkdir -p .claude/skills
+cp -r /path/to/pm-vibecode-ops/claude/skills/* .claude/skills/
+```
+
+### Verify Installation
+
+After installation, skills should be in:
+- **Global**: `~/.claude/skills/[skill-name]/SKILL.md`
+- **Project**: `.claude/skills/[skill-name]/SKILL.md`
+
+## Repository Location
+
+In this repository, skill definitions are stored in:
+```
+claude/skills/
+├── production-code-standards/
+│   └── SKILL.md
+├── service-reuse/
+│   └── SKILL.md
+├── testing-philosophy/
+│   └── SKILL.md
+├── mvd-documentation/
+│   └── SKILL.md
+└── security-patterns/
+    └── SKILL.md
+```
+
+## Creating Custom Skills
+
+To add a new skill to your installation:
+
+1. Create directory: `~/.claude/skills/[skill-name]/` (global) or `.claude/skills/[skill-name]/` (project)
+2. Create `SKILL.md` with YAML frontmatter:
+
+```yaml
+---
+name: skill-name
+description: When to activate. Use keywords that match user intent.
+---
+
+# Skill Title
+
+Instructions for Claude when skill is active...
+```
+
+**Key points**:
+- `description` determines when skill activates - use specific trigger keywords
+- Name must be lowercase with hyphens (max 64 chars)
+- Instructions should be actionable and enforceable
+
+## Troubleshooting
+
+**Skill not activating?**
+- Ensure skill is installed to `~/.claude/skills/[name]/SKILL.md` or `.claude/skills/[name]/SKILL.md`
+- Check the `description` field has relevant keywords
+- Verify YAML frontmatter syntax is valid
+
+**Skill too aggressive?**
+- Refine the description to be more specific about when to activate
+- Add "Use when" phrases to narrow context
+
+**Skill conflicts with command?**
+- Skills provide standards, commands provide workflow
+- They should complement, not conflict
+- If conflict occurs, command takes precedence during its phase
