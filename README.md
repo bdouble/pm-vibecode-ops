@@ -21,7 +21,7 @@ Traditional product development bottlenecks on engineering capacity. AI coding t
 
 This workflow provides the structure AI needs to build production software reliably:
 
-### Five Key Innovations
+### Six Key Innovations
 
 **1. Service Inventory System**
 Automatically catalogs existing code before building anything new. Prevents the #1 AI coding disaster: rebuilding functionality that already exists.
@@ -133,12 +133,17 @@ Each phase includes quality gates. Security review is the final gate that marks 
 git clone https://github.com/your-org/pm-vibecode-ops.git
 cd pm-vibecode-ops
 
-# Global installation
+# Global installation (commands, agents, and skills)
 mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
 cp claude/commands/*.md ~/.claude/commands/
 cp claude/agents/*.md ~/.claude/agents/
 cp -r claude/skills/* ~/.claude/skills/
 ```
+
+**What gets installed:**
+- **Commands** (`/adaptation`, `/implementation`, etc.) - Explicit workflow phases you invoke
+- **Agents** - Specialized AI roles (architect, QA engineer, security engineer)
+- **Skills** - Auto-activated quality enforcement during development ([details](https://code.claude.com/docs/en/skills))
 
 **Complete installation guide**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
 **First-time terminal users**: [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)

@@ -11,10 +11,11 @@ Complete installation instructions for PM Vibe Code Operations on all platforms 
 1. [Prerequisites](#prerequisites)
 2. [Choose Your Mode](#choose-your-mode)
 3. [Claude Code Installation](#claude-code-installation)
-4. [OpenAI Codex Installation](#openai-codex-installation)
-5. [Verification](#verification)
-6. [MCP Configuration](#mcp-configuration)
-7. [Troubleshooting](#troubleshooting)
+4. [Skills Installation](#skills-installation)
+5. [OpenAI Codex Installation](#openai-codex-installation)
+6. [Verification](#verification)
+7. [MCP Configuration](#mcp-configuration)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -193,7 +194,45 @@ cp /path/to/pm-vibecode-ops/claude/agents/*.md .claude/agents/
 
 **Note**: Project-specific installation takes precedence over global installation for that project.
 
-### Step 3: Verify Installation
+### Step 3: Install Skills
+
+Skills are auto-activated quality enforcement that Claude applies contextually during development. Unlike commands (which you explicitly invoke), skills activate automatically based on what you're doing.
+
+**For more details**: See [SKILLS.md](../SKILLS.md) or [Claude Code Skills Documentation](https://code.claude.com/docs/en/skills).
+
+#### Global Skills Installation (Recommended)
+
+```bash
+# Create skills directory
+mkdir -p ~/.claude/skills
+
+# Copy all skills (each skill is a directory with SKILL.md inside)
+cp -r claude/skills/* ~/.claude/skills/
+```
+
+#### Project-Specific Skills Installation
+
+```bash
+# Navigate to your project
+cd /path/to/your/project
+
+# Create local skills directory
+mkdir -p .claude/skills
+
+# Copy skills
+cp -r /path/to/pm-vibecode-ops/claude/skills/* .claude/skills/
+```
+
+**Available Skills**:
+| Skill | Purpose |
+|-------|---------|
+| `production-code-standards` | Blocks workarounds, temporary code, fallbacks |
+| `service-reuse` | Requires checking inventory before creating services |
+| `testing-philosophy` | Requires fixing broken tests before writing new ones |
+| `mvd-documentation` | Enforces "document why, not what" standards |
+| `security-patterns` | Applies OWASP patterns during code writing |
+
+### Step 4: Verify Installation
 
 ```bash
 # Check commands installed
@@ -204,9 +243,18 @@ ls ~/.claude/commands/
 ls ~/.claude/agents/
 # Should show: architect_agent.md, backend_engineer_agent.md, etc.
 
+# Check skills installed
+ls ~/.claude/skills/
+# Should show: production-code-standards/, service-reuse/, testing-philosophy/, etc.
+
+# Verify skill structure (each should contain SKILL.md)
+ls ~/.claude/skills/production-code-standards/
+# Should show: SKILL.md
+
 # For local installation
 ls .claude/commands/
 ls .claude/agents/
+ls .claude/skills/
 ```
 
 ---
@@ -405,16 +453,43 @@ cp /path/to/pm-vibecode-ops/claude/commands-worktrees/*.md ~/.claude/commands/
 # Create directories with proper permissions
 mkdir -p ~/.claude/commands
 mkdir -p ~/.claude/agents
-chmod 755 ~/.claude/commands ~/.claude/agents
+mkdir -p ~/.claude/skills
+chmod 755 ~/.claude/commands ~/.claude/agents ~/.claude/skills
 
 # Copy files
 cp claude/commands/*.md ~/.claude/commands/
 cp claude/agents/*.md ~/.claude/agents/
+cp -r claude/skills/* ~/.claude/skills/
 
 # Set read permissions
 chmod +r ~/.claude/commands/*.md
 chmod +r ~/.claude/agents/*.md
+chmod -R +r ~/.claude/skills/
 ```
+
+### Skills Not Activating
+
+**Problem**: Skills don't seem to be enforcing standards during development
+
+**Solutions**:
+```bash
+# 1. Verify skills are installed correctly
+ls ~/.claude/skills/
+# Should show directories: production-code-standards/, service-reuse/, etc.
+
+# 2. Verify SKILL.md exists in each skill directory
+ls ~/.claude/skills/production-code-standards/
+# Should show: SKILL.md
+
+# 3. Check YAML frontmatter syntax
+head -10 ~/.claude/skills/production-code-standards/SKILL.md
+# Should show valid YAML with --- markers
+
+# 4. For project-specific skills, verify path
+ls .claude/skills/
+```
+
+**Note**: Skills activate based on context (what you're doing). They don't show in `/help` like commands do. To test, try asking Claude to write code—skills should enforce standards automatically.
 
 ### MCP Integration Not Working
 
