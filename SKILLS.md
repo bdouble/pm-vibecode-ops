@@ -85,6 +85,20 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 **Example trigger**: "Add login endpoint with password validation"
 
+### 6. model-aware-behavior
+
+**Activates when**: Exploring codebases, proposing code changes, making architectural decisions, using tools for code modification
+
+**Enforces**:
+- Read all relevant files before proposing any changes
+- Never speculate about code not yet inspected
+- Search for existing implementations before creating new ones
+- Make only requested changes (no unrequested improvements)
+- No helpers/utilities for one-time operations
+- Parallel tool execution when operations are independent
+
+**Example trigger**: "Implement the user profile feature"
+
 ## Skills vs Commands vs Agents
 
 | Aspect | Skills | Commands | Agents |
@@ -161,7 +175,9 @@ claude/skills/
 │   └── SKILL.md
 ├── mvd-documentation/
 │   └── SKILL.md
-└── security-patterns/
+├── security-patterns/
+│   └── SKILL.md
+└── model-aware-behavior/
     └── SKILL.md
 ```
 

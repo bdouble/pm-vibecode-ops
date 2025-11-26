@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
 
 ## What This Is
 
@@ -105,6 +105,46 @@ The workflow consists of two phases:
 Each phase includes quality gates. Security review is the final gate that marks tickets as complete.
 
 **Best practice**: Run each command in a fresh Claude Code session to prevent context overflow and ensure optimal performance.
+
+---
+
+## Model Recommendations
+
+**Primary Recommendation: Claude Opus 4.5**
+
+This workflow is designed for deep reasoning and comprehensive analysis. Opus 4.5 is the recommended model for most phases due to its superior reasoning capabilities.
+
+| Phase | Recommended Model | Rationale |
+|-------|------------------|-----------|
+| Discovery | Opus 4.5 | Deep architectural analysis |
+| Epic Planning | Opus 4.5 | Strategic reasoning |
+| Planning | Opus 4.5 | Complex ticket breakdown |
+| Adaptation | Opus 4.5 | Thorough implementation planning |
+| Implementation | Opus 4.5 or Sonnet 4.5 | Strong coding with reasoning |
+| Testing | Opus 4.5 or Sonnet 4.5 | Multi-file test creation |
+| Documentation | Sonnet 4.5 | Straightforward generation |
+| Code Review | Opus 4.5 | Deep analysis |
+| Security Review | Opus 4.5 | Critical security reasoning |
+
+### Model Behavioral Notes
+
+**Opus 4.5 (Recommended)**:
+- Excellent for deep reasoning and architecture decisions
+- Best choice for complex, multi-step operations
+- The `production-code-standards` skill prevents over-engineering
+- The `model-aware-behavior` skill ensures thorough code exploration
+
+**Sonnet 4.5 (Alternative)**:
+- Good for agentic coding tasks when cost/speed is a concern
+- Responds well to emphatic instructions
+- Excellent parallel tool execution
+- Use when Opus throughput is insufficient
+
+**Haiku 4.5 (Not Recommended)**:
+- DO NOT USE for this workflow
+- Cannot maintain context across complex multi-phase operations
+- May produce incomplete or inaccurate analysis
+- If you must use Haiku, limit to isolated single-file documentation tasks only
 
 ---
 

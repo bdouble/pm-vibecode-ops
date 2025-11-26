@@ -5,6 +5,32 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-11-26
+
+### Added
+
+**Model-Aware Behavior Skill**
+
+- New `model-aware-behavior` auto-activated skill based on Anthropic's [Opus 4.5 migration guidance](https://github.com/anthropics/claude-code/tree/main/plugins/claude-opus-4-5-migration/skills/claude-opus-4-5-migration)
+- Enforces code exploration before proposing changes (addresses Opus 4.5's conservative exploration tendency)
+- Scope control to prevent over-engineering (addresses Opus 4.5's tendency to create extra abstractions)
+- Word substitutions for thinking sensitivity when extended thinking is disabled
+- Parallel tool execution optimization
+
+**Model Recommendations Documentation**
+
+- Added "Model Recommendations" section to README.md with phase-by-phase guidance
+- Opus 4.5 recommended as primary model for deep reasoning capabilities
+- Explicit warning against Haiku 4.5 (cannot maintain context across complex operations)
+- Cross-referenced in GET_STARTED.md for new user visibility
+
+**Code Exploration Requirements**
+
+- Added code exploration sections to `adaptation.md` and `implementation.md` commands
+- Reinforces "read before proposing" behavior across workflow phases
+
+---
+
 ## [1.1.0] - 2025-11-26
 
 ### Added
@@ -405,6 +431,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[1.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.1.1
 [1.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.1.0
 [1.0.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.0.3
 [1.0.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.0.2
