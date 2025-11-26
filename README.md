@@ -5,7 +5,7 @@
 
 ## What This Is
 
-A battle-tested workflow that enables Product Managers and other non-engineers to transform product requirements into production-ready code through structured AI collaboration—without becoming developers.
+A battle-tested workflow that enables Product Managers and other non-engineers to transform product requirements into production-ready code through structured AI collaboration.
 
 Write a PRD. Run 10 commands. Ship features with tests, documentation, and security review.
 
@@ -19,7 +19,7 @@ Write a PRD. Run 10 commands. Ship features with tests, documentation, and secur
 
 Traditional product development bottlenecks on engineering capacity. AI coding tools promise speed but without structure create unmaintainable chaos—duplicate code, security holes, missing tests, and technical debt.
 
-This workflow provides the structure AI needs to build production software reliably:
+This workflow provides the structure AI needs to help non-engineers move beyond prototypes and build production software reliably:
 
 ### Six Key Innovations
 
@@ -35,11 +35,11 @@ Your ticketing system (Linear/Jira) becomes AI's external memory. Discovery find
 **4. Specialized Agent Workflow**
 Instead of one generic AI, you work with expert agents—architect, backend engineer, QA, security, technical writer. Each focuses on their specialty with strict boundaries to prevent scope creep.
 
-**5. Auto-Activated Quality Skills**
+**5. Auto-Activated Quality Skills (Claude Only)**
 Skills enforce standards during development, not just at review time. Production code standards, security patterns, and testing philosophy activate automatically as Claude writes code—preventing issues before they're created.
 
-**6. Production-First Quality**
-Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based testing focuses on code that matters. Inline documentation AI can't miss.
+**6. Production-First Quality Focus**
+Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based testing focuses on code that matters. Inline documentation AI can't miss. Strong guidance to fail fast and fix issues rather than building workarounds you'd otherwise miss. 
 
 ### What You Get
 
@@ -74,7 +74,7 @@ Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based te
 
 ## Have Realistic Expectations
 
-This workflow helps non-technical PMs build software that works in production—with proper tests, documentation, and security review.
+This workflow helps PMs and other non-engineers build software that works in production—with proper tests, documentation, and security review.
 
 **It will not** produce the elegant, highly-optimized code that senior engineers would write.
 
