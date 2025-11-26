@@ -27,9 +27,9 @@ Complete installation instructions for PM Vibe Code Operations on all platforms 
 - **OR OpenAI Codex CLI** - [Official installation guide](https://developers.openai.com/codex/cli)
 
 **Project Management**:
-- **Linear** (recommended) with MCP - [Get Linear MCP](https://github.com/QuantGeekDev/linear-mcp)
-- **OR Jira** with MCP - [Get Jira MCP](https://github.com/zcaceres/jira-mcp)
-- **OR** other ticketing system with MCP integration
+- **Linear** (recommended) with MCP - [Install Linear MCP](https://linear.app/docs/mcp)
+- **OR Jira** with MCP - [Install Jira MCP](https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/)
+- **OR** other ticketing system with MCP integration: [Asana](https://developers.asana.com/docs/using-asanas-mcp-server)
 
 **Version Control**:
 - **Git** - [Install Git](https://git-scm.com/downloads)
