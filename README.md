@@ -5,7 +5,7 @@
 
 ## What This Is
 
-A battle-tested workflow that enables Product Managers to transform product requirements into production-ready code through structured AI collaboration—without becoming developers.
+A battle-tested workflow that enables Product Managers and other non-engineers to transform product requirements into production-ready code through structured AI collaboration—without becoming developers.
 
 Write a PRD. Run 10 commands. Ship features with tests, documentation, and security review.
 
@@ -119,7 +119,7 @@ Each phase includes quality gates. Security review is the final gate that marks 
 ### Prerequisites
 
 - AI coding tool (Claude Code or OpenAI Codex)
-- Ticketing system with MCP integration ([Linear](https://linear.app) recommended, [Jira](https://www.atlassian.com/software/jira) supported)
+- Ticketing system with MCP integration ([Linear](https://linear.app) recommended, [Jira](https://www.atlassian.com/software/jira)  and other systems with MCP integrations supported)
 - Git repository
 - [Complete prerequisite checklist](docs/INSTALLATION.md#prerequisites)
 
@@ -208,7 +208,7 @@ Based on workflow capabilities and user experiences:
 
 - **Questions?** Start with [FAQ.md](FAQ.md) - 50+ answered questions
 - **Stuck?** Check [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-- **Issues?** [Open an issue on GitHub](https://github.com/your-org/pm-vibecode-ops/issues)
+- **Issues?** [Open an issue on GitHub](https://github.com/bdouble/pm-vibecode-ops/issues)
 - **Contributing?** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
