@@ -1,17 +1,10 @@
-# Simple Mode Commands (Default)
+# Workflow Commands
 
-This directory contains the **default, simpler workflow** commands. These are recommended for most users.
-
-## When to Use Simple Mode
-
-- You're new to the PM Vibe Code Operations workflow
-- You work on one ticket at a time
-- Your team doesn't need concurrent parallel development
-- You prefer straightforward git branching without worktrees
+This directory contains the workflow slash commands for PM Vibe Code Operations.
 
 ## How It Works
 
-Simple mode uses standard git branches:
+The workflow uses standard git branches:
 1. Each ticket gets a feature branch (`feature/TICKET-123-description`)
 2. You work on the branch until complete
 3. Security review merges to main
@@ -57,13 +50,6 @@ All progress is saved in tickets, PRs, and code—starting fresh sessions doesn'
 | `/security_review` | Final gate - closes ticket |
 
 **Remember:** Run each command in its own fresh session for best results.
-
-## Switching to Worktree Mode
-
-If you need concurrent development on multiple tickets, see:
-- [Worktree Mode Commands](../commands-worktrees/README.md)
-- [Worktree Guide](../docs/WORKTREE_GUIDE.md)
-- [Migration Guide](../docs/WORKTREE_MIGRATION_GUIDE.md)
 
 ## Installation
 

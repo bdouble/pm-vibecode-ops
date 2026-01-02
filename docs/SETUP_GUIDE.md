@@ -305,13 +305,10 @@ If Claude responds, you're ready!
 
 This workflow provides commands and agents for both Claude Code and OpenAI Codex. The installation process differs based on your chosen platform.
 
-### Platform and Mode Selection
+### Platform Selection
 
 **For Claude Code users:**
-| Mode | Location | Best For |
-|------|----------|----------|
-| **Simple Mode** (Recommended) | `claude/commands/` | Most users, one ticket at a time |
-| **Worktree Mode** (Advanced) | `claude/commands-worktrees/` | Concurrent development with git worktrees |
+Commands and agents are installed from the `commands/` and `agents/` directories. Skills provide auto-activated quality enforcement from the `skills/` directory.
 
 **For OpenAI Codex users:**
 | Type | Location | Notes |
@@ -350,20 +347,12 @@ mkdir -p ~/.claude/commands
 mkdir -p ~/.claude/agents
 ```
 
-#### Step 3: Copy Files Based on Your Mode Choice
+#### Step 3: Copy Commands and Agents
 
-**For Simple Mode (Recommended for beginners):**
 ```bash
-# Copy Simple Mode commands and agents
-cp claude/commands/*.md ~/.claude/commands/
-cp claude/agents/*.md ~/.claude/agents/
-```
-
-**For Worktree Mode (Advanced users only):**
-```bash
-# Copy Worktree Mode commands and agents
-cp claude/commands-worktrees/*.md ~/.claude/commands/
-cp claude/agents/*.md ~/.claude/agents/  # Same agents for both modes
+# Copy commands and agents
+cp commands/*.md ~/.claude/commands/
+cp agents/*.md ~/.claude/agents/
 ```
 
 #### Step 4: Verify Installation
@@ -375,7 +364,7 @@ ls ~/.claude/commands/
 
 # List installed agents
 ls ~/.claude/agents/
-# You should see: architect_agent.md, backend_engineer_agent.md, etc.
+# You should see: architect-agent.md, backend-engineer-agent.md, etc.
 ```
 
 ### Local Installation (Project-Specific)
@@ -390,14 +379,9 @@ cd /path/to/your/project
 mkdir -p .claude/commands
 mkdir -p .claude/agents
 
-# Copy files based on your mode choice
-# For Simple Mode:
-cp /path/to/pm-vibecode-ops/claude/commands/*.md .claude/commands/
-cp /path/to/pm-vibecode-ops/claude/agents/*.md .claude/agents/
-
-# OR for Worktree Mode:
-cp /path/to/pm-vibecode-ops/claude/commands-worktrees/*.md .claude/commands/
-cp /path/to/pm-vibecode-ops/claude/agents/*.md .claude/agents/
+# Copy commands and agents
+cp /path/to/pm-vibecode-ops/commands/*.md .claude/commands/
+cp /path/to/pm-vibecode-ops/agents/*.md .claude/agents/
 ```
 
 **Note**: Local installation takes precedence over global installation for that project.

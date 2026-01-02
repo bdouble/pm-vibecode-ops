@@ -10,10 +10,9 @@ Complete command documentation, agent specifications, and architecture details f
 
 1. [Command Reference](#command-reference)
 2. [Specialized Agents](#specialized-agents)
-3. [Git Worktree Architecture](#git-worktree-architecture)
-4. [Workflow Integration](#workflow-integration)
-5. [Repository Structure](#repository-structure)
-6. [Best Practices](#best-practices)
+3. [Workflow Integration](#workflow-integration)
+4. [Repository Structure](#repository-structure)
+5. [Best Practices](#best-practices)
 
 ---
 
@@ -509,104 +508,6 @@ These commands run for each individual ticket through the development lifecycle.
 
 ---
 
-## Git Worktree Architecture
-
-> **Note**: This section describes **Worktree Mode** in `commands-worktrees/`. If you're using Simple Mode in `commands/`, you can skip this section.
-
-### Overview
-
-The worktree mode uses **git worktrees** to enable true concurrent development with complete isolation between tickets. Each ticket gets its own working directory, eliminating conflicts when multiple AI agents or developers work in parallel.
-
-**Key Benefits**:
-- ✅ **Complete Isolation**: Each ticket has dedicated file system - no interference between concurrent work
-- ✅ **No Context Switching**: Multiple Claude Code sessions can run simultaneously on different tickets
-- ✅ **Clean History**: Changes isolated until merge, producing clean commit graphs
-- ✅ **Easy Debugging**: Inspect any ticket's worktree independently without affecting others
-- ✅ **Automatic Cleanup**: Worktrees merged and removed after ticket completion
-
-### How It Works
-
-1. **Adaptation Phase** (`/adaptation`):
-   - Creates worktree in `.worktrees/[ticket-id]` directory
-   - Creates feature branch in the worktree
-   - Documents worktree path in Linear ticket for downstream commands
-
-2. **Development Phases** (`/implementation`, `/testing`, `/documentation`, `/codereview`):
-   - Auto-load worktree path from Linear ticket
-   - Navigate to worktree directory automatically
-   - All work happens in isolation
-   - Changes committed to worktree's feature branch
-
-3. **Security Review Phase** (`/security_review`):
-   - Performs final security assessment
-   - **Merges worktree branch to main** when review passes
-   - **Removes worktree** automatically after successful merge
-   - Closes Linear ticket (final gate)
-
-### Concurrent Development Example
-
-```bash
-# Terminal 1: Agent working on authentication (TICKET-101)
-claude code
-/adaptation TICKET-101
-/implementation TICKET-101
-# Works in .worktrees/TICKET-101/
-
-# Terminal 2: Agent working on payments (TICKET-102) - NO CONFLICT!
-claude code
-/adaptation TICKET-102
-/implementation TICKET-102
-# Works in .worktrees/TICKET-102/
-
-# Both agents work simultaneously without any interference
-```
-
-### Worktree Lifecycle
-
-```
-Adaptation → Implementation → Testing → Documentation → Code Review → Security Review → Merge & Cleanup
-    ↓             ↓             ↓            ↓               ↓               ↓              ↓
-  CREATE      Navigate      Navigate     Navigate        Navigate        Navigate    MERGE + REMOVE
- worktree    to worktree   to worktree  to worktree     to worktree     to worktree   worktree
-```
-
-### Manual Worktree Inspection
-
-Users can inspect any active worktree:
-
-```bash
-# List all active worktrees
-git worktree list
-
-# Navigate to specific ticket's worktree
-cd .worktrees/TICKET-123
-
-# View worktree status
-git status
-
-# Return to main repo
-cd ../..
-```
-
-### Error Recovery
-
-If a worktree becomes corrupted or needs cleanup:
-
-```bash
-# Remove specific worktree
-git worktree remove .worktrees/TICKET-123
-
-# Or force removal if needed
-git worktree remove --force .worktrees/TICKET-123
-
-# Clean up stale worktree metadata
-git worktree prune
-```
-
-**See [WORKTREE_GUIDE.md](docs/WORKTREE_GUIDE.md) for comprehensive details.**
-
----
-
 ## Workflow Integration
 
 ### Ticketing System Integration
@@ -648,7 +549,7 @@ pm-vibecode-ops/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest configuration
 │
-├── agents/                      # Specialized AI agent configurations (shared)
+├── agents/                      # Specialized AI agent configurations
 │   ├── architect-agent.md
 │   ├── backend-engineer-agent.md
 │   ├── code-reviewer-agent.md
@@ -658,8 +559,8 @@ pm-vibecode-ops/
 │   ├── security-engineer-agent.md
 │   └── technical-writer-agent.md
 │
-├── commands/                    # DEFAULT: Simple mode commands
-│   ├── README.md                # Simple mode documentation
+├── commands/                    # Workflow slash commands
+│   ├── README.md                # Commands documentation
 │   ├── adaptation.md
 │   ├── codereview.md
 │   ├── discovery.md
@@ -671,19 +572,16 @@ pm-vibecode-ops/
 │   ├── security_review.md
 │   └── testing.md
 │
-├── commands-worktrees/          # EXPERIMENTAL: Worktree mode commands
-│   ├── README.md                # Worktree mode documentation
-│   ├── _worktree_helpers.md     # Reusable git worktree utilities
-│   ├── adaptation.md            # (with worktree logic)
-│   └── ... (same commands with worktree integration)
-│
-├── skills/                      # Auto-activated quality enforcement
-│   ├── production-code-standards/
-│   ├── service-reuse/
-│   ├── testing-philosophy/
-│   ├── mvd-documentation/
-│   ├── security-patterns/
-│   └── model-aware-behavior/
+├── skills/                      # Auto-activated quality enforcement (9 skills)
+│   ├── divergent-exploration/   # Explore alternative approaches before converging
+│   ├── model-aware-behavior/    # Read all files before proposing changes
+│   ├── mvd-documentation/       # Document why, not what
+│   ├── production-code-standards/  # Block workarounds, temporary code
+│   ├── security-patterns/       # OWASP patterns during code writing
+│   ├── service-reuse/           # Check inventory before creating services
+│   ├── testing-philosophy/      # Fix broken tests before writing new tests
+│   ├── using-pm-workflow/       # Guide through workflow phases
+│   └── verify-implementation/  # Verify work before marking complete
 │
 ├── hooks/
 │   └── hooks.json               # Event-triggered automation
@@ -693,19 +591,18 @@ pm-vibecode-ops/
 │
 ├── codex/
 │   └── prompts/                 # Platform-agnostic prompts (OpenAI Codex compatible)
-│       └── [mirrors commands/ - simple mode only]
 │
 ├── docs/                        # Advanced documentation
 │   ├── INSTALLATION.md          # Comprehensive installation guide
 │   ├── SETUP_GUIDE.md           # Terminal basics for beginners
 │   ├── MCP_SETUP.md             # MCP server configuration
-│   ├── WORKTREE_GUIDE.md        # Git worktree technical reference
-│   ├── WORKTREE_MIGRATION.md    # Switching between modes
 │   └── TROUBLESHOOTING.md       # Common issues and solutions
 │
 ├── PM_GUIDE.md                  # Non-technical guide for Product Managers
 ├── GET_STARTED.md               # Quick start and navigation
 ├── TECHNICAL_REFERENCE.md       # This file - complete technical documentation
+├── SKILLS.md                    # Skills documentation
+├── AGENTS.md                    # Agents documentation
 ├── EXAMPLES.md                  # Real-world case studies
 ├── FAQ.md                       # Common questions answered
 ├── GLOSSARY.md                  # Technical terms explained
@@ -759,20 +656,19 @@ Commands track and report:
 
 ## Platform Comparison
 
-| Feature | Claude Code Simple | Claude Code Worktree | OpenAI Codex |
-|---------|-------------------|----------------------|--------------|
-| **Command Style** | Slash commands | Slash commands | Copy-paste prompts |
-| **Agents** | Specialized via Task tool | Specialized via Task tool | Platform-agnostic |
-| **Installation** | Copy to `~/.claude/` | Copy to `~/.claude/` | Reference prompts |
-| **Concurrency** | One ticket at a time | Multiple simultaneous | One at a time |
-| **Git Strategy** | Feature branches | Isolated worktrees | Feature branches |
-| **Complexity** | Low | Medium | Low |
-| **Best For** | Beginners, standard workflow | Concurrent development | Flexibility, custom integration |
+| Feature | Claude Code | OpenAI Codex |
+|---------|-------------|--------------|
+| **Command Style** | Slash commands | Copy-paste prompts |
+| **Agents** | Specialized via Task tool | Platform-agnostic |
+| **Installation** | Copy to `~/.claude/` | Reference prompts |
+| **Git Strategy** | Feature branches | Feature branches |
+| **Skills** | Auto-activated (9 skills) | Not supported |
+| **Hooks** | Session automation | Not supported |
+| **Best For** | Full workflow with quality enforcement | Flexibility, custom integration |
 
 ---
 
 **For additional technical details, see:**
 - [Installation Guide](docs/INSTALLATION.md)
-- [Worktree Guide](docs/WORKTREE_GUIDE.md)
 - [MCP Setup](docs/MCP_SETUP.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)

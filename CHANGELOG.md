@@ -5,6 +5,88 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-02
+
+### Breaking Changes
+
+**Repository Structure Refactoring**
+
+This release restructures the repository to follow Claude Code plugin conventions:
+
+- **Removed `commands-worktrees/` directory** - Worktree mode has been deprecated. The workflow now uses standard git branches only. All worktree-related documentation has been removed.
+- **Moved components from `claude/` to root level**:
+  - `claude/commands/` → `commands/`
+  - `claude/agents/` → `agents/`
+  - `claude/skills/` → `skills/`
+- **Agent files renamed from snake_case to kebab-case**:
+  - `architect_agent.md` → `architect-agent.md`
+  - `backend_engineer_agent.md` → `backend-engineer-agent.md`
+  - `code_reviewer_agent.md` → `code-reviewer-agent.md`
+  - `design_reviewer_agent.md` → `design-reviewer-agent.md`
+  - `frontend_engineer_agent.md` → `frontend-engineer-agent.md`
+  - `qa_engineer_agent.md` → `qa-engineer-agent.md`
+  - `security_engineer_agent.md` → `security-engineer-agent.md`
+  - `technical_writer_agent.md` → `technical-writer-agent.md`
+
+### Added
+
+**Plugin Architecture**
+
+- Added `.claude-plugin/plugin.json` manifest file for Claude Code plugin system
+- Added `hooks/hooks.json` for event-triggered automation
+- Added `scripts/session-start.sh` for session initialization with workflow context
+- Added `marketplace.json` for plugin marketplace configuration
+
+**Three New Skills (9 total)**
+
+- **using-pm-workflow** - Guides users through workflow phases correctly, ensures proper command sequencing
+- **verify-implementation** - Requires verification of work before marking tasks complete
+- **divergent-exploration** - Encourages exploring alternative approaches before converging on a solution
+
+**Enhanced Agent Definitions**
+
+- All agents now include `model` field for recommended model selection
+- All agents now include `skills` field listing required skills for the agent role
+- Optimized agent descriptions for better activation triggers
+
+**Enhanced Command Definitions**
+
+- All commands now include "Required Skills" sections documenting which skills activate
+- Improved command descriptions for better discoverability
+
+### Changed
+
+**Documentation Updates**
+
+- Updated all documentation to reflect new directory structure
+- Removed all worktree mode references and documentation
+- Updated version badges to 2.0.0
+- Updated repository structure diagrams
+- Simplified platform comparison (removed worktree mode column)
+
+**Skills Refactoring**
+
+- Refactored all 6 existing skills with optimized descriptions
+- Skills now follow Claude Code plugin skill conventions
+
+### Removed
+
+- `commands-worktrees/` directory and all worktree mode commands
+- `docs/WORKTREE_GUIDE.md`
+- `docs/WORKTREE_MIGRATION_GUIDE.md`
+- All worktree-related sections from documentation files
+
+### Migration Guide
+
+If upgrading from 1.x:
+
+1. **Update installation paths**: Change `claude/commands/` to `commands/`, etc.
+2. **Update agent references**: Use kebab-case names (e.g., `architect-agent` not `architect_agent`)
+3. **Remove worktree commands**: If you were using worktree mode, switch to standard branch workflow
+4. **Re-install skills**: Skills directory structure has changed
+
+---
+
 ## [1.1.1] - 2025-11-26
 
 ### Fixed
@@ -354,16 +436,11 @@ PM Vibe Code Operations is a complete workflow system enabling Product Managers 
 - `/codereview` - Automated code quality and pattern compliance review
 - `/security_review` - OWASP Top 10 vulnerability assessment (final gate, closes tickets)
 
-### Dual Workflow Modes
+### Workflow Mode
 
-- **Simple Mode** (Recommended) - Standard git branches, one ticket at a time
-  - Commands in `claude/commands/`
-  - Best for most users and beginners
-
-- **Worktree Mode** (Advanced) - Git worktrees for concurrent development
-  - Commands in `claude/commands-worktrees/`
-  - For advanced users needing parallel ticket work
-  - Complete file system isolation between tickets
+- Standard git branches, one ticket at a time
+  - Commands in `commands/`
+  - Best for most users
 
 ### Specialized Agents
 
@@ -399,12 +476,12 @@ All agents include:
 
 **Technical Reference:**
 - `README.md` - Complete technical reference with workflow diagrams
-- `docs/WORKTREE_GUIDE.md` - Git worktree technical reference
+- `TECHNICAL_REFERENCE.md` - Detailed command and agent documentation
 - `CONTRIBUTING.md` - Contribution guidelines
 
 ### Platform Support
 
-- `claude/` - Claude Code optimized commands and agents
+- `commands/`, `agents/`, `skills/` - Claude Code optimized components
 - `codex/` - Platform-agnostic prompts (OpenAI Codex compatible)
 
 ### Quality Standards
@@ -444,6 +521,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.0.0
 [1.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.1.1
 [1.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.1.0
 [1.0.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v1.0.3

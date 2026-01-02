@@ -46,14 +46,14 @@ Run these in order when starting a new project or major initiative:
 
 Run these for EACH ticket, in order:
 
-| Phase | Command | Purpose | Creates Worktree? |
-|-------|---------|---------|-------------------|
-| 5 | `/adaptation` | Create implementation guide for specific ticket | YES - creates isolated workspace |
-| 6 | `/implementation` | Write production code | Works in worktree |
-| 7 | `/testing` | Build comprehensive test suite | Works in worktree |
-| 8 | `/documentation` | Generate API docs and user guides | Works in worktree |
-| 9 | `/codereview` | Quality assurance review | Works in worktree |
-| 10 | `/security_review` | OWASP vulnerability assessment | Merges and removes worktree |
+| Phase | Command | Purpose |
+|-------|---------|---------|
+| 5 | `/adaptation` | Create implementation guide for specific ticket |
+| 6 | `/implementation` | Write production code |
+| 7 | `/testing` | Build comprehensive test suite |
+| 8 | `/documentation` | Generate API docs and user guides |
+| 9 | `/codereview` | Quality assurance review |
+| 10 | `/security_review` | OWASP vulnerability assessment |
 
 **Critical**: Only `/security_review` closes tickets and merges code to main.
 

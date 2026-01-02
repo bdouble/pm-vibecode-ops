@@ -63,18 +63,13 @@ Complete installation instructions for PM Vibe Code Operations on all platforms 
 
 ---
 
-## Choose Your Mode
+## Choose Your Platform
 
-Before installing, choose your platform and mode:
+Before installing, choose your platform:
 
 ### For Claude Code Users
 
-| Mode | Best For | Commands Location | Install From |
-|------|----------|-------------------|--------------|
-| **Simple Mode** | Beginners, one ticket at a time | `claude/commands/` | Recommended starting point |
-| **Worktree Mode** | Advanced users, concurrent development | `claude/commands-worktrees/` | After mastering Simple Mode |
-
-**Recommendation**: Start with Simple Mode. Switch to Worktree Mode after shipping 3-5 features successfully.
+Commands and agents are installed from the `commands/` and `agents/` directories. Skills provide auto-activated quality enforcement.
 
 ### For OpenAI Codex Users
 
@@ -149,26 +144,14 @@ You can install globally (available for all projects) or locally (specific to on
 
 Global installation makes the workflow available across all your projects.
 
-**For Simple Mode**:
 ```bash
 # Create Claude directories
 mkdir -p ~/.claude/commands
 mkdir -p ~/.claude/agents
 
-# Copy Simple Mode commands and agents
-cp claude/commands/*.md ~/.claude/commands/
-cp claude/agents/*.md ~/.claude/agents/
-```
-
-**For Worktree Mode**:
-```bash
-# Create Claude directories (if not already created)
-mkdir -p ~/.claude/commands
-mkdir -p ~/.claude/agents
-
-# Copy Worktree Mode commands and agents
-cp claude/commands-worktrees/*.md ~/.claude/commands/
-cp claude/agents/*.md ~/.claude/agents/
+# Copy commands and agents
+cp commands/*.md ~/.claude/commands/
+cp agents/*.md ~/.claude/agents/
 ```
 
 #### Local Installation (Project-Specific)
@@ -183,13 +166,9 @@ cd /path/to/your/project
 mkdir -p .claude/commands
 mkdir -p .claude/agents
 
-# For Simple Mode
-cp /path/to/pm-vibecode-ops/claude/commands/*.md .claude/commands/
-cp /path/to/pm-vibecode-ops/claude/agents/*.md .claude/agents/
-
-# OR for Worktree Mode
-cp /path/to/pm-vibecode-ops/claude/commands-worktrees/*.md .claude/commands/
-cp /path/to/pm-vibecode-ops/claude/agents/*.md .claude/agents/
+# Copy commands and agents
+cp /path/to/pm-vibecode-ops/commands/*.md .claude/commands/
+cp /path/to/pm-vibecode-ops/agents/*.md .claude/agents/
 ```
 
 **Note**: Project-specific installation takes precedence over global installation for that project.
@@ -207,7 +186,7 @@ Skills are auto-activated quality enforcement that Claude applies contextually d
 mkdir -p ~/.claude/skills
 
 # Copy all skills (each skill is a directory with SKILL.md inside)
-cp -r claude/skills/* ~/.claude/skills/
+cp -r skills/* ~/.claude/skills/
 ```
 
 #### Project-Specific Skills Installation
@@ -220,10 +199,10 @@ cd /path/to/your/project
 mkdir -p .claude/skills
 
 # Copy skills
-cp -r /path/to/pm-vibecode-ops/claude/skills/* .claude/skills/
+cp -r /path/to/pm-vibecode-ops/skills/* .claude/skills/
 ```
 
-**Available Skills**:
+**Available Skills** (9 total):
 | Skill | Purpose |
 |-------|---------|
 | `production-code-standards` | Blocks workarounds, temporary code, fallbacks |
@@ -231,6 +210,10 @@ cp -r /path/to/pm-vibecode-ops/claude/skills/* .claude/skills/
 | `testing-philosophy` | Requires fixing broken tests before writing new ones |
 | `mvd-documentation` | Enforces "document why, not what" standards |
 | `security-patterns` | Applies OWASP patterns during code writing |
+| `model-aware-behavior` | Read all files before proposing changes |
+| `using-pm-workflow` | Guide through workflow phases correctly |
+| `verify-implementation` | Verify work before marking complete |
+| `divergent-exploration` | Explore alternatives before converging |
 
 ### Step 4: Verify Installation
 
@@ -241,7 +224,7 @@ ls ~/.claude/commands/
 
 # Check agents installed
 ls ~/.claude/agents/
-# Should show: architect_agent.md, backend_engineer_agent.md, etc.
+# Should show: architect-agent.md, backend-engineer-agent.md, etc.
 
 # Check skills installed
 ls ~/.claude/skills/
@@ -427,21 +410,17 @@ claude
 # Filenames must match command names exactly
 ```
 
-### Wrong Mode Installed
+### Commands Need Updating
 
-**Problem**: Installed Worktree Mode but wanted Simple Mode (or vice versa)
+**Problem**: Commands are outdated or need to be reinstalled
 
 **Solution**:
 ```bash
 # Remove current installation
 rm -rf ~/.claude/commands/*.md
 
-# Re-install correct mode
-# For Simple Mode:
-cp /path/to/pm-vibecode-ops/claude/commands/*.md ~/.claude/commands/
-
-# For Worktree Mode:
-cp /path/to/pm-vibecode-ops/claude/commands-worktrees/*.md ~/.claude/commands/
+# Re-install
+cp /path/to/pm-vibecode-ops/commands/*.md ~/.claude/commands/
 ```
 
 ### Permission Denied Errors
@@ -457,9 +436,9 @@ mkdir -p ~/.claude/skills
 chmod 755 ~/.claude/commands ~/.claude/agents ~/.claude/skills
 
 # Copy files
-cp claude/commands/*.md ~/.claude/commands/
-cp claude/agents/*.md ~/.claude/agents/
-cp -r claude/skills/* ~/.claude/skills/
+cp commands/*.md ~/.claude/commands/
+cp agents/*.md ~/.claude/agents/
+cp -r skills/* ~/.claude/skills/
 
 # Set read permissions
 chmod +r ~/.claude/commands/*.md
@@ -576,54 +555,6 @@ After installation:
 2. **Learn the workflow**: [PM_GUIDE.md](../PM_GUIDE.md)
 3. **Ship your first feature**: [GET_STARTED.md](../GET_STARTED.md)
 4. **Review examples**: [EXAMPLES.md](../EXAMPLES.md)
-
----
-
-## Advanced Configuration
-
-### Multiple Projects with Different Modes
-
-You can use global installation for one mode and local installation for specific projects using the other mode:
-
-```bash
-# Global: Simple Mode (default for most projects)
-cp claude/commands/*.md ~/.claude/commands/
-
-# Project A: Use global Simple Mode
-cd /path/to/project-a
-# (no local .claude/ directory)
-
-# Project B: Use Worktree Mode locally
-cd /path/to/project-b
-mkdir -p .claude/commands .claude/agents
-cp /path/to/pm-vibecode-ops/claude/commands-worktrees/*.md .claude/commands/
-cp /path/to/pm-vibecode-ops/claude/agents/*.md .claude/agents/
-```
-
-### Switching Between Modes
-
-**From Simple to Worktree**:
-```bash
-# 1. Finish all in-progress tickets in Simple Mode
-# 2. Update global commands to Worktree Mode
-rm ~/.claude/commands/*.md
-cp /path/to/pm-vibecode-ops/claude/commands-worktrees/*.md ~/.claude/commands/
-# 3. Start new tickets using Worktree Mode
-```
-
-**From Worktree to Simple**:
-```bash
-# 1. Complete and merge all active worktrees
-git worktree list  # Check for active worktrees
-# Finish each one via /security_review
-
-# 2. Clean up stale worktrees
-git worktree prune
-
-# 3. Switch to Simple Mode commands
-rm ~/.claude/commands/*.md
-cp /path/to/pm-vibecode-ops/claude/commands/*.md ~/.claude/commands/
-```
 
 ---
 

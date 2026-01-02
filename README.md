@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 
 ## What This Is
 
@@ -153,8 +153,7 @@ This workflow is designed for deep reasoning and comprehensive analysis. Opus 4.
 ### Choose Your Platform
 
 **For Claude Code Users** (Recommended):
-- **Simple Mode**: Standard git branches, one ticket at a time → [Installation](docs/INSTALLATION.md)
-- **Worktree Mode**: Git worktrees for concurrent development → [Worktree Guide](docs/WORKTREE_GUIDE.md)
+- Standard git branches, one ticket at a time → [Installation](docs/INSTALLATION.md)
 
 **For OpenAI Codex Users**:
 - Platform-agnostic prompts in `codex/prompts/` → [Codex Guide](codex/README.md)
@@ -168,7 +167,7 @@ This workflow is designed for deep reasoning and comprehensive analysis. Opus 4.
 
 ### Installation
 
-**Quick install for Claude Code (Simple Mode)**:
+**Quick install for Claude Code**:
 ```bash
 git clone https://github.com/your-org/pm-vibecode-ops.git
 cd pm-vibecode-ops
@@ -218,8 +217,7 @@ Detailed command syntax and architecture:
 
 - **[TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md)** - Complete command documentation, agent specifications, architecture details
 - **[SKILLS.md](SKILLS.md)** - Auto-activated quality enforcement (production standards, security patterns, testing philosophy)
-- **[INSTALLATION.md](docs/INSTALLATION.md)** - Comprehensive installation guide for all platforms and modes
-- **[WORKTREE_GUIDE.md](docs/WORKTREE_GUIDE.md)** - Git worktrees for concurrent development (advanced)
+- **[INSTALLATION.md](docs/INSTALLATION.md)** - Comprehensive installation guide
 
 ---
 

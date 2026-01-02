@@ -99,6 +99,46 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 **Example trigger**: "Implement the user profile feature"
 
+### 7. using-pm-workflow
+
+**Activates when**: Starting any PM workflow session, before responding to requests, when switching contexts, or when unsure which command to use
+
+**Enforces**:
+- Check which skills apply BEFORE any action (including clarifying questions)
+- Follow the correct workflow phase sequence
+- Use project-level commands (phases 1-4) for new projects
+- Use ticket-level commands (phases 5-10) for each ticket
+- Explain technical decisions clearly for non-engineers
+
+**Example trigger**: Session start, or "What command should I use?"
+
+### 8. verify-implementation
+
+**Activates when**: Claiming any work is complete, fixed, or passing; before committing, creating PRs, or marking tickets done
+
+**Enforces**:
+- Never claim completion without verification evidence
+- Run actual tests before saying "tests pass"
+- Execute builds before saying "build succeeds"
+- Demonstrate features before saying "feature works"
+- Show output/evidence for every completion claim
+- Avoid speculation phrases like "should work" or "probably passes"
+
+**Example trigger**: "I've finished implementing the feature"
+
+### 9. divergent-exploration
+
+**Activates when**: Creating features, designing architecture, planning epics, solving complex problems
+
+**Enforces**:
+- Generate 3-5 genuinely distinct approaches before converging
+- Never jump to "the obvious solution" without exploring alternatives
+- Evaluate trade-offs across dimensions (user impact, complexity, time, dependencies)
+- Present options with clear pros/cons before recommending
+- Document why alternatives were rejected
+
+**Example trigger**: "Design the notification system architecture"
+
 ## Skills vs Commands vs Agents
 
 | Aspect | Skills | Commands | Agents |
@@ -167,17 +207,23 @@ After installation, skills should be in:
 In this repository, skill definitions are stored in:
 ```
 skills/
+├── divergent-exploration/
+│   └── SKILL.md
+├── model-aware-behavior/
+│   └── SKILL.md
+├── mvd-documentation/
+│   └── SKILL.md
 ├── production-code-standards/
+│   └── SKILL.md
+├── security-patterns/
 │   └── SKILL.md
 ├── service-reuse/
 │   └── SKILL.md
 ├── testing-philosophy/
 │   └── SKILL.md
-├── mvd-documentation/
+├── using-pm-workflow/
 │   └── SKILL.md
-├── security-patterns/
-│   └── SKILL.md
-└── model-aware-behavior/
+└── verify-implementation/
     └── SKILL.md
 ```
 

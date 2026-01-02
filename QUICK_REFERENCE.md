@@ -4,17 +4,6 @@
 
 ---
 
-## Choose Your Mode
-
-| Mode | Location | Use When |
-|------|----------|----------|
-| **Simple (Default)** | `commands/` | One ticket at a time |
-| **Worktree (Advanced)** | `commands-worktrees/` | Multiple tickets in parallel |
-
-**Recommendation**: Start with Simple Mode.
-
----
-
 ## Workflow Commands (Run in Order)
 
 ### Project-Level (Recurring)
@@ -59,7 +48,7 @@ Before merging, verify:
 | **Service Inventory** | List of existing code | Prevents rebuilding what exists |
 | **Discovery** | AI learns your codebase | Ensures new code matches patterns |
 | **Adaptation** | Implementation plan | Maximizes code reuse |
-| **Worktree** | Isolated workspace | Enables concurrent ticket work |
+| **Skills** | Auto-activated quality rules | Enforces standards during development |
 | **Quality Gates** | Automated checks | Ensures production-ready code |
 
 ---
@@ -105,7 +94,7 @@ Your PRD must include:
 | Security CRITICAL | Must fix before merge, describe issue to AI |
 | Implementation wrong | Describe what's wrong (not how to fix) |
 | Duplicate epics | Re-run with service inventory first |
-| Worktree not found | Run `/adaptation` first |
+| Branch not found | Run `/adaptation` first |
 
 ---
 
@@ -127,8 +116,8 @@ Your PRD must include:
 | Common questions | [FAQ.md](FAQ.md) |
 | Technical terms | [GLOSSARY.md](GLOSSARY.md) |
 | Command details | [README.md](README.md) |
-| Worktree help | [WORKTREE_GUIDE.md](WORKTREE_GUIDE.md) |
+| Skills reference | [SKILLS.md](SKILLS.md) |
 
 ---
 
-**Version 1.1.1** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 2.0.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

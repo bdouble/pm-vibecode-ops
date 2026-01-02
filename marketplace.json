@@ -1,0 +1,40 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "pm-vibecode-ops",
+  "owner": {
+    "name": "Brian Double",
+    "email": "brian@example.com"
+  },
+  "plugins": [
+    {
+      "name": "pm-vibecode-ops",
+      "source": ".",
+      "description": "AI-assisted Product Management workflow enabling non-engineers to produce production-quality code through structured AI collaboration with Linear integration",
+      "version": "2.0.0",
+      "author": {
+        "name": "Brian Double",
+        "email": "brian@example.com"
+      },
+      "homepage": "https://github.com/bdouble/pm-vibecode-ops",
+      "repository": "https://github.com/bdouble/pm-vibecode-ops",
+      "license": "MIT",
+      "keywords": [
+        "product-management",
+        "workflow",
+        "linear",
+        "tdd",
+        "test-driven-development",
+        "security",
+        "code-review",
+        "documentation",
+        "agile",
+        "tickets",
+        "epics",
+        "non-technical",
+        "production-ready",
+        "quality-enforcement"
+      ],
+      "category": "development"
+    }
+  ]
+}

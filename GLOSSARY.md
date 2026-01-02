@@ -801,48 +801,6 @@ Coverage: 94%  ✅
 
 ## W
 
-### Worktree (Git Worktree)
-**PM Definition**: An isolated working directory for a single ticket, allowing multiple features to be developed simultaneously without conflicts.
-
-**Analogy**: Like having multiple copies of your codebase, each working on a different feature. But instead of actual copies (which waste disk space), git creates smart links that share the common parts.
-
-**How it works in this workflow**:
-1. Each ticket gets its own `.worktrees/[ticket-id]` directory
-2. Multiple AI agents can work on different tickets at the same time
-3. Changes in one worktree don't affect others
-4. When work completes, worktree merges to main and gets removed automatically
-
-**Real-world example**:
-```
-repo/                           # Main codebase
-├── .worktrees/
-│   ├── TICKET-101/            # Agent building authentication
-│   ├── TICKET-102/            # Agent building payments
-│   └── TICKET-103/            # Agent building reports
-
-All three work simultaneously with zero conflicts!
-```
-
-**PM Impact**:
-- **You don't manage worktrees** - they're created and removed automatically
-- **Enables concurrent development** - multiple features can be built in parallel
-- **No conflicts** - each ticket completely isolated from others
-- **Just works** - run commands like `/adaptation` and `/implementation`, workflow handles the rest
-
-**When you'll see it**:
-- Linear ticket comments show: "**Worktree Path**: `/path/to/repo/.worktrees/TICKET-123`"
-- Error messages might mention "worktree not found" (means: run `/adaptation` first)
-- Commands navigate to worktrees automatically (you don't need to)
-
-**Troubleshooting**:
-- **"Worktree not found"** → Run `/adaptation TICKET-ID` first
-- **"Worktree already exists"** → Choose "Reuse" or "Remove and recreate"
-- **Disk space concerns** → Worktrees share git objects (very space-efficient)
-
-**See Also**: [WORKTREE_GUIDE.md](WORKTREE_GUIDE.md) for comprehensive technical details (optional reading for PMs)
-
----
-
 ### Workflow
 **PM Definition**: Series of steps to accomplish a task.
 

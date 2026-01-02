@@ -42,7 +42,7 @@ Welcome! This guide will help you navigate the documentation and get up and runn
 **Detailed commands** → [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md)
 - Complete command documentation
 - Agent specifications
-- Git worktree architecture
+- Skills documentation
 - Integration details
 
 **For AI agents** → `/agents/` directory
@@ -86,19 +86,7 @@ Before starting, choose your AI platform and workflow mode:
 
 **Model Recommendation**: Use **Claude Opus 4.5** for this workflow. See [Model Recommendations](README.md#model-recommendations) for phase-specific guidance. Haiku 4.5 is not recommended.
 
-| Mode | Best For | Commands Location |
-|------|----------|-------------------|
-| **Simple Mode** | Most users, beginners, one ticket at a time | `commands/` |
-| **Worktree Mode** | Advanced users, concurrent development | `commands-worktrees/` |
-
-#### Simple Mode (Recommended)
-Use standard git branches. Work on one ticket at a time. This is the recommended starting point.
-
-#### Worktree Mode
-Use git worktrees for complete isolation. Work on multiple tickets simultaneously. Choose this if:
-- You need multiple AI agents working in parallel
-- You're comfortable with git worktrees
-- See [Worktree Guide](docs/WORKTREE_GUIDE.md) for details
+Commands and agents are installed from the `commands/` and `agents/` directories. Skills provide auto-activated quality enforcement.
 
 ### For OpenAI Codex Users
 
@@ -109,7 +97,7 @@ Use git worktrees for complete isolation. Work on multiple tickets simultaneousl
 Use the prompts from `codex/prompts/` which are platform-agnostic versions without Claude-specific agent references.
 
 **Our recommendation**:
-- New users should start with Claude Code Simple Mode for the best experience
+- New users should start with Claude Code for the best experience
 - Codex users can adapt the prompts from `codex/prompts/` to their workflow
 
 ---
