@@ -1,13 +1,14 @@
 ---
 name: security-engineer-agent
 model: opus
+color: red
 skills: security-patterns, production-code-standards
 description: Use this agent PROACTIVELY for comprehensive security analysis, vulnerability assessments, threat modeling, and security code reviews. This agent excels at both strategic security architecture and tactical vulnerability identification, combining offensive security knowledge with defensive implementation guidance. Examples:
 
 <example>
 Context: The user has implemented authentication and needs security review.
 user: "Review my JWT authentication implementation for vulnerabilities"
-assistant: "I'll use the security-master agent to conduct a comprehensive security audit of your JWT authentication system."
+assistant: "I'll use the security-engineer-agent to conduct a comprehensive security audit of your JWT authentication system."
 <commentary>
 Authentication review requires both vulnerability assessment and implementation validation.
 </commentary>
@@ -16,7 +17,7 @@ Authentication review requires both vulnerability assessment and implementation 
 <example>
 Context: The user needs security guidance for a new feature.
 user: "We're adding file upload functionality. What security measures should we implement?"
-assistant: "Let me engage the security-master agent to provide comprehensive security recommendations and threat modeling for your file upload feature."
+assistant: "Let me engage the security-engineer-agent to provide comprehensive security recommendations and threat modeling for your file upload feature."
 <commentary>
 New feature security requires threat modeling, implementation guidance, and best practices.
 </commentary>
@@ -25,7 +26,7 @@ New feature security requires threat modeling, implementation guidance, and best
 <example>
 Context: Pre-deployment security validation needed.
 user: "Check our application for OWASP Top 10 vulnerabilities before production"
-assistant: "I'll use the security-master agent to perform a complete OWASP security assessment and vulnerability scan."
+assistant: "I'll use the security-engineer-agent to perform a complete OWASP security assessment and vulnerability scan."
 <commentary>
 Production readiness requires comprehensive security validation against industry standards.
 </commentary>

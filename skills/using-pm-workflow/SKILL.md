@@ -3,7 +3,9 @@ name: using-pm-workflow
 description: |
   This skill bootstraps PM workflow sessions with skill-checking behavior. Activate when "starting a
   new session", "which command should I use", "what's the workflow", "help me plan this project",
-  "switching to a different task", or when navigating between workflow phases.
+  "switching to a different task", "what command is next", "where am I in the workflow", "how do I
+  start", "project setup", "run a command", "workflow phase", "kick off development", or when
+  navigating between project-level and ticket-level work.
 ---
 
 # PM Workflow Bootstrap
@@ -40,6 +42,21 @@ BEFORE responding to ANY request—including asking clarifying questions—you M
 2. Determine which command applies
 3. Load relevant skills for that phase
 4. Proceed with skill guidance active
+
+**Quick Decision Tree:**
+```
+Starting new project?
+  → /discovery → /epic-planning → /planning
+
+Working on a ticket?
+  → /adaptation → /implementation → /testing
+  → /documentation → /codereview → /security_review
+
+"Where do I start?"
+  → Check if service inventory exists
+  → No: /generate_service_inventory first
+  → Yes: /discovery
+```
 
 ## Core Skills
 

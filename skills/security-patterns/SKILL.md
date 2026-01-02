@@ -3,8 +3,9 @@ name: security-patterns
 description: |
   This skill enforces OWASP Top 10 security patterns during code writing. Activate when "implementing
   authentication", "handling passwords", "writing API endpoints", "validating input", "handling user
-  data", "creating database queries", or "managing sessions". Prevents injection, access control, and
-  cryptographic vulnerabilities.
+  data", "creating database queries", "managing sessions", "encryption", "XSS prevention", "CSRF
+  protection", "authorization check", "access control", "SQL injection", "storing credentials",
+  "OAuth integration", "JWT tokens", "rate limiting", "secure cookies", or "webhook validation".
 ---
 
 # Security Patterns

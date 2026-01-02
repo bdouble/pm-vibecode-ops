@@ -1,6 +1,7 @@
 ---
 name: architect-agent
 model: opus
+color: blue
 skills: production-code-standards, service-reuse
 description: Use this agent PROACTIVELY for system architecture, discovery, planning, and technical decomposition. This agent excels at analyzing codebases, decomposing requirements into implementable tickets, and ensuring architectural consistency. Examples:
 

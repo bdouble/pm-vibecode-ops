@@ -1,5 +1,5 @@
 ---
-description: Take a Linear issue and adapt requirements to existing codebase patterns, creating precise implementation guide that ensures consistent, high-quality code output.
+description: Adapt ticket requirements to codebase patterns, producing implementation guide
 allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 argument-hint: [ticket-id] [discovery-report-optional] [additional-context]
 workflow-phase: adaptation

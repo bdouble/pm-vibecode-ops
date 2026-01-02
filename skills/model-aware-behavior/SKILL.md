@@ -3,7 +3,9 @@ name: model-aware-behavior
 description: |
   This skill enforces disciplined exploration and scope control during development. Activate when
   "modifying code", "exploring a codebase", "proposing changes", "making edits", "using Edit tool",
-  or "reading files before changes". Prevents over-engineering and ensures tool efficiency.
+  "reading files before changes", "understanding the codebase", "reviewing existing code", "planning
+  changes", "avoiding over-engineering", "scope creep", "file exploration", "code navigation", or
+  "before implementing". Prevents gold-plating and ensures efficient tool usage.
 ---
 
 # Model-Aware Behavior
@@ -25,6 +27,18 @@ This skill enforces disciplined development practices that ensure code quality a
 - Do I understand the existing patterns in this codebase?
 - Have I checked for similar existing implementations?
 
+**Example - Correct approach:**
+```
+User: "Add email validation to the signup form"
+
+WRONG: Immediately write validation code
+RIGHT:
+1. Read signup form: src/components/SignupForm.tsx
+2. Search for existing validation: grep -r "validation\|validate" src/
+3. Find existing pattern: src/utils/validators.ts
+4. Use existing validateEmail() from validators.ts
+```
+
 ## Scope Control
 
 **Do ONLY what is requested:**
@@ -41,6 +55,21 @@ This skill enforces disciplined development practices that ensure code quality a
 - "It would be better to also..."
 - "For future extensibility..."
 - Adding abstractions for single-use code
+
+**Example - Scope discipline:**
+```
+User: "Fix the typo in the button label"
+
+WRONG:
+- Fix typo ✓
+- Refactor button component (not requested)
+- Add aria-label (not requested)
+- Update tests (not requested)
+
+RIGHT:
+- Fix typo ✓
+- Done
+```
 
 ## Word Substitutions
 

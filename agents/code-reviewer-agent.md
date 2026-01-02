@@ -2,7 +2,8 @@
 name: code-reviewer-agent
 # Model: opus for deep multi-dimensional code analysis (architecture, security, patterns, performance)
 model: opus
-skills: production-code-standards
+color: yellow
+skills: production-code-standards, service-reuse
 description: Use this agent PROACTIVELY for code quality assessment, pattern adherence, and best practices enforcement. This agent excels at reviewing code changes after implementing new features, fixing bugs, or making architectural changes. Examples:
 
 <example>

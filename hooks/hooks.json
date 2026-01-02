@@ -1,12 +1,13 @@
 {
   "hooks": {
-    "PreToolUse": [
+    "PostToolUse": [
       {
         "matcher": "Write|Edit",
+        "description": "Validate production code standards after file modifications",
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Before writing code, remember: NO workarounds, temporary fixes, or fallback behaviors. Code must be production-ready. Check the production-code-standards skill if unsure. Proceed with the tool use."
+            "prompt": "Review the code just written. Check for violations of production-code-standards: TODO/FIXME comments, empty catch blocks, console.log statements, hardcoded values, or fallback patterns hiding errors. If violations exist, flag them for immediate correction before continuing."
           }
         ]
       }
@@ -14,10 +15,11 @@
     "Stop": [
       {
         "matcher": ".*",
+        "description": "Remind about Linear ticket updates when workflow commands were used",
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "If this session involved implementing a Linear ticket (adaptation, implementation, testing phases), remind the user to update the ticket status. If no Linear ticket was involved, approve stopping without comment."
+            "prompt": "Before stopping: If this session used workflow commands (/adaptation, /implementation, /testing, /documentation, /codereview, /security_review) on a Linear ticket, remind the user to verify the ticket status is updated. If no workflow commands or Linear tickets were involved, approve stopping without comment."
           }
         ]
       }
@@ -25,6 +27,7 @@
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact",
+        "description": "Inject PM workflow context and skill reminders at session start",
         "hooks": [
           {
             "type": "command",

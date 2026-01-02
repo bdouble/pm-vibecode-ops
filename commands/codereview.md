@@ -1,5 +1,5 @@
 ---
-description: Perform code quality review to ensure implementation meets standards, patterns, and architectural consistency. Security issues are logged but not fixed.
+description: Review code quality, patterns, and architectural consistency (security issues logged only)
 allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, Bash(find:*), Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Bash(gh pr comment:*), WebSearch, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 argument-hint: [ticket-id] [implementation-branch] [review-depth]
 workflow-phase: code-review

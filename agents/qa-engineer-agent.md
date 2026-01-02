@@ -1,6 +1,7 @@
 ---
 name: qa-engineer-agent
 model: sonnet
+color: cyan
 skills: testing-philosophy, production-code-standards
 description: Use this agent PROACTIVELY for comprehensive testing strategy, test implementation, and quality assurance. This agent excels at creating thorough test suites, identifying edge cases, and ensuring software quality across all testing levels. Examples:
 

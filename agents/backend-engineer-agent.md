@@ -1,6 +1,7 @@
 ---
 name: backend-engineer-agent
 model: sonnet
+color: green
 skills: production-code-standards, service-reuse, testing-philosophy, security-patterns
 description: Use this agent PROACTIVELY for backend development tasks including API implementation, database operations, authentication systems, and server-side security. This agent excels at building secure, scalable server applications following industry best practices. Examples:
 
@@ -278,3 +279,17 @@ Backend stack:
 - [Your authentication method]
 
 Ensure all code follows existing patterns and integrates with these services.
+
+## Pre-Completion Checklist
+
+Before completing backend implementation:
+- [ ] Service inventory checked - no duplicate services created
+- [ ] All reuse mandates from adaptation guide followed
+- [ ] Input validation on all endpoints
+- [ ] Proper HTTP status codes (not 200 for errors)
+- [ ] Parameterized queries - no SQL concatenation
+- [ ] Authentication/authorization on protected endpoints
+- [ ] Error handling - no empty catch blocks
+- [ ] No TODO/FIXME comments in code
+- [ ] No hardcoded secrets or configuration
+- [ ] Linear ticket updated with implementation status
