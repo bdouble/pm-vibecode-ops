@@ -5,7 +5,7 @@
 This guide teaches you to use AI coding agents with a structured workflow. You write product requirements; AI writes code with built-in quality gates (testing, security review, documentation). Best for: internal tools, MVPs, standard web apps. Not a replacement for engineering teams on complex/critical systems—but a powerful force multiplier for appropriate projects.
 
 **Time to first feature**: 2-4 hours following the workflow
-**Prerequisites**: Claude Code installed with PM workflow plugin (`/plugin install github:bdouble/pm-vibecode-ops`), Linear account, a codebase
+**Prerequisites**: Claude Code installed with PM workflow plugin (install from marketplace), Linear account, a codebase
 
 ---
 
@@ -144,7 +144,7 @@ This section walks you through your first feature. Setup time is approximately 4
 ### What You'll Need
 
 - [ ] Claude Code installed and configured
-- [ ] PM workflow plugin installed: `/plugin install github:bdouble/pm-vibecode-ops`
+- [ ] PM workflow plugin installed (see [Installation Guide](docs/INSTALLATION.md))
 - [ ] A Product Requirements Document (PRD)
 - [ ] Access to a ticketing system with MCP integration (Linear or Jira recommended)
 - [ ] A codebase (or start with a new project)

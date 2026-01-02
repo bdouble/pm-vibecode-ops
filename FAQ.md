@@ -75,21 +75,16 @@ See [Setup Guide](docs/SETUP_GUIDE.md) which covers:
 
 The workflow supports both **Claude Code** (plugin-based installation) and **OpenAI Codex** (platform-agnostic prompts).
 
-**For Claude Code (one-command installation)**:
+**For Claude Code (marketplace installation)**:
 ```bash
-/plugin install github:bdouble/pm-vibecode-ops
+# Add the marketplace
+/plugin marketplace add bdouble/pm-vibecode-ops
+
+# Install from marketplace
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 ```
 
 That's it! The plugin system automatically installs all commands, agents, skills, and hooks.
-
-**Alternative: Marketplace installation**:
-```bash
-# Add the marketplace first
-/plugin marketplace add bdouble/pm-vibecode-ops
-
-# Then install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
-```
 
 **Verify Claude Code installation**:
 ```bash
@@ -152,7 +147,11 @@ See [MCP Setup Guide](docs/MCP_SETUP.md) for installation instructions.
 **For Claude Code users**: The plugin system handles installation automatically. Plugins are installed globally and work across all projects.
 
 ```bash
-/plugin install github:bdouble/pm-vibecode-ops
+# Add the marketplace
+/plugin marketplace add bdouble/pm-vibecode-ops
+
+# Install from marketplace
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 ```
 
 **For OpenAI Codex users**: Prompts can be referenced directly from the cloned repository, making them effectively "global" by default.

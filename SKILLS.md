@@ -183,12 +183,16 @@ All skills in this repo use **strict enforcement**:
 Skills are automatically installed when you install the PM workflow plugin:
 
 ```bash
-/plugin install github:bdouble/pm-vibecode-ops
+# Add the marketplace
+/plugin marketplace add bdouble/pm-vibecode-ops
+
+# Install from marketplace
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 ```
 
 This installs all 9 skills automatically along with commands, agents, and hooks.
 
-### Manual Installation (Alternative)
+### Manual Installation (Not Recommended)
 
 If you prefer to install skills manually:
 

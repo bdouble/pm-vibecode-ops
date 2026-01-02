@@ -55,12 +55,16 @@ All progress is saved in tickets, PRs, and code—starting fresh sessions doesn'
 
 **Plugin Installation (Recommended)**:
 ```bash
-/plugin install github:bdouble/pm-vibecode-ops
+# Add the marketplace
+/plugin marketplace add bdouble/pm-vibecode-ops
+
+# Install from marketplace
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 ```
 
 This automatically installs all commands, agents, skills, and hooks.
 
-**Manual Installation (Alternative)**:
+**Manual Installation (Not Recommended)**:
 ```bash
 mkdir -p ~/.claude/commands
 cp commands/*.md ~/.claude/commands/

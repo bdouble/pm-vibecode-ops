@@ -65,10 +65,9 @@ Enhanced `.claude-plugin/marketplace.json` for better discoverability:
 
 This release introduces simplified plugin-based installation for Claude Code users:
 
-- **One-command installation**: `/plugin install github:bdouble/pm-vibecode-ops`
+- **Marketplace installation**: Add marketplace and install plugin (see README)
 - Automatically installs all commands, agents, skills, and hooks
 - No manual file copying or directory setup required
-- Supports marketplace installation as alternative
 
 ### Changed
 
@@ -100,11 +99,12 @@ Updated all documentation to reflect the new plugin installation method:
 If upgrading from 2.0.0:
 
 1. **No action required for existing installations** - Your current setup continues to work
-2. **For new installations**: Use `/plugin install github:bdouble/pm-vibecode-ops` instead of manual copying
+2. **For new installations**: Install from marketplace instead of manual copying (see README)
 3. **To switch to plugin**: You can optionally remove manual installations and use the plugin instead:
    ```bash
    rm -rf ~/.claude/commands/*.md ~/.claude/agents/*.md ~/.claude/skills/*
-   /plugin install github:bdouble/pm-vibecode-ops
+   /plugin marketplace add bdouble/pm-vibecode-ops
+   /plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
    ```
 
 ---

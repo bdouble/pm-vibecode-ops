@@ -84,11 +84,13 @@ Before starting, choose your AI platform and workflow mode:
 
 ### For Claude Code Users
 
-**Model Recommendation**: Use **Claude Opus 4.5** for this workflow. See [Model Recommendations](README.md#model-recommendations) for phase-specific guidance. Haiku 4.5 is not recommended.
-
-**One-command installation**:
+**Install from Claude Code Marketplace**:
 ```bash
-/plugin install github:bdouble/pm-vibecode-ops
+# Add the marketplace
+/plugin marketplace add bdouble/pm-vibecode-ops
+
+# Install from marketplace
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 ```
 
 The plugin system automatically installs all commands, agents, skills, and hooks.
@@ -121,7 +123,7 @@ This workflow enables you to:
 
 You need:
 - [ ] Claude Code installed ([installation guide](https://code.claude.com/docs/en/setup))
-- [ ] PM Workflow plugin installed: `/plugin install github:bdouble/pm-vibecode-ops`
+- [ ] PM Workflow plugin installed (see Installation section above)
 - [ ] Ticketing system with MCP integration ([Linear](https://linear.app) or [Jira](https://www.atlassian.com/software/jira))
 - [ ] Access to a codebase (or start a new project)
 - [ ] A feature idea to implement
@@ -311,7 +313,7 @@ You'll know you're successful when:
 ### Week 1
 - [ ] Read [PM_GUIDE.md](PM_GUIDE.md) completely
 - [ ] Review at least 2 case studies in [EXAMPLES.md](EXAMPLES.md)
-- [ ] Set up Claude Code, install plugin (`/plugin install github:bdouble/pm-vibecode-ops`), and configure MCP
+- [ ] Set up Claude Code, install plugin from marketplace, and configure MCP
 - [ ] Write first PRD using templates
 
 ### Month 1

@@ -138,7 +138,8 @@ Linear uses OAuth 2.1, not API keys. If you see authentication errors:
 2. Reinstall the plugin:
    ```bash
    /plugin uninstall pm-vibecode-ops
-   /plugin install github:bdouble/pm-vibecode-ops
+   /plugin marketplace add bdouble/pm-vibecode-ops
+   /plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
    ```
 
 3. Restart Claude Code (exit and start a new session)
@@ -242,7 +243,8 @@ npm install -g @anthropic-ai/claude-code
 
 # Start Claude Code and reinstall the plugin
 claude
-/plugin install github:bdouble/pm-vibecode-ops
+/plugin marketplace add bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 ```
 
 ### Getting Help

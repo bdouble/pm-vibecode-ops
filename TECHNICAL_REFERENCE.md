@@ -660,7 +660,7 @@ Commands track and report:
 |---------|-------------|--------------|
 | **Command Style** | Slash commands | Copy-paste prompts |
 | **Agents** | Specialized via Task tool | Platform-agnostic |
-| **Installation** | Plugin: `/plugin install github:bdouble/pm-vibecode-ops` | Clone repo, reference prompts |
+| **Installation** | Plugin: Install from marketplace | Clone repo, reference prompts |
 | **Git Strategy** | Feature branches | Feature branches |
 | **Skills** | Auto-activated (9 skills) | Not supported |
 | **Hooks** | Session automation | Not supported |

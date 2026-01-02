@@ -317,12 +317,16 @@ Use the plugin system for one-command installation of all commands, agents, skil
 
 ## Claude Code Installation
 
-### One-Command Plugin Installation (Recommended)
+### Plugin Installation from Marketplace
 
 Once Claude Code is installed and you've started a session, run:
 
 ```bash
-/plugin install github:bdouble/pm-vibecode-ops
+# Add the marketplace
+/plugin marketplace add bdouble/pm-vibecode-ops
+
+# Install from marketplace
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 ```
 
 That's it! The plugin system automatically installs:
@@ -330,18 +334,6 @@ That's it! The plugin system automatically installs:
 - **Agents** - Specialized AI roles (architect, QA engineer, security engineer)
 - **Skills** - Auto-activated quality enforcement during development
 - **Hooks** - Session automation for workflow context
-
-### Alternative: Marketplace Installation
-
-If direct GitHub installation doesn't work, use the marketplace approach:
-
-```bash
-# Add the marketplace first
-/plugin marketplace add bdouble/pm-vibecode-ops
-
-# Then install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
-```
 
 ### Verify Installation
 
@@ -365,7 +357,8 @@ If direct GitHub installation doesn't work, use the marketplace approach:
 
 # Reinstall if needed
 /plugin uninstall pm-vibecode-ops
-/plugin install github:bdouble/pm-vibecode-ops
+/plugin marketplace add bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
 
 # List installed plugins
 /plugin list
@@ -596,7 +589,8 @@ export PATH=~/.npm-global/bin:$PATH
 2. Reinstall the plugin:
    ```bash
    /plugin uninstall pm-vibecode-ops
-   /plugin install github:bdouble/pm-vibecode-ops
+   /plugin marketplace add bdouble/pm-vibecode-ops
+   /plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
    ```
 
 3. Restart Claude Code (exit and start a new session)
@@ -635,7 +629,8 @@ Now that your setup is complete:
 
 1. **Install the plugin** (if you haven't already):
    ```bash
-   /plugin install github:bdouble/pm-vibecode-ops
+   /plugin marketplace add bdouble/pm-vibecode-ops
+   /plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
    ```
 
 2. **Set up MCP integrations** — See [MCP_SETUP.md](MCP_SETUP.md) for Linear, Perplexity, and other required integrations
