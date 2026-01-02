@@ -1,6 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PM Workflow Session Start Hook
 # Injects context about PM workflow skills and commands for non-engineer users
+
+set -euo pipefail
 
 cat << 'EOF'
 {
@@ -10,3 +12,5 @@ cat << 'EOF'
   }
 }
 EOF
+
+exit 0
