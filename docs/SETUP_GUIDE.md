@@ -326,7 +326,7 @@ Once Claude Code is installed and you've started a session, run:
 /plugin marketplace add bdouble/pm-vibecode-ops
 
 # Install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
 That's it! The plugin system automatically installs:
@@ -358,7 +358,7 @@ That's it! The plugin system automatically installs:
 # Reinstall if needed
 /plugin uninstall pm-vibecode-ops
 /plugin marketplace add bdouble/pm-vibecode-ops
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 
 # List installed plugins
 /plugin list
@@ -590,7 +590,7 @@ export PATH=~/.npm-global/bin:$PATH
    ```bash
    /plugin uninstall pm-vibecode-ops
    /plugin marketplace add bdouble/pm-vibecode-ops
-   /plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+   /plugin install pm-vibecode-ops@pm-vibecode-ops
    ```
 
 3. Restart Claude Code (exit and start a new session)
@@ -630,7 +630,7 @@ Now that your setup is complete:
 1. **Install the plugin** (if you haven't already):
    ```bash
    /plugin marketplace add bdouble/pm-vibecode-ops
-   /plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+   /plugin install pm-vibecode-ops@pm-vibecode-ops
    ```
 
 2. **Set up MCP integrations** — See [MCP_SETUP.md](MCP_SETUP.md) for Linear, Perplexity, and other required integrations

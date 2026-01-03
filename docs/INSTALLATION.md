@@ -112,8 +112,17 @@ Follow the prompts to authenticate via Claude Console, Claude App, or Enterprise
 /plugin marketplace add bdouble/pm-vibecode-ops
 
 # Then install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
+
+When prompted for scope, **select "User"** (recommended) to make the plugin available across all projects.
+
+**Scope options**:
+| Scope | Who can use it | Where it works | Best for |
+|-------|----------------|----------------|----------|
+| **User** | You only | All your projects | Personal workflow (recommended) |
+| **Project** | All collaborators | This repository only | Team standardization |
+| **Local** | You only | This repository only | Testing/evaluation |
 
 That's it! The plugin system automatically installs:
 - **Commands** (`/adaptation`, `/implementation`, etc.) - Workflow phases you invoke
@@ -149,7 +158,7 @@ claude
 ```bash
 /plugin uninstall pm-vibecode-ops
 /plugin marketplace add bdouble/pm-vibecode-ops
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
 **List installed plugins**:
@@ -320,7 +329,7 @@ curl https://github.com/bdouble/pm-vibecode-ops
 exit
 claude
 /plugin marketplace add bdouble/pm-vibecode-ops
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
 ### Commands Not Showing Up
@@ -340,8 +349,38 @@ claude
 # 3. Reinstall plugin
 /plugin uninstall pm-vibecode-ops
 /plugin marketplace add bdouble/pm-vibecode-ops
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
+
+### "Already Installed" But Commands Don't Work
+
+**Problem**: Claude Code says the plugin is "already installed" but commands aren't available
+
+**Cause**: The plugin was previously installed with "Local" scope for a different project. The plugin registry shows it as installed, but it's only active in that specific project directory.
+
+**Solution**: Clear the stale installation and reinstall with "User" scope:
+
+```bash
+# 1. Exit Claude Code
+exit
+
+# 2. Clear the plugin cache (in your terminal, not Claude Code)
+rm -rf ~/.claude/plugins/cache/pm-vibecode-ops
+
+# 3. Remove the stale registry entry
+# Edit ~/.claude/plugins/installed_plugins.json and remove the pm-vibecode-ops entry
+# Or delete the file to reset all plugins: rm ~/.claude/plugins/installed_plugins.json
+
+# 4. Start Claude Code fresh
+claude
+
+# 5. Reinstall with User scope
+/plugin marketplace add bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
+# When prompted, select "User" scope
+```
+
+**Prevention**: Always select "User" scope when installing to make the plugin available everywhere.
 
 ### Skills Not Activating
 

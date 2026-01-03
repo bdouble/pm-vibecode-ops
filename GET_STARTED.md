@@ -90,7 +90,7 @@ Before starting, choose your AI platform and workflow mode:
 /plugin marketplace add bdouble/pm-vibecode-ops
 
 # Install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
 The plugin system automatically installs all commands, agents, skills, and hooks.

@@ -187,7 +187,7 @@ Skills are automatically installed when you install the PM workflow plugin:
 /plugin marketplace add bdouble/pm-vibecode-ops
 
 # Install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
 This installs all 9 skills automatically along with commands, agents, and hooks.

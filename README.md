@@ -133,10 +133,17 @@ Each phase includes quality gates. Security review is the final gate that marks 
 /plugin marketplace add bdouble/pm-vibecode-ops
 
 # Then install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
+When prompted, **select "User" scope** to make the plugin available across all projects.
+
 That's it! The plugin system automatically installs all commands, agents, skills, and hooks.
+
+**Scope options explained**:
+- **User** (recommended) - Available in all projects for you
+- **Project** - Available to all collaborators in this repository (commits to `.claude/settings.json`)
+- **Local** - Available only in this project, only for you
 
 **What gets installed:**
 - **Commands** (`/adaptation`, `/implementation`, etc.) - Explicit workflow phases you invoke

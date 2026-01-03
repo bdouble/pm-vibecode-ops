@@ -141,7 +141,7 @@ If upgrading from 2.0.0:
    ```bash
    rm -rf ~/.claude/commands/*.md ~/.claude/agents/*.md ~/.claude/skills/*
    /plugin marketplace add bdouble/pm-vibecode-ops
-   /plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+   /plugin install pm-vibecode-ops@pm-vibecode-ops
    ```
 
 ---

@@ -59,7 +59,7 @@ All progress is saved in tickets, PRs, and code—starting fresh sessions doesn'
 /plugin marketplace add bdouble/pm-vibecode-ops
 
 # Install from marketplace
-/plugin install pm-vibecode-ops@bdouble/pm-vibecode-ops
+/plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
 This automatically installs all commands, agents, skills, and hooks.
