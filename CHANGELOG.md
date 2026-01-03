@@ -5,6 +5,43 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-02
+
+### Changed
+
+**Agent Quality Improvements**
+
+- Added `color` field to all 7 agents for visual identification in UI:
+  - architect-agent → blue, backend-engineer → green, frontend-engineer → purple
+  - code-reviewer → yellow, qa-engineer → cyan, security-engineer → red, technical-writer → teal
+- Added `service-reuse` skill to code-reviewer-agent
+- Added `production-code-standards` skill to technical-writer-agent
+- Fixed naming inconsistency: "security-master agent" → "security-engineer-agent" in example blocks
+- Added pre-completion checklists to backend-engineer, frontend-engineer, and technical-writer agents
+
+**Command Description Optimization**
+
+- Shortened verbose command descriptions for better display:
+  - codereview.md: 165 → 96 characters
+  - adaptation.md: 198 → 85 characters
+
+**Skill Trigger Improvements**
+
+- Broadened trigger phrases in 4 skills for better auto-activation:
+  - `using-pm-workflow`: Added "what command is next", "where am I in the workflow", "project setup", etc.
+  - `security-patterns`: Added "encryption", "XSS", "CSRF", "SQL injection", "JWT tokens", etc.
+  - `model-aware-behavior`: Added "understanding the codebase", "scope creep", "before implementing", etc.
+  - `divergent-exploration`: Added "brainstorming", "trade-offs analysis", "pros and cons", etc.
+- Added inline examples to model-aware-behavior and using-pm-workflow skills
+
+**Hooks Refactoring**
+
+- Changed PreToolUse → PostToolUse hook (validates after file changes, reduces noise)
+- Added `description` field to all hook configurations for better discoverability
+- Made Stop hook conditional (only reminds about Linear when workflow commands were used)
+
+---
+
 ## [2.2.0] - 2026-01-02
 
 ### Changed
@@ -625,6 +662,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.0
 [2.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.2.0
 [2.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.1.0
 [2.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.0.0
