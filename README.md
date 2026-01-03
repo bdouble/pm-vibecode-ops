@@ -76,7 +76,7 @@ Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based te
 
 This workflow helps PMs and other non-engineers build software that works in production—with proper tests, documentation, and security review.
 
-**It will not** produce the elegant, highly-optimized code that senior engineers would write.
+**It will not** produce the elegantly architected, concise, highly scalable code that senior engineers would write.
 
 **It will** enable you to ship real features, maintain code quality as your application grows, and avoid the unmaintainable mess that unstructured AI coding creates.
 
