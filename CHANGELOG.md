@@ -5,6 +5,29 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-01-05
+
+### Fixed
+
+**Discovery Reference Standardization**
+
+Updated commands and documentation to consistently reference Linear discovery tickets as the primary workflow:
+
+- **Commands updated**:
+  - `/epic-planning`: Clarified discovery argument accepts ticket ID (e.g., `DISC-001`) or markdown file path
+  - `/planning`: Updated `--discovery` flag description and examples to show ticket IDs as primary
+  - `/adaptation`: Updated argument hint and examples to use discovery ticket IDs
+
+- **Documentation updated**:
+  - PM_GUIDE.md: Fixed 3 references to use discovery ticket IDs instead of markdown files
+  - QUICK_REFERENCE.md: Updated example commands to use `DISC-001` format
+  - FAQ.md: Fixed 2 example references
+  - TECHNICAL_REFERENCE.md: Updated usage syntax and examples for epic-planning and planning
+
+The `/discovery` command creates a Linear ticket as its artifact, so downstream commands should reference that ticket ID by default. Markdown file paths remain supported as an alternative.
+
+---
+
 ## [2.3.0] - 2026-01-02
 
 ### Changed
@@ -662,6 +685,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
 [2.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.0
 [2.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.2.0
 [2.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.1.0
