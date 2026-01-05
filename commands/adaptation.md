@@ -1,7 +1,7 @@
 ---
 description: Adapt ticket requirements to codebase patterns, producing implementation guide
 allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
-argument-hint: [ticket-id] [discovery-report-optional] [additional-context]
+argument-hint: [ticket-id] [discovery-ticket-or-file-optional] [additional-context]
 workflow-phase: adaptation
 closes-ticket: false
 workflow-sequence: "**adaptation** → implementation → testing → documentation → code-review → security-review"
@@ -18,11 +18,14 @@ workflow-sequence: "**adaptation** → implementation → testing → documentat
 # Basic usage with just ticket ID
 /adaptation LIN-123
 
-# With discovery report from previous phase
-/adaptation LIN-123 ./docs/discovery-report.md
+# With discovery ticket from previous phase (recommended)
+/adaptation LIN-123 DISC-001
 
-# Full parameters with additional context
-/adaptation LIN-123 ./docs/discovery-report.md "Focus on event-driven patterns for notifications"
+# With additional context
+/adaptation LIN-123 DISC-001 "Focus on event-driven patterns for notifications"
+
+# Alternative: using discovery markdown file
+/adaptation LIN-123 ./docs/discovery-report.md
 ```
 
 You are acting as the **Architect** for this ticket. Focus on analysis, planning, and decomposition only—no implementation, test code, or documentation files are created in this phase. Your primary deliverable is a clear, production-ready implementation guide documented in the Linear ticket.
@@ -52,7 +55,7 @@ You are acting as the **Architect** for this ticket. Focus on analysis, planning
 
 Take Linear issue **$1** and adapt all requirements to existing codebase patterns, creating a precise implementation guide.
 
-Discovery report: ${2:-"none - will perform discovery as needed"}
+Discovery source: ${2:-"none - will perform discovery as needed"} (can be a Linear ticket ID like `DISC-001` or a markdown file path)
 
 Additional information may be provided to guide the adaptation work in **$3**
 

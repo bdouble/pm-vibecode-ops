@@ -80,15 +80,18 @@ These commands run at recurring intervals throughout the project lifecycle—not
 
 **Purpose**: Transforms PRD and business requirements into capability-focused epics with comprehensive duplicate prevention.
 
-**Usage**: `/epic-planning [prd-document] [discovery-report] [business-context] [strategic-focus]`
+**Usage**: `/epic-planning [prd-document] [discovery-ticket-or-file] [business-context] [strategic-focus]`
 
 **Examples**:
 ```bash
-# Basic epic planning
-/epic-planning prd.md discovery-report.md
+# With discovery ticket (recommended)
+/epic-planning prd.md DISC-001
 
 # With business context
 /epic-planning prd.md DISC-001 "market-leader" "user-value"
+
+# Alternative: using discovery markdown file
+/epic-planning prd.md ./discovery-report.md "market-leader"
 ```
 
 **Key Features**:
@@ -123,28 +126,31 @@ These commands run at recurring intervals throughout the project lifecycle—not
 
 **Purpose**: Technical decomposition - breaks epics into actionable sub-tickets with proper dependencies.
 
-**Usage**: `/planning <epic-ids> [--prd <prd-file>] [--discovery <discovery-report>] [--context <additional-context>]`
+**Usage**: `/planning <epic-ids> [--prd <prd-file>] [--discovery <ticket-id-or-file>] [--context <additional-context>]`
 
 **Examples**:
 ```bash
 # Single epic
 /planning LIN-123
 
-# Multiple epics with discovery
-/planning LIN-123,LIN-124 --discovery discovery-report.md
+# Multiple epics with discovery ticket (recommended)
+/planning LIN-123,LIN-124 --discovery DISC-001
 
 # Epic with all context sources
-/planning LIN-456 --prd requirements.md --discovery discovery.md --context "Must support 10k concurrent users"
+/planning LIN-456 --prd requirements.md --discovery DISC-002 --context "Must support 10k concurrent users"
 
 # Process all epics in a project
-/planning PROJ-789 --discovery discovery.md
+/planning PROJ-789 --discovery DISC-003
+
+# Alternative: using discovery markdown file
+/planning LIN-123 --discovery ./discovery-report.md
 ```
 
 **Key Features**:
 - **Primary Input**: Epic IDs (comma-separated) or Project ID
 - **Optional Context**:
   - `--prd`: Original PRD for detailed requirements
-  - `--discovery`: Technical patterns and service inventory
+  - `--discovery`: Discovery ticket ID (e.g., `DISC-001`) or markdown file with technical patterns and service inventory
   - `--context`: Ad-hoc constraints or requirements
 - **Sub-ticket Creation**: All tickets created as children of parent epics
 - **Technical Sizing**: 2-8 hour implementation chunks

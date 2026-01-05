@@ -252,7 +252,7 @@ exit
 
 # Session 2 (fresh context)
 claude
-/epic-planning prd.md discovery-report.md
+/epic-planning prd.md DISC-001
 # Review output
 exit
 
@@ -1202,7 +1202,7 @@ The workflow has built-in duplicate prevention. Make sure you:
 ```bash
 # In your ticketing system, delete the duplicate epics
 # Re-run epic-planning with clean state
-/epic-planning prd.md discovery.md "context"
+/epic-planning prd.md DISC-001 "context"
 # This time, carefully review the existing epics manifest
 ```
 

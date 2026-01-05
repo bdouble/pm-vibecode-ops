@@ -1,7 +1,7 @@
 ---
 description: Transform PRD and business requirements into capability-focused Linear epics that provide engineering teams with clear functional requirements and business context without prescribing technical implementation.
 allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(git branch:*), Bash(git status:*), WebSearch, mcp__linear-server__create_project, mcp__linear-server__create_issue, mcp__linear-server__list_teams, mcp__linear-server__list_projects, mcp__linear-server__update_issue, mcp__linear-server__list_issues, mcp__linear-server__get_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__update_project, mcp__linear-server__get_project, mcp__linear-server__linear_get_milestones, mcp__linear-server__linear_create_milestone, mcp__linear-server__linear_update_milestone
-argument-hint: [prd-file] [discovery-ticket] [business-context] [focus] (e.g., /epic-planning prd.md LIN-123 "Series A startup" "user engagement")
+argument-hint: [prd-file] [discovery-ticket-or-file] [business-context] [focus] (e.g., /epic-planning prd.md DISC-123 "Series A startup" "user engagement")
 workflow-phase: epic-creation
 closes-ticket: false
 workflow-sequence: "discovery → **epic-planning** → planning (technical decomposition)"
@@ -103,7 +103,7 @@ Read the PRD at **$1** and extract:
 - **Success Criteria**: How do we measure success?
 - **Revenue Impact**: Direct/indirect revenue or cost savings
 
-If discovery report provided at **${2:-"none"}**, incorporate technical landscape context.
+If discovery provided at **${2:-"none"}** (Linear ticket ID like `DISC-123` or `LIN-456`, OR a markdown file path), incorporate technical landscape context.
 
 ## Step 3: Decompose into MECE Capabilities with Duplicate Prevention
 

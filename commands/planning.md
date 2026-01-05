@@ -1,7 +1,7 @@
 ---
 description: Technical decomposition of Linear epics into actionable implementation tickets with proper dependencies and technical specifications, using epic tickets as primary input with optional PRD, discovery report, and additional context.
 allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(git branch:*), Bash(git status:*), WebSearch, mcp__linear-server__create_project, mcp__linear-server__create_issue, mcp__linear-server__list_teams, mcp__linear-server__list_projects, mcp__linear-server__update_issue, mcp__linear-server__list_issues, mcp__linear-server__get_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__get_project, mcp__linear-server__linear_get_milestones
-argument-hint: <epic-ids> [--prd <prd-file>] [--discovery <discovery-report>] [--context <additional-context>]
+argument-hint: <epic-ids> [--prd <prd-file>] [--discovery <ticket-id-or-file>] [--context <additional-context>]
 workflow-phase: planning
 closes-ticket: false
 workflow-sequence: "discovery → epic-planning → **planning** (creates sub-tickets)"
@@ -51,7 +51,7 @@ Transform Linear epics into technical implementation tickets with clear dependen
 
 ### Optional Context (Flags):
 **--prd**: Original PRD document for additional business context
-**--discovery**: Discovery report with technical analysis and patterns
+**--discovery**: Discovery ticket ID (e.g., `DISC-123`) or markdown file path with technical analysis and patterns
 **--context**: Additional ad-hoc context, requirements, or constraints
 
 Examples:
@@ -59,11 +59,14 @@ Examples:
 # Single epic with no additional context
 /planning LIN-123
 
-# Multiple epics with discovery report
-/planning LIN-123,LIN-124,LIN-125 --discovery discovery-report.md
+# Multiple epics with discovery ticket (recommended)
+/planning LIN-123,LIN-124,LIN-125 --discovery DISC-001
 
-# Project with all context
-/planning PROJ-456 --prd requirements.md --discovery discovery.md --context "Must integrate with legacy system"
+# Project with all context (ticket ID)
+/planning PROJ-456 --prd requirements.md --discovery DISC-002 --context "Must integrate with legacy system"
+
+# Alternative: using discovery markdown file
+/planning LIN-123,LIN-124 --discovery ./docs/discovery-report.md
 
 # Epic with just additional context
 /planning LIN-789 --context "Performance critical - sub-100ms response required"

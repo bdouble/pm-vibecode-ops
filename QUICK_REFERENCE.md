@@ -72,8 +72,8 @@ Your PRD must include:
 # Full workflow for new feature
 /generate_service_inventory . inventory.md
 /discovery my-prd.md MyProject ./src "area1, area2"
-/epic-planning my-prd.md discovery.md "market context" "user value"
-/planning EPIC-123,EPIC-124 --discovery discovery.md
+/epic-planning my-prd.md DISC-001 "market context" "user value"
+/planning EPIC-123,EPIC-124 --discovery DISC-001
 
 # Per-ticket workflow
 /adaptation TICKET-201

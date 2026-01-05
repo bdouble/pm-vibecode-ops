@@ -206,7 +206,7 @@ Success Metric: 70% of active users complete profile within 7 days
 #### Step 4: Technical Planning - Engineering Tasks (5 minutes)
 
 ```bash
-/planning EPIC-123 --discovery discovery-report.md
+/planning EPIC-123 --discovery DISC-001
 ```
 
 **What this does**: AI breaks epics into specific engineering tasks (2-8 hours each).
@@ -370,7 +370,7 @@ Before running epic-planning, ensure your PRD has:
 
 #### 3️⃣ **Epic Planning** (Transform PRD → Business Capabilities)
 ```bash
-/epic-planning [prd-file] [discovery-report] [business-context] [focus]
+/epic-planning [prd-file] [discovery-ticket] [business-context] [focus]
 ```
 
 **Your Job**:
@@ -405,7 +405,7 @@ Your Decision:
 
 #### 4️⃣ **Technical Planning** (Epic → Engineering Tasks)
 ```bash
-/planning EPIC-123,EPIC-124 --discovery [discovery-report]
+/planning EPIC-123,EPIC-124 --discovery [discovery-ticket]
 ```
 
 **Your Job**:
