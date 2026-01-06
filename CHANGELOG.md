@@ -5,6 +5,21 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.4] - 2026-01-06
+
+### Fixed
+
+**Security Review Command Shell Substitution Error**
+
+Fixed error where `/security_review` command failed with "Command contains $() command substitution" due to Claude Code's security model blocking shell substitution patterns.
+
+- Removed complex `$()` command substitution patterns from shell commands
+- Replaced dynamic default branch detection with simple `origin/HEAD` reference
+- Git automatically resolves `origin/HEAD` to the default branch
+- Simplified from 4 complex shell commands to 3 simple git commands
+
+---
+
 ## [2.4.3] - 2026-01-06
 
 ### Changed
