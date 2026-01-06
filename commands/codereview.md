@@ -226,7 +226,7 @@ During code review, the agent MUST identify and fix any workarounds or temporary
 13. **Security Issue Logging**: If security issues noticed, LOG them in Linear (do NOT fix)
 14. **Fix Implementation**: Make focused commits for NON-SECURITY and DUPLICATION issues (including those from PR comments)
 15. **Commit & Push**: Commit fixes to feature branch and push to remote
-16. **PR State Change**: Move PR from DRAFT to READY FOR REVIEW using `gh pr ready` (BEFORE adding comments)
+16. **PR State Change (AUTO)**: If PR is in draft, automatically move to READY FOR REVIEW using `gh pr ready` - DO NOT ask user, just do it (BEFORE adding comments)
 17. **PR Comment with Acknowledgments**: Add review results acknowledging addressed feedback
 18. **PR Labels & Description**: Add `code-reviewed` label and update PR description with review summary
 19. **Enhanced Linear Update**: Use structured report template with metrics dashboard
@@ -458,6 +458,25 @@ gh pr list --head "$(git branch --show-current)" --state open
 gh pr view --json number
 ```
 
+### Auto-Convert Draft PR to Ready for Review
+**CRITICAL: This MUST happen automatically without asking the user.**
+
+After finding the PR, immediately check if it's in draft status and convert it:
+```bash
+# Get PR details including draft status
+PR_NUMBER=$(gh pr view --json number -q .number)
+IS_DRAFT=$(gh pr view --json isDraft -q .isDraft)
+
+# Auto-convert draft PR without asking user
+if [ "$IS_DRAFT" = "true" ]; then
+    echo "=== PR is in draft status - automatically converting to ready for review ==="
+    gh pr ready $PR_NUMBER
+    echo "✅ PR automatically moved from draft to ready for review"
+fi
+```
+
+**DO NOT ask for user confirmation** - the code review phase requires the PR to be ready for review, so this conversion is automatic and expected.
+
 ### Enhanced PR Comment Analysis & Tracking
 After finding the PR, systematically analyze and categorize all review feedback:
 ```bash
@@ -515,19 +534,26 @@ gh api --method PUT repos/:owner/:repo/pulls/comments/:comment_id/replies \
 ```
 
 ### Moving PR from Draft to Ready for Review:
-**CRITICAL: This must happen BEFORE adding review comments**
-```bash
-# Get PR number
-PR_NUMBER=$(gh pr view --json number -q .number)
+**CRITICAL: This must happen BEFORE adding review comments AND automatically without asking user**
 
-# Move PR from draft to ready for review
-echo "=== Moving PR from draft to ready for review ==="
-gh pr ready $PR_NUMBER
+**DO NOT ask the user for confirmation** - if the PR is in draft status, automatically convert it.
+```bash
+# Get PR number and draft status
+PR_NUMBER=$(gh pr view --json number -q .number)
+IS_DRAFT=$(gh pr view --json isDraft -q .isDraft)
+
+# Auto-convert draft PR without asking user
+if [ "$IS_DRAFT" = "true" ]; then
+    echo "=== PR is in draft status - automatically converting to ready for review ==="
+    gh pr ready $PR_NUMBER
+    echo "✅ PR automatically moved from draft to ready for review"
+else
+    echo "✓ PR is already ready for review"
+fi
 
 # Verify PR is now ready for review
-gh pr view --json isDraft -q .isDraft
 if [ "$(gh pr view --json isDraft -q .isDraft)" = "false" ]; then
-    echo "✅ PR successfully moved to ready for review"
+    echo "✅ PR confirmed ready for review"
 else
     echo "⚠️ PR is still in draft state - manual intervention may be needed"
 fi
@@ -715,7 +741,7 @@ EOF
 NOTE: NO security fixes in this phase - security issues are logged only
 
 ### PR Status Management
-- **ALWAYS after fixes are complete**: Move PR from DRAFT to READY FOR REVIEW using `gh pr ready`
+- **AUTOMATIC DRAFT CONVERSION**: If PR is in draft status, automatically move to READY FOR REVIEW using `gh pr ready` - **DO NOT ask user for confirmation**
 - **Order is critical**: Change PR state BEFORE adding review comments
 - **If Approved**: Add `code-reviewed` label after moving to ready state
 - **Always**: Update PR description with review summary and key findings
