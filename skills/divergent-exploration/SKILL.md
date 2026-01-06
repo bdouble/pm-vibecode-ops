@@ -1,11 +1,15 @@
 ---
 name: divergent-exploration
 description: |
-  This skill enforces exploring multiple approaches before committing to one. Activate when "designing
-  a feature", "planning an epic", "architecting a solution", "solving a complex problem", "what are
-  my options", "how should we approach this", "brainstorming solutions", "comparing alternatives",
-  "trade-offs analysis", "which approach is better", "pros and cons", "evaluate options", "different
-  ways to implement", or "before deciding on architecture". Generates 3-5 distinct alternatives.
+  Enforces exploring 3-5 distinct approaches before committing to one. ACTIVATE when:
+  - User says: "design", "architect", "plan", "how should we", "what's the best way"
+  - User says: "options", "alternatives", "trade-offs", "pros and cons", "compare approaches"
+  - User asks: "which approach", "what are my options", "how would you solve this"
+  - Planning: epic creation, feature design, architecture decisions, complex problem solving
+  - About to recommend a single approach for a non-trivial decision
+
+  ENFORCES: Generate 3-5 GENUINELY DISTINCT alternatives (not variations). Evaluate each on:
+  user impact, complexity, time to value, dependencies, reversibility, risk. Present options, don't decide.
 ---
 
 # Divergent Exploration

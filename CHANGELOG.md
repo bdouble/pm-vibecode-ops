@@ -5,6 +5,43 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-05
+
+### Changed
+
+**Improved Skill Trigger Specificity**
+
+Updated all 9 skill descriptions with more explicit activation triggers based on Claude Code best practices research. Skills now use structured format with categorized triggers:
+
+- **Skills updated**: `production-code-standards`, `service-reuse`, `testing-philosophy`, `mvd-documentation`, `security-patterns`, `model-aware-behavior`, `using-pm-workflow`, `verify-implementation`, `divergent-exploration`
+
+- **New description format**:
+  - Lead with purpose (what skill enforces)
+  - Explicit "ACTIVATE when:" section with categorized triggers
+  - User phrases, file patterns, tool usage, and context cues
+  - Clear "ENFORCES/BLOCKS/REQUIRES" summary
+
+**Mandatory Agent Invocation in Commands**
+
+Added explicit mandatory language to all 8 workflow commands requiring agent invocation via Task tool:
+
+- **Commands updated**: `discovery`, `planning`, `adaptation`, `implementation`, `testing`, `documentation`, `codereview`, `security_review`
+
+- **New section added** (after frontmatter): "MANDATORY: Agent Invocation Required"
+  - Bold statement: "You MUST use the Task tool to invoke the [agent-name]"
+  - Numbered steps for required process
+  - Clear prohibition: "DO NOT attempt to perform [work] directly"
+
+- **Agent mapping**:
+  - `discovery`, `planning`, `adaptation` → `architect-agent`
+  - `implementation` → `backend-engineer-agent` / `frontend-engineer-agent`
+  - `testing` → `qa-engineer-agent`
+  - `documentation` → `technical-writer-agent`
+  - `codereview` → `code-reviewer-agent`
+  - `security_review` → `security-engineer-agent`
+
+---
+
 ## [2.3.2] - 2026-01-05
 
 ### Fixed

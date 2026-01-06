@@ -1,9 +1,14 @@
 ---
 name: testing-philosophy
 description: |
-  This skill enforces fixing broken tests before writing new ones. Activate when "writing tests",
-  "debugging test failures", "improving coverage", "tests are failing", "add tests for this", or
-  "run the test suite". Prioritizes accurate running tests over high coverage with broken tests.
+  Enforces test accuracy over coverage quantity. ACTIVATE when:
+  - User says: "write tests", "add tests", "test this", "improve coverage", "testing phase"
+  - User says: "tests failing", "fix tests", "debug test", "test suite broken", "run tests"
+  - User asks: "why is this test failing", "how do I test this", "what should I test"
+  - Creating/editing: *.spec.ts, *.test.ts, *.spec.js, *.test.js, __tests__/*
+
+  ENFORCES: Fix ALL existing broken tests BEFORE writing new tests. Read actual API before mocking.
+  Gate sequence: Fix existing → Discover API → Compile → Execute → Coverage (secondary).
 ---
 
 # Testing Philosophy

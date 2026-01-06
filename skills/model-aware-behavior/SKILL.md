@@ -1,11 +1,15 @@
 ---
 name: model-aware-behavior
 description: |
-  This skill enforces disciplined exploration and scope control during development. Activate when
-  "modifying code", "exploring a codebase", "proposing changes", "making edits", "using Edit tool",
-  "reading files before changes", "understanding the codebase", "reviewing existing code", "planning
-  changes", "avoiding over-engineering", "scope creep", "file exploration", "code navigation", or
-  "before implementing". Prevents gold-plating and ensures efficient tool usage.
+  Enforces read-before-write discipline and prevents scope creep. ACTIVATE when:
+  - User says: "modify", "change", "update", "edit", "refactor", "fix", "implement"
+  - User says: "explore codebase", "understand this code", "how does this work"
+  - About to use: Edit, Write, MultiEdit tools on any code file
+  - Proposing changes to files not yet read in this session
+
+  ENFORCES: Read ALL files before proposing changes. Never speculate about unread code.
+  Do ONLY what is requested - no "while I'm here" improvements, no gold-plating, no scope creep.
+  Parallelize independent tool calls; serialize dependent ones.
 ---
 
 # Model-Aware Behavior

@@ -1,9 +1,14 @@
 ---
 name: mvd-documentation
 description: |
-  This skill enforces minimal, decision-focused documentation. Activate when "writing JSDoc",
-  "creating a README", "documenting an API", "adding code comments", "document this function",
-  or "explain this code". Documents WHY not WHAT - TypeScript already shows WHAT.
+  Enforces minimal, decision-focused documentation (WHY not WHAT). ACTIVATE when:
+  - User says: "add comments", "document this", "write JSDoc", "create README", "add docs"
+  - User says: "explain this code", "what does this do", "documentation phase"
+  - User asks: "should I document this", "how should I comment this"
+  - Adding: /**, //, README.md, CHANGELOG.md, API documentation
+
+  BLOCKS: Type duplication in JSDoc (@param {string}), over-documenting trivial code, TODO/TBD
+  placeholders. TypeScript types ARE documentation. Document business logic rationale, not syntax.
 ---
 
 # Minimal Viable Documentation

@@ -7,6 +7,26 @@ closes-ticket: false
 workflow-sequence: "adaptation → **implementation** → testing → documentation → code-review → security-review"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the appropriate engineer agent for this phase.**
+
+Based on the type of work required:
+- **Backend work**: Use the Task tool with the `backend-engineer-agent`
+- **Frontend work**: Use the Task tool with the `frontend-engineer-agent`
+- **Full-stack work**: Invoke both agents as needed for their respective domains
+
+Before performing ANY implementation work yourself:
+1. Determine if the work is backend, frontend, or full-stack based on the ticket requirements
+2. Use the Task tool with the appropriate engineer agent(s)
+3. Provide the agent with all context from this command (ticket ID, adaptation guide)
+4. Let the agent perform the actual code implementation
+5. Only proceed after the agent completes
+
+DO NOT attempt to write implementation code directly. The specialized engineer agents handle this phase.
+
+---
+
 ## Required Skills
 Before implementation, ensure these skills are active:
 - **production-code-standards** - All code must be production-ready, no workarounds
@@ -74,7 +94,7 @@ Adaptation guide: **$2** (implementation instructions)
 - Do NOT fix unrelated linting or type errors outside of ticket scope
 - Stay strictly within the boundaries defined by the Linear ticket and its comments
 
-Use the assigned specialist agent (**backend-engineer-agent**, **frontend-engineer-agent**, etc.) to implement code following the established patterns and guidelines.
+**You MUST invoke the assigned specialist agent via the Task tool** (`backend-engineer-agent` for backend work, `frontend-engineer-agent` for frontend work) to implement code following the established patterns and guidelines.
 
 ## Branch Management
 

@@ -7,6 +7,20 @@ closes-ticket: false
 workflow-sequence: "**adaptation** → implementation → testing → documentation → code-review → security-review"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the `architect-agent` for this phase.**
+
+Before performing ANY adaptation work yourself:
+1. Use the Task tool with the `architect-agent`
+2. Provide the agent with all context from this command (ticket ID, discovery source, additional context)
+3. Let the agent perform the actual adaptation analysis and implementation planning
+4. Only proceed after the agent completes
+
+DO NOT attempt to perform adaptation work directly. The specialized architect-agent handles this phase.
+
+---
+
 ## Required Skills
 - **production-code-standards** - Plan for production-ready code only
 - **service-reuse** - Identify reusable services in inventory
@@ -59,7 +73,7 @@ Discovery source: ${2:-"none - will perform discovery as needed"} (can be a Line
 
 Additional information may be provided to guide the adaptation work in **$3**
 
-Use the **architect-agent** to perform comprehensive analysis and adaptation, including discovery if no discovery report is provided.
+**You MUST invoke the `architect-agent` via the Task tool** to perform comprehensive analysis and adaptation, including discovery if no discovery report is provided.
 
 ## 🚨 CRITICAL: Architect Agent Context
 

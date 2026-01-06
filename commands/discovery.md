@@ -7,6 +7,20 @@ closes-ticket: false
 workflow-sequence: "service-inventory → **discovery** → epic-planning → planning"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the `architect-agent` for this phase.**
+
+Before performing ANY discovery work yourself:
+1. Use the Task tool with the `architect-agent`
+2. Provide the agent with all context from this command (PRD, project name, codebase path, focus areas)
+3. Let the agent perform the actual discovery analysis
+4. Only proceed after the agent completes
+
+DO NOT attempt to perform discovery work directly. The specialized architect-agent handles this phase.
+
+---
+
 ## Usage Examples
 
 ```bash
@@ -43,7 +57,7 @@ Linear project name: **$2** (project to attach discovery ticket to)
 Codebase path: **$3** (root directory to analyze)
 Focus areas: ${4:-"all areas"}
 
-Use the **architect-agent** to systematically examine the codebase and create a comprehensive discovery ticket in Linear that all subsequent phases will reference.
+**You MUST invoke the `architect-agent` via the Task tool** to systematically examine the codebase and create a comprehensive discovery ticket in Linear that all subsequent phases will reference.
 
 ## Pre-Discovery Setup
 

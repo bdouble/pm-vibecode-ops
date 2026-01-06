@@ -1,11 +1,15 @@
 ---
 name: using-pm-workflow
 description: |
-  This skill bootstraps PM workflow sessions with skill-checking behavior. Activate when "starting a
-  new session", "which command should I use", "what's the workflow", "help me plan this project",
-  "switching to a different task", "what command is next", "where am I in the workflow", "how do I
-  start", "project setup", "run a command", "workflow phase", "kick off development", or when
-  navigating between project-level and ticket-level work.
+  Guides users through PM workflow phases and command sequence. ACTIVATE when:
+  - User says: "what command", "which phase", "where do I start", "what's next", "workflow"
+  - User says: "new project", "new session", "help me plan", "kick off", "get started"
+  - User asks: "how do I use this", "what are the commands", "workflow overview"
+  - User mentions: /discovery, /planning, /adaptation, /implementation, /testing, /codereview
+  - Session start or context switch between project-level and ticket-level work
+
+  PROVIDES: Workflow sequence guidance (discovery → epic-planning → planning → adaptation →
+  implementation → testing → documentation → codereview → security_review). Ensures skills load.
 ---
 
 # PM Workflow Bootstrap

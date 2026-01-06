@@ -7,6 +7,20 @@ closes-ticket: false
 workflow-sequence: "testing → **documentation** → code-review → security-review"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the `technical-writer-agent` for this phase.**
+
+Before performing ANY documentation work yourself:
+1. Use the Task tool with the `technical-writer-agent`
+2. Provide the agent with all context from this command (ticket ID, doc types, format, update strategy)
+3. Let the agent perform the actual documentation creation
+4. Only proceed after the agent completes
+
+DO NOT attempt to write documentation directly. The specialized technical-writer-agent handles this phase.
+
+---
+
 ## Required Skills
 - **mvd-documentation** - Document WHY, not WHAT
 
@@ -67,7 +81,7 @@ Documentation approach: ${5:-"pragmatic"}
 
 **Wait for the Linear MCP responses before proceeding with documentation.**
 
-Use the **technical-writer-agent** to create **minimal viable documentation (MVD)**: focused, essential docs that provide value without redundancy or over-documentation.
+**You MUST invoke the `technical-writer-agent` via the Task tool** to create **minimal viable documentation (MVD)**: focused, essential docs that provide value without redundancy or over-documentation.
 
 ## Documentation Workflow
 

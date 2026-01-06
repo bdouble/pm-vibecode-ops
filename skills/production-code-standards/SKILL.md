@@ -1,10 +1,14 @@
 ---
 name: production-code-standards
 description: |
-  This skill enforces production-grade code quality standards. Activate when "implementing a feature",
-  "fixing a bug", "creating a service", "writing production code", "reviewing a PR", or for code in
-  src/, lib/, or app/ directories. Blocks workarounds, fallbacks, TODO/FIXME/HACK comments, and empty
-  catch blocks.
+  Enforces production-grade code quality. ACTIVATE when:
+  - User says: "implement", "write code", "add feature", "fix bug", "create service", "build"
+  - User says: "review PR", "check this code", "is this production ready"
+  - Editing files in: src/, lib/, app/, services/, modules/, controllers/
+  - Using tools: Write, Edit on .ts, .js, .tsx, .jsx files
+
+  BLOCKS: TODO/FIXME/HACK comments, empty catch blocks, fallback logic, || default patterns,
+  setTimeout for race conditions, mocked services outside tests. Enforces fail-fast error handling.
 ---
 
 # Production Code Standards

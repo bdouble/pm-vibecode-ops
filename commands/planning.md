@@ -7,6 +7,20 @@ closes-ticket: false
 workflow-sequence: "discovery → epic-planning → **planning** (creates sub-tickets)"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the `architect-agent` for this phase.**
+
+Before performing ANY planning work yourself:
+1. Use the Task tool with the `architect-agent`
+2. Provide the agent with all context from this command (epic IDs, PRD, discovery report, additional context)
+3. Let the agent perform the actual ticket decomposition
+4. Only proceed after the agent completes
+
+DO NOT attempt to perform planning work directly. The specialized architect-agent handles this phase.
+
+---
+
 ## Required Skills
 - **divergent-exploration** - Explore technical approaches before decomposition
 - **service-reuse** - Factor in existing services during planning
@@ -72,7 +86,7 @@ Examples:
 /planning LIN-789 --context "Performance critical - sub-100ms response required"
 ```
 
-Use the **architect-agent** to decompose business epics into technical tickets with implementation details.
+**You MUST invoke the `architect-agent` via the Task tool** to decompose business epics into technical tickets with implementation details.
 
 ## Pre-Planning Analysis
 

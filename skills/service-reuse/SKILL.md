@@ -1,9 +1,14 @@
 ---
 name: service-reuse
 description: |
-  This skill enforces checking existing code before creating new services. Activate when "creating a
-  new service", "adding a utility", "building a helper", "implementing middleware", "adding a new
-  class", or "create new". Requires searching service-inventory.yaml and codebase before writing.
+  Prevents code duplication by requiring inventory check before creation. ACTIVATE when:
+  - User says: "create new", "add a service", "build a helper", "write a utility", "new class"
+  - User says: "implement middleware", "add validator", "create repository", "new module"
+  - About to create: *Service.ts, *Helper.ts, *Util.ts, *Middleware.ts, *Repository.ts
+  - Writing new: export class, export function in services/, utils/, common/
+
+  REQUIRES: Search service-inventory.yaml AND grep codebase for existing implementations BEFORE
+  writing any new service, utility, helper, or shared code. Document "found X" or "searched, not found".
 ---
 
 # Service Reuse Enforcement

@@ -7,6 +7,20 @@ closes-ticket: false
 workflow-sequence: "documentation → **code-review** → security-review"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the `code-reviewer-agent` for this phase.**
+
+Before performing ANY code review work yourself:
+1. Use the Task tool with the `code-reviewer-agent`
+2. Provide the agent with all context from this command (ticket ID, implementation branch, review depth)
+3. Let the agent perform the actual code quality assessment
+4. Only proceed after the agent completes
+
+DO NOT attempt to perform code review directly. The specialized code-reviewer-agent handles this phase.
+
+---
+
 ## Required Skills
 - **production-code-standards** - Zero tolerance for workarounds
 - **verify-implementation** - Verify claims in review
@@ -66,7 +80,7 @@ Review depth: ${3:-"standard"}
 
 **Wait for the Linear MCP responses before proceeding with code review.**
 
-Use the **code-reviewer-agent** to review code quality, patterns, and architecture. Security issues found are LOGGED ONLY - not fixed (handled by security review phase).
+**You MUST invoke the `code-reviewer-agent` via the Task tool** to review code quality, patterns, and architecture. Security issues found are LOGGED ONLY - not fixed (handled by security review phase).
 
 ## CRITICAL SCOPE BOUNDARIES FOR CODE REVIEW
 

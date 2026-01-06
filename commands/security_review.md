@@ -7,6 +7,20 @@ closes-ticket: true
 workflow-sequence: "code-review → **security-review** (FINAL GATE - closes ticket)"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the `security-engineer-agent` for this phase.**
+
+Before performing ANY security review work yourself:
+1. Use the Task tool with the `security-engineer-agent`
+2. Provide the agent with all context from this command (ticket ID, git status, diff content)
+3. Let the agent perform the actual security vulnerability assessment
+4. Only proceed after the agent completes
+
+DO NOT attempt to perform security review directly. The specialized security-engineer-agent handles this phase.
+
+---
+
 ## Required Skills
 - **security-patterns** - OWASP Top 10 enforcement
 - **production-code-standards** - No workarounds, even for security fixes

@@ -1,9 +1,14 @@
 ---
 name: verify-implementation
 description: |
-  This skill requires evidence before claiming work is complete. Activate when "marking done",
-  "creating a PR", "committing changes", "tests pass", "bug is fixed", "feature complete", or
-  "ready for review". Prevents unverified assertions - every completion claim requires proof.
+  Requires evidence before any completion claim. ACTIVATE when:
+  - User says: "is it done", "are we finished", "ready for review", "create PR", "commit"
+  - About to say: "tests pass", "build succeeds", "bug fixed", "feature complete", "done"
+  - About to say: "should work", "probably works", "I think it's fixed", "that should do it"
+  - Marking Linear tickets as complete or creating pull requests
+
+  BLOCKS: Unverified completion claims. Every "done/fixed/passing" requires executed command output.
+  Run tests and show output. Run build and show output. Demonstrate features working. No speculation.
 ---
 
 # Verify Implementation

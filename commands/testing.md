@@ -7,6 +7,20 @@ closes-ticket: false
 workflow-sequence: "implementation → **testing** → documentation → code-review → security-review"
 ---
 
+## MANDATORY: Agent Invocation Required
+
+**You MUST use the Task tool to invoke the `qa-engineer-agent` for this phase.**
+
+Before performing ANY testing work yourself:
+1. Use the Task tool with the `qa-engineer-agent`
+2. Provide the agent with all context from this command (ticket ID, test types, coverage target)
+3. Let the agent perform the actual test creation and validation
+4. Only proceed after the agent completes
+
+DO NOT attempt to write tests directly. The specialized qa-engineer-agent handles this phase.
+
+---
+
 ## Required Skills
 - **testing-philosophy** - Fix broken tests BEFORE writing new tests
 - **production-code-standards** - Test code must be production-ready
@@ -101,7 +115,7 @@ Generate **accurate, compilable** test suites for ticket **$1** that use the act
 
 **Wait for the Linear MCP responses before proceeding with test implementation.**
 
-Use the **qa-engineer-agent** to create **focused, high-value** test coverage ensuring quality and preventing regressions while **avoiding over-testing trivial code**.
+**You MUST invoke the `qa-engineer-agent` via the Task tool** to create **focused, high-value** test coverage ensuring quality and preventing regressions while **avoiding over-testing trivial code**.
 
 ### QA Agent Testing Priorities
 
