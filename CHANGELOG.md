@@ -5,6 +5,24 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.3] - 2026-01-06
+
+### Changed
+
+**Conditional Linear MCP Integration**
+
+Made Linear MCP integration conditional on ticket ID to preserve agent utility outside the workflow:
+
+- **All 8 agents** updated with conditional ticket handling:
+  - Linear MCP first/last actions now only mandatory **when a ticket ID is provided**
+  - Added fallback: "If NO ticket ID is provided: You may work without Linear integration"
+  - Tools remain documented and available for optional use
+  - Agents can now be invoked for general work without requiring Linear tickets
+
+- **Agents modified**: architect, backend-engineer, frontend-engineer, qa-engineer, code-reviewer, technical-writer, security-engineer, design-reviewer
+
+---
+
 ## [2.4.2] - 2026-01-06
 
 ### Added
