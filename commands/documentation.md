@@ -162,8 +162,9 @@ Documentation approach: ${5:-"pragmatic"}
 12. **Integration**: Update README with quick start and API reference links
 13. **Commit & Push**: Commit all inline and external documentation to feature branch
 14. **PR Comment**: Add documentation summary highlighting JSDoc coverage
-15. **PR Finalization**: Update PR description, add final labels, move to READY FOR REVIEW
-16. **Linear Integration**: Use `mcp__linear-server__create_comment` to add documentation summary, then use `mcp__linear-server__update_issue` to add label 'docs-complete' (status remains 'In Progress' - proceeding to code review)
+15. **PR State Change (AUTO)**: If PR is in draft, automatically move to READY FOR REVIEW using `gh pr ready` - DO NOT ask user, just do it
+16. **PR Finalization**: Update PR description, add `docs-complete` label
+17. **Linear Integration**: Use `mcp__linear-server__create_comment` to add documentation summary, then use `mcp__linear-server__update_issue` to add label 'docs-complete' (status remains 'In Progress' - proceeding to code review)
 
 ## Documentation Philosophy: Minimal Viable Documentation (MVD)
 
@@ -442,8 +443,32 @@ git push origin HEAD
 
 ## PR Documentation Management
 
+### Auto-Convert Draft PR to Ready for Review:
+**CRITICAL: This MUST happen automatically without asking the user.**
+
+After documentation is complete, check if PR is in draft status and convert it:
+```bash
+# Get PR details including draft status
+PR_NUMBER=$(gh pr view --json number -q .number)
+IS_DRAFT=$(gh pr view --json isDraft -q .isDraft)
+
+# Auto-convert draft PR without asking user
+if [ "$IS_DRAFT" = "true" ]; then
+    echo "=== PR is in draft status - automatically converting to ready for review ==="
+    gh pr ready $PR_NUMBER
+    echo "✅ PR automatically moved from draft to ready for review"
+else
+    echo "✓ PR is already ready for review"
+fi
+
+# Add the docs-complete label
+gh pr edit --add-label "docs-complete"
+```
+
+**DO NOT ask for user confirmation** - the documentation phase requires the PR to be ready for review when complete, so this conversion is automatic and expected.
+
 ### Adding Final Documentation Comment to PR:
-After documentation is complete, add final comment to PR:
+After moving PR to ready state, add final comment to PR:
 ```bash
 # No approval needed - gh pr comment
 gh pr comment --body "## 📚 Documentation Complete
@@ -486,7 +511,7 @@ The documentation phase completes the code implementation and documentation work
 
 **PR Status Updates:**
 - Add `docs-complete` label when all documentation is finished
-- Keep PR in DRAFT status - code review phase will move it to READY FOR REVIEW
+- **AUTOMATIC DRAFT CONVERSION**: If PR is in draft status, automatically move to READY FOR REVIEW using `gh pr ready` - **DO NOT ask user for confirmation**
 - Update PR description with comprehensive documentation summary
 - Note: Code review and security review phases still need to run
 
@@ -517,7 +542,7 @@ After documentation phase completes:
 - ⏳ `code-reviewed` (will be added by code review phase)
 - ⏳ `security-approved` (will be added by security review phase)
 
-Documentation phase does NOT move PR to READY FOR REVIEW - that happens in code review phase.
+Documentation phase automatically moves PR from DRAFT to READY FOR REVIEW when complete.
 
 ## Success Criteria
 
@@ -540,7 +565,7 @@ Documentation is successful when:
 
 **Process Requirements Met:**
 - Documentation PR label added (`docs-complete`)
-- PR remains in DRAFT for code review phase
+- PR automatically moved from DRAFT to READY FOR REVIEW (without asking user)
 - Linear ticket updated with MVD metrics showing efficiency gains
 - Linear ticket remains "In Progress" for code review and security review phases
 
