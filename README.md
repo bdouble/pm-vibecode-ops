@@ -1,13 +1,13 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.7.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.7.1-blue.svg)
 
 ## What This Is
 
 A battle-tested workflow that enables Product Managers and other non-engineers to transform product requirements into production-ready code through structured AI collaboration.
 
-Write a PRD. Run 10 commands. Ship features with tests, documentation, and security review.
+Write a PRD. Run 11 commands. Ship features with tests, documentation, and security review.
 
 **Time**: Significantly faster delivery for routine features (50-75% time savings typical)
 **Quality**: 90%+ test coverage, automated security review, comprehensive documentation

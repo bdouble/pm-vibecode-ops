@@ -5,6 +5,21 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1] - 2026-01-06
+
+### Fixed
+- **AGENTS.md**: Completely rewritten - was containing coding style guidelines instead of agent documentation
+- **README.md**: Fixed command count from "10 commands" to "11 commands"
+- **TECHNICAL_REFERENCE.md**: Fixed skill count from "9 skills" to "10 skills" in platform comparison table
+- **SKILLS.md**: Fixed filename casing (`skill.md` → `SKILL.md`) and phase breakdown accuracy
+- **FAQ.md**: Fixed phase counts from "9 phases" and "10 phases" to "11 phases"
+- **session-start.sh**: Added missing `epic-closure-validation` skill to the 10-skill list
+
+### Changed
+- Documentation consistency scrub ensuring all files accurately reflect: 9 agents, 10 skills, 11 commands
+
+---
+
 ## [2.7.0] - 2026-01-06
 
 ### Added
@@ -939,6 +954,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.7.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.7.1
 [2.7.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.7.0
 [2.6.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.6.0
 [2.5.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.5.2

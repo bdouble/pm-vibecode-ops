@@ -162,7 +162,7 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 ## How Skills Complement the Workflow
 
-The pm-vibecode-ops workflow has 11 phases (10 ticket-level + 1 epic-level). Skills add a proactive enforcement layer:
+The pm-vibecode-ops workflow has 11 phases (4 project-level + 6 ticket-level + 1 epic-level). Skills add a proactive enforcement layer:
 
 ```
 Traditional:
@@ -254,7 +254,7 @@ skills/
 ├── verify-implementation/
 │   └── SKILL.md
 └── epic-closure-validation/
-    └── skill.md
+    └── SKILL.md
 ```
 
 ## Creating Custom Skills

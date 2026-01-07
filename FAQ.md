@@ -370,7 +370,7 @@ Starting a fresh session just gives the AI clean context to work with—all your
 
 **It depends on the change**:
 
-**Full workflow** (all 9 phases):
+**Full workflow** (all 11 phases):
 - ✅ New features
 - ✅ Complex changes
 - ✅ Changes affecting multiple areas
@@ -385,7 +385,7 @@ Starting a fresh session just gives the AI clean context to work with—all your
 **Decision tree**:
 ```
 Does this create new user-facing functionality?
-├─ Yes → Full workflow (all 10 phases)
+├─ Yes → Full workflow (all 11 phases)
 └─ No → Is it changing business logic?
     ├─ Yes → Implementation + Testing + Documentation + Code Review + Security Review
     └─ No → Implementation + Testing + Documentation + Code Review + Security Review

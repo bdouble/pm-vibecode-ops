@@ -739,7 +739,7 @@ Commands track and report:
 | **Agents** | Specialized via Task tool | Platform-agnostic |
 | **Installation** | Plugin: Install from marketplace | Clone repo, reference prompts |
 | **Git Strategy** | Feature branches | Feature branches |
-| **Skills** | Auto-activated (9 skills) | Not supported |
+| **Skills** | Auto-activated (10 skills) | Not supported |
 | **Hooks** | Session automation | Not supported |
 | **Best For** | Full workflow with quality enforcement | Flexibility, custom integration |
 
