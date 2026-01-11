@@ -1,6 +1,43 @@
 # Verification Checklist Reference
 
-A comprehensive checklist for verifying implementation before claiming completion.
+Comprehensive checklists for verifying implementation before claiming completion. Use these to ensure every completion claim has supporting evidence.
+
+---
+
+## Quick Verification Checklists
+
+Before marking ANY task complete, confirm each applicable item with actual command output:
+
+### For Code Changes
+- [ ] Code compiles without errors (show compiler output)
+- [ ] Linting passes (show linter output)
+- [ ] Existing tests still pass (show test output)
+- [ ] New tests pass (show test output)
+- [ ] Feature works as intended (demonstrate it)
+
+### For Bug Fixes
+- [ ] Original bug reproduced before fix (show reproduction)
+- [ ] Bug no longer occurs after fix (show verification)
+- [ ] No regression in related functionality (show tests)
+
+### For New Features
+- [ ] Feature works end-to-end (demonstrate full flow)
+- [ ] Edge cases handled (show edge case handling)
+- [ ] Error states handled gracefully (show error handling)
+
+### Before Creating PRs
+- [ ] All tests pass locally (show output)
+- [ ] Build succeeds (show output)
+- [ ] Code compiles (show output)
+- [ ] Branch is up to date with base
+
+### Before Marking Tickets Done
+- [ ] Acceptance criteria verified (demonstrate each)
+- [ ] Tests exist and pass (show output)
+- [ ] Documentation updated if needed
+- [ ] No known issues remaining
+
+---
 
 ## Requirements Verification
 
@@ -21,6 +58,8 @@ Acceptance Criteria:
 3. Password must meet complexity requirements [VERIFIED - weak password rejected]
 4. User is logged in after reset [VERIFIED - redirected to dashboard]
 ```
+
+---
 
 ## Code Quality Verification
 
@@ -46,6 +85,8 @@ npx type-coverage
 - Commented-out code not removed
 - TODO comments added but not tracked
 - Type assertions (`as any`) hiding real issues
+
+---
 
 ## Test Verification
 
@@ -76,12 +117,16 @@ Tests:       1 failed, 19 passed, 20 total
 
 If ANY tests fail, you cannot claim "tests pass" - report actual state.
 
+---
+
 ## Documentation Verification
 
 - [ ] API documentation updated for new endpoints
 - [ ] README updated if setup steps changed
 - [ ] Inline comments for complex business logic
 - [ ] No TODO placeholders left incomplete
+
+---
 
 ## Pre-Closure Final Checks
 
@@ -105,6 +150,8 @@ npm run build && npm test && npm run lint
 - [ ] Deployed to staging (not just merged)
 - [ ] Smoke test in staging environment passed
 - [ ] No blocking issues in comments
+
+---
 
 ## Things Commonly Missed
 
@@ -132,6 +179,8 @@ npm run build && npm test && npm run lint
 - Works for admin, fails for regular user
 - API allows unauthorized access
 - CORS not configured correctly
+
+---
 
 ## Verification Command Templates
 
@@ -165,6 +214,8 @@ npm run build
 ls -la dist/
 # Expected: Non-empty directory with expected files
 ```
+
+---
 
 ## The Verification Standard
 

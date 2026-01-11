@@ -5,8 +5,9 @@ description: |
   - User says: "create new", "add a service", "build a helper", "write a utility", "new class"
   - User says: "implement middleware", "add validator", "create repository", "new module"
   - User says: "implement a shared component", "add shared function", "create common utility"
-  - About to create: *Service.ts, *Helper.ts, *Util.ts, *Middleware.ts, *Repository.ts
-  - Writing new: export class, export function in services/, utils/, common/
+  - User says: "avoid duplication", "don't duplicate", "DRY", "reuse pattern", "existing pattern", "already exists"
+  - About to create: *Service.ts, *Helper.ts, *Util.ts, *Middleware.ts, *Repository.ts, *Factory.ts
+  - Writing new: export class, export function in services/, utils/, common/, shared/
 
   Requires searching service-inventory.yaml AND grepping codebase for existing implementations BEFORE
   writing any new service, utility, helper, or shared code. Document "found X" or "searched, not found".
@@ -62,7 +63,7 @@ grep -ri "auth.*middleware\|middleware.*auth" src/
 ## Prohibited Patterns
 
 ### Never Recreate Auth
-```javascript
+```typescript
 // BLOCK - Custom auth logic
 class MyAuthService { validateToken(token) { } }
 
@@ -71,7 +72,7 @@ import { AuthService } from '@/modules/auth';
 ```
 
 ### Never Recreate Validators
-```javascript
+```typescript
 // BLOCK - Duplicate validator
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+$/.test(email);
 
@@ -80,7 +81,7 @@ import { validators } from '@/utils/validators';
 ```
 
 ### Never Recreate Base Classes
-```javascript
+```typescript
 // BLOCK - Duplicate base abstraction
 class AbstractRepository { }  // One already exists!
 
@@ -89,7 +90,7 @@ class MyRepository extends BaseRepository<MyEntity> { }
 ```
 
 ### Use Events Over Direct Coupling
-```javascript
+```typescript
 // BLOCK - Direct service coupling
 await this.emailService.sendConfirmation(data);
 await this.inventoryService.decrementStock(data);
@@ -139,3 +140,7 @@ Even then:
 - Emit events, don't couple directly
 
 **When the service inventory cannot be found, ask the user for its location. Never assume creation is needed.**
+
+## Related Skills
+- **production-code-standards**: Quality standards for any new services created
+- **divergent-exploration**: Explore alternatives before deciding to create new services

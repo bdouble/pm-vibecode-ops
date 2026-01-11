@@ -4,6 +4,7 @@ description: |
   This skill should be used when requiring evidence before any completion claim. Activate when:
   - User says: "is it done", "is this done", "are we finished", "ready for review", "create PR", "commit"
   - User says: "ready to close", "mark as complete", "verify my work", "did I miss anything"
+  - User says: "ship it", "LGTM", "merge it", "push it", "deploy this", "good to go", "send it"
   - About to say: "tests pass", "build succeeds", "bug fixed", "feature complete", "done"
   - About to say: "should work", "probably works", "I think it's fixed", "that should do it"
   - Marking Linear tickets as complete or creating pull requests
@@ -18,167 +19,76 @@ description: |
 
 **Every status claim requires proof. No exceptions.**
 
-Saying "done," "fixed," "passing," or "complete" constitutes a factual assertion. Facts require evidence. Without executing the verification command and observing the output, the claim is speculation—not reporting.
+"Done," "fixed," "passing," or "complete" are factual assertions requiring evidence. Without executing the verification command and observing output, the claim is speculation—not reporting.
 
-This matters because non-engineers depend on these claims to make real decisions. When an AI says "tests pass," that might trigger a deployment. When it says "bug is fixed," someone might close a customer support ticket. Unverified assertions cause real-world harm.
+Non-engineers depend on these claims. "Tests pass" might trigger deployment. "Bug is fixed" might close a customer support ticket. Unverified assertions cause real-world harm.
 
 ## The Evidence Requirement
 
-Before making any completion claim:
+Before any completion claim:
 
-1. **Execute** the relevant verification command
-2. **Observe** the complete output
-3. **Confirm** the output supports the claim
-4. **Include** the evidence with the claim
+1. **Execute** the verification command
+2. **Observe** complete output
+3. **Confirm** output supports the claim
+4. **Include** evidence with the claim
 
 Skipping any step means guessing, not verifying.
 
 ## Required Evidence by Claim Type
 
-| Claim | Required First | Evidence Format |
-|-------------------------|-------------------|-----------------|
-| "Tests pass" | Run the actual test suite | Show test output with pass/fail counts |
-| "Build succeeds" | Execute the build command | Show build output with success message |
-| "Bug is fixed" | Reproduce the original issue, verify it's resolved | Show before/after behavior |
-| "Feature works" | Demonstrate the feature | Show the feature functioning |
-| "Linting passes" | Run the linter | Show linter output |
-| "No TypeScript errors" | Run `tsc --noEmit` or equivalent | Show compiler output |
-| "API endpoint works" | Make actual API call | Show request and response |
-| "Migration complete" | Run the migration | Show migration output |
-| "Dependencies installed" | Run install command | Show install output |
-| "Server starts" | Start the server | Show startup output |
+| Claim | Required Action | Evidence |
+|-------|-----------------|----------|
+| "Tests pass" | Run test suite | Pass/fail counts |
+| "Build succeeds" | Run build | Success message |
+| "Bug is fixed" | Reproduce, then verify | Before/after behavior |
+| "Feature works" | Demonstrate it | Feature functioning |
+| "Linting passes" | Run linter | Linter output |
+| "No TypeScript errors" | Run `tsc --noEmit` | Compiler output |
+| "API works" | Make actual call | Request/response |
 
-## Speculation Red Flags
+For formatting examples, see `examples/evidence-formats.md`.
 
-Using any of these phrases signals an unverified claim. STOP before proceeding.
+## Avoiding Speculation
 
-**Hedging Language:**
-- "should work"
-- "should pass"
-- "should succeed"
-- "probably works"
-- "I think it's fixed"
-- "I believe this resolves"
-- "this ought to"
-- "in theory"
-- "assuming everything is correct"
+Phrases like "should work," "probably works," or "ready for review" without evidence signal speculation. When you catch yourself using hedging language, STOP and run the verification command instead.
 
-**Premature Certainty:**
-- "the fix is complete"
-- "that should do it"
-- "all done"
-- "ready for review"
-- "good to merge"
-
-**Wishful Thinking:**
-- "tests would pass"
-- "the build would succeed"
-- "there shouldn't be any issues"
-- "I don't anticipate problems"
-
-## Verification Checklists
-
-Before marking ANY task complete, confirm each applicable item:
-
-### For Code Changes
-- [ ] Code compiles without errors (show compiler output)
-- [ ] Linting passes (show linter output)
-- [ ] Existing tests still pass (show test output)
-- [ ] New tests pass (show test output)
-- [ ] Feature works as intended (demonstrate it)
-
-### For Bug Fixes
-- [ ] Original bug reproduced before fix (show reproduction)
-- [ ] Bug no longer occurs after fix (show verification)
-- [ ] No regression in related functionality (show tests)
-
-### For New Features
-- [ ] Feature works end-to-end (demonstrate full flow)
-- [ ] Edge cases handled (show edge case handling)
-- [ ] Error states handled gracefully (show error handling)
-
-### Before Creating PRs
-- [ ] All tests pass locally (show output)
-- [ ] Build succeeds (show output)
-- [ ] Code compiles (show output)
-- [ ] Branch is up to date with base
-
-### Before Marking Tickets Done
-- [ ] Acceptance criteria verified (demonstrate each)
-- [ ] Tests exist and pass (show output)
-- [ ] Documentation updated if needed
-- [ ] No known issues remaining
-
-## Evidence Formats
-
-Evidence should be explicit and recent. Include command output directly:
-
-**For Tests:**
-```
-Running: npm test
-
-PASS  src/auth/login.test.ts
-PASS  src/auth/logout.test.ts
-PASS  src/api/users.test.ts
-
-Test Suites: 3 passed, 3 total
-Tests:       47 passed, 47 total
-```
-
-**For Builds:**
-```
-Running: npm run build
-
-> project@1.0.0 build
-> tsc && vite build
-
-✓ 156 modules transformed
-✓ built in 2.34s
-```
-
-**For Bug Fixes:**
-```
-Before fix:
-> POST /api/users returns 500 Internal Server Error
-
-After fix:
-> POST /api/users returns 201 Created
-> Response body: {"id": 123, "email": "user@example.com"}
-```
-
-## Why PMs Need Verified Claims
-
-Product managers using AI tools typically cannot independently verify technical claims. This skill ensures reliable, actionable information:
-
-1. **Deployment Decisions**: "Tests pass" determines whether code ships to production
-2. **Timeline Accuracy**: "Feature complete" affects sprint planning and stakeholder updates
-3. **Quality Assurance**: "Bug fixed" determines whether customer issues get closed
-4. **Risk Visibility**: Unverified claims mask technical risk from decision-makers
-
-With this skill active, every completion claim includes proof. Test output can be forwarded to engineers. Build logs can be shared with stakeholders. Evidence is available to act on, not assertions to trust.
+For red-flag phrases, see `references/speculation-red-flags.md`.
 
 ## When Verification Fails
 
-When verification reveals problems, report them accurately:
+Report problems accurately:
 
-1. **State the actual result**: "Tests fail with 3 errors" not "tests mostly pass"
-2. **Include the failure output**: Show the actual error messages
+1. **State actual result**: "3 tests fail" not "mostly pass"
+2. **Include failure output**: Show error messages
 3. **Don't minimize**: A failing test is a failing test
-4. **Propose next steps**: "Here's what needs to be fixed..."
+4. **Propose next steps**: What needs fixing
 
-A verified failure is more valuable than an unverified success claim. Knowing the true state enables good decisions.
+A verified failure beats an unverified success claim.
+
+## Why This Matters for PMs
+
+Product managers cannot independently verify technical claims. This skill ensures:
+
+- **Deployment decisions** based on actual results
+- **Timeline accuracy** reflects real state
+- **Quality assurance** with forwardable evidence
+- **Risk visibility** without masked problems
 
 ## The Accountability Standard
 
-This skill creates a chain of accountability:
+- **Traceable**: Claims link to evidence
+- **Repeatable**: Others can verify same commands
+- **Auditable**: Evidence persists in record
+- **Trustworthy**: Claims match reality
 
-- **Traceable**: Every claim links directly to evidence
-- **Repeatable**: Others can verify by running the same commands
-- **Auditable**: Evidence persists in the conversation record
-- **Trustworthy**: Claims match observable reality
+Trust is earned through verifiable reporting—not confident assertions.
 
-Trust is earned through consistent, verifiable reporting—not confident-sounding assertions.
+## Related Skills
+- **testing-philosophy**: Gate sequence for test verification
+- **production-code-standards**: Quality standards that must be verified
 
 ## Extended Resources
 
-For detailed verification command templates, environment-specific checks, and edge case coverage, see `references/verification-checklist.md`.
+- `references/verification-checklist.md` - Task-specific checklists and command templates
+- `examples/evidence-formats.md` - Evidence formatting examples
+- `references/speculation-red-flags.md` - Language patterns signaling unverified claims

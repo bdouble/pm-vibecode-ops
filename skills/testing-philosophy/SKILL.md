@@ -4,8 +4,9 @@ description: |
   This skill should be used when enforcing test accuracy over coverage quantity. Activate when:
   - User says: "write tests", "add tests", "test this", "improve coverage", "testing phase"
   - User says: "tests failing", "fix tests", "debug test", "test suite broken", "run tests"
+  - User says: "CI failing", "pipeline broken", "build red", "tests red", "skip tests", "disable test"
   - User asks: "why is this test failing", "how do I test this", "what should I test"
-  - Creating/editing: *.spec.ts, *.test.ts, *.spec.js, *.test.js, __tests__/*
+  - Creating/editing: *.spec.ts, *.test.ts, *.spec.js, *.test.js, __tests__/*, *.test.py, *_test.go
 
   Enforces fixing ALL existing broken tests BEFORE writing new tests. Read actual API before mocking.
   Gate sequence: Fix existing → Discover API → Compile → Execute → Coverage (secondary).
@@ -19,7 +20,7 @@ Fix broken tests BEFORE writing new tests. Accurate running tests > high coverag
 
 ### Gate 0: Fix Existing Tests (FIRST)
 
-**BLOCKER: Cannot write new tests until existing tests pass.**
+**BLOCKER: Do not write new tests until existing tests pass.**
 
 ```bash
 # 1. Find existing tests for affected modules
@@ -137,5 +138,9 @@ await expect(service.failingOp()).rejects.toThrow(ValidationError);
 | *.test.*, __tests__/ | YES | YES | N/A |
 
 **Remember: 50% coverage with correct tests > 90% with broken tests.**
+
+## Related Skills
+- **production-code-standards**: Production code quality standards (test code has different rules)
+- **verify-implementation**: Run and show test output before claiming "tests pass"
 
 See `examples/test-templates.md` for well-structured test file templates and examples.

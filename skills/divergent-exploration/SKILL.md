@@ -5,6 +5,7 @@ description: |
   - User says: "design", "architect", "plan", "how should we", "what's the best way"
   - User says: "options", "alternatives", "trade-offs", "pros and cons", "compare approaches"
   - User says: "help me decide", "how should I implement", "what approach should I take"
+  - User says: "refactor", "redesign", "rearchitect", "rebuild", "rewrite", "migrate"
   - User asks: "which approach", "what are my options", "how would you solve this"
   - Planning: epic creation, feature design, architecture decisions, complex problem solving
   - About to recommend a single approach for a non-trivial decision

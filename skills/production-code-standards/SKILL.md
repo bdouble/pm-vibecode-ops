@@ -3,9 +3,10 @@ name: production-code-standards
 description: |
   This skill should be used when enforcing production-grade code quality. Activate when:
   - User says: "implement", "write code", "add feature", "fix bug", "create service", "build"
+  - User says: "make it work", "quick fix", "just get it working", "temporary solution", "workaround", "hack"
   - User says: "review PR", "check this code", "is this production ready"
-  - Editing files in: src/, lib/, app/, services/, modules/, controllers/
-  - Using tools: Write, Edit on .ts, .js, .tsx, .jsx files
+  - Editing files in: src/, lib/, app/, services/, modules/, controllers/, domain/
+  - Using tools: Write, Edit on .ts, .js, .tsx, .jsx, .py, .go files
 
   Blocks TODO/FIXME/HACK comments, empty catch blocks, fallback logic, || default patterns,
   setTimeout for race conditions, mocked services outside tests. Enforces fail-fast error handling.
@@ -51,6 +52,10 @@ If proper implementation is blocked:
 4. **WAIT** - Blocker must be fixed first
 
 **If implementation requires a workaround, do not implement. Communicate the blocker clearly.**
+
+## Related Skills
+- **testing-philosophy**: Test code may use mocks and fixtures; production code must not
+- **verify-implementation**: Verify all claims before marking work complete
 
 See `references/anti-patterns.md` for detailed code examples of prohibited and required patterns.
 

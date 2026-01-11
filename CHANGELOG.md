@@ -5,6 +5,35 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2025-01-11
+
+### Added
+- New reference files for progressive disclosure:
+  - `skills/verify-implementation/examples/evidence-formats.md` - Evidence format templates
+  - `skills/verify-implementation/references/speculation-red-flags.md` - Hedging language catalog
+  - `skills/testing-philosophy/references/test-priority-guidelines.md` - Test prioritization guide
+  - `skills/service-reuse/examples/inventory-search-session.md` - Complete search walkthrough
+- Cross-references between related skills (production-code-standards, testing-philosophy, verify-implementation, service-reuse)
+- Enhanced trigger phrases for better skill auto-activation:
+  - Anti-workaround detection: "make it work", "quick fix", "temporary solution", "hack"
+  - CI/pipeline triggers: "CI failing", "pipeline broken", "build red"
+  - Deployment triggers: "ship it", "LGTM", "merge it", "deploy this"
+  - DRY/reuse triggers: "avoid duplication", "DRY", "existing pattern"
+  - Refactor triggers: "refactor", "redesign", "rearchitect", "migrate"
+
+### Changed
+- Restructured `verify-implementation` skill for progressive disclosure (1029 to 514 words in SKILL.md)
+- Expanded `verification-checklist.md` with detailed checklists moved from SKILL.md
+- Standardized all code blocks to TypeScript in `service-reuse` skill
+- Updated imperative form: "Cannot write" to "Do not write" in testing-philosophy
+- Extended file type support: added `.py`, `.go` patterns to relevant skills
+- Extended directory patterns: added `domain/`, `shared/` to monitored paths
+
+### Fixed
+- Skills now properly follow progressive disclosure pattern (lean SKILL.md + detailed references)
+
+---
+
 ## [2.9.0] - 2025-01-11
 
 ### Changed
@@ -1015,6 +1044,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.10.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.10.0
 [2.9.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.9.0
 [2.8.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.8.0
 [2.7.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.7.3
