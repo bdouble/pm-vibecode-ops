@@ -26,6 +26,12 @@
 | 9 | `/codereview [ticket-id]` | Quality check | Review findings |
 | 10 | `/security-review [ticket-id]` | **Final gate** | **Fix criticals** |
 
+**Or use orchestrated execution:**
+
+| Command | Purpose | Your Action |
+|---------|---------|-------------|
+| `/execute-ticket [ticket-id]` | Runs phases 5-10 automatically | Fix blocking issues only |
+
 ### Epic-Level (Run After All Tickets Done)
 
 | # | Command | Purpose | Your Action |
@@ -82,13 +88,16 @@ Your PRD must include:
 /epic-planning my-prd.md DISC-001 "market context" "user value"
 /planning EPIC-123,EPIC-124 --discovery DISC-001
 
-# Per-ticket workflow
+# Per-ticket workflow (manual)
 /adaptation TICKET-201
 /implementation TICKET-201
 /testing TICKET-201
 /documentation TICKET-201
 /codereview TICKET-201
 /security-review TICKET-201
+
+# Per-ticket workflow (automated)
+/execute-ticket TICKET-201
 
 # Epic closure (after all tickets in epic are Done)
 /close-epic EPIC-123
@@ -130,4 +139,4 @@ Your PRD must include:
 
 ---
 
-**Version 2.11.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 2.12.1** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

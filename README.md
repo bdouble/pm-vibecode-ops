@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.11.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.12.1-blue.svg)
 
 ## What This Is
 
@@ -101,6 +101,8 @@ The workflow consists of two phases:
 8. `/documentation` - Generate API docs, user guides, inline documentation
 9. `/codereview` - Automated quality checks and pattern compliance
 10. `/security-review` - OWASP vulnerability scan → **closes ticket when passing**
+
+**Alternative**: `/execute-ticket [ticket-id]` - Orchestrates phases 5-10 automatically, pausing only for blocking issues
 
 ### Epic-Level Completion
 11. `/close-epic` - Close completed epic with retrofit analysis → **closes epic when all tickets done**
