@@ -45,30 +45,49 @@ Use the Task tool to invoke the appropriate engineer agent with ALL context embe
 
 **Example prompt structure:**
 ```
-## Ticket Context
-**ID**: [ticket-id]
-**Title**: [title from get_issue]
-**Description**:
+## 🎯 TASK: IMPLEMENTATION
+**This is an IMPLEMENTATION task. You are writing NEW CODE, not reviewing existing code.**
+
+### Ticket
+- **ID**: [ticket-id]
+- **Title**: [title from get_issue]
+- **Phase**: Implementation (after Adaptation, before Testing)
+
+### Description
 [full description text from get_issue]
 
-## Adaptation Report (Implementation Guide)
+### Implementation Guide (from Adaptation Phase)
 [paste the full adaptation report from list_comments]
 
-## Service Reuse Mandates
+### Service Reuse Requirements
 [list any services that MUST be reused from adaptation report]
 
-## Current State
-**Branch**: [current branch name]
-**Git Status**: [clean/uncommitted changes]
+### Current Git State
+- **Branch**: [current branch name]
+- **Status**: [clean/uncommitted changes]
 
-## Your Task
-Implement the functionality for this ticket following the adaptation guide. Return a structured implementation report when complete, including:
-- Files created/modified
-- Services reused
-- Implementation decisions made
+### Your Task
+1. READ the implementation guide above
+2. IMPLEMENT the functionality following the guide
+3. COMMIT code to the feature branch
+4. RETURN a structured implementation report
+
+**DO NOT:**
+- Perform security reviews or code reviews
+- Work on any ticket other than [ticket-id]
+- Reference session summaries or prior conversation context
+
+**Expected Output**: Structured implementation report with Status, Summary, Files Changed, and Recommendations.
 ```
 
 **CRITICAL**: Do NOT tell the agent to "fetch the ticket" or "read comments" - the agent cannot access Linear.
+
+**CRITICAL: Task Identification**
+- Start the agent prompt with `## 🎯 TASK: IMPLEMENTATION` header
+- Explicitly state "This is an IMPLEMENTATION task. You are writing NEW CODE."
+- Include explicit "DO NOT" instructions to prevent phase confusion
+- Use imperative language ("READ", "IMPLEMENT", "COMMIT", "RETURN")
+- Avoid assessment-style language ("analyze", "review", "evaluate")
 
 ### Step 3: Post-Agent Completion (YOU Write to Linear)
 
