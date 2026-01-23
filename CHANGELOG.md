@@ -5,6 +5,25 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2025-01-23
+
+### Added
+- Workflow phase isolation for all ticket-level agents
+  - `WORKFLOW POSITION` markers clarify each agent's place in workflow
+  - `Context Isolation` sections prevent session context contamination
+  - `Phase Guardrails` provide explicit STOP instructions for wrong task types
+- Imperative prompt structure in implementation command with `TASK:` header
+
+### Changed
+- All 9 ticket-level agents now have consistent phase boundary protections
+- Implementation command uses action-oriented language (READ, IMPLEMENT, COMMIT, RETURN)
+
+### Fixed
+- Agent phase confusion where agents would act on session summaries instead of explicit tasks
+- Context contamination where agents performed wrong-phase work (e.g., security reviews during implementation)
+
+---
+
 ## [2.12.1] - 2026-01-23
 
 ### Added
@@ -1092,6 +1111,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
 [2.12.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.12.1
 [2.11.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.11.0
 [2.10.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.10.0
