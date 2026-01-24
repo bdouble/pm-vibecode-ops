@@ -17,6 +17,9 @@ Questions from Product Managers using AI-powered development workflows.
 - [Can I use this with my existing codebase?](#can-i-use-this-with-my-existing-codebase)
 
 **Workflow Questions**
+- [Should I use /execute-ticket or run phases individually?](#should-i-use-execute-ticket-or-run-phases-individually)
+- [What happens if /execute-ticket is interrupted?](#what-happens-if-execute-ticket-is-interrupted)
+- [How does /execute-ticket handle Git branches and PRs?](#how-does-execute-ticket-handle-git-branches-and-prs)
 - [Should I run multiple commands in the same session?](#should-i-run-multiple-commands-in-the-same-session)
 - [How long does each phase take?](#how-long-does-each-phase-take)
 - [Can I skip steps to move faster?](#can-i-skip-steps-to-move-faster)
@@ -228,6 +231,128 @@ You do **NOT** need to:
 ---
 
 ## Workflow Questions
+
+### Should I use /execute-ticket or run phases individually?
+
+**Short answer:** Use `/execute-ticket` for most tickets. It's the recommended approach.
+
+**Why `/execute-ticket` is recommended:**
+
+- **8x faster** than running phases manually
+- **Zero human intervention** for tickets that pass all quality gates
+- **Consistent quality** across all tickets
+- **Full traceability** with PR comments and labels for each phase
+- **Resume capability** if interrupted mid-execution
+
+**When to use individual phases:**
+
+- **Debugging**: A specific phase failed and you need to understand why
+- **Partial execution**: You only need to run certain phases (e.g., just testing and security review)
+- **Manual intervention**: You need to make changes between phases
+- **Learning**: You're new to the workflow and want to understand each step
+
+**Example workflow:**
+
+```bash
+# Recommended: Let AI handle everything
+/execute-ticket TICKET-201
+
+# Alternative: Run phases individually (advanced)
+/adaptation TICKET-201
+/implementation TICKET-201
+/testing TICKET-201
+/documentation TICKET-201
+/codereview TICKET-201
+/security-review TICKET-201
+```
+
+**Bottom line:** Start with `/execute-ticket`. If it pauses for a blocking issue, you can debug with individual phases.
+
+---
+
+### What happens if /execute-ticket is interrupted?
+
+**Good news:** The workflow is designed to resume gracefully.
+
+**What gets preserved:**
+- Git branch and any committed code
+- Draft PR if already created
+- Ticket comments with phase reports
+- PR labels for completed phases
+
+**How to resume:**
+
+Simply run `/execute-ticket [ticket-id]` again. The command:
+
+1. **Detects existing branch** - Uses the existing feature branch instead of creating a new one
+2. **Detects existing PR** - Updates the existing PR instead of creating a duplicate
+3. **Reads phase status** - Checks ticket comments and PR labels to determine completed phases
+4. **Continues from where it stopped** - Skips completed phases, resumes from the interrupted phase
+
+**Example scenario:**
+
+```
+First run: /execute-ticket TICKET-201
+- Completed: adaptation, implementation, testing
+- Interrupted: documentation (context overflow)
+
+Second run: /execute-ticket TICKET-201
+- Detects existing branch and PR
+- Reads completed phase labels
+- Resumes from: documentation
+- Continues: documentation, codereview, security-review
+```
+
+**If you want a fresh start:**
+
+Delete the feature branch and PR, then run `/execute-ticket` again.
+
+---
+
+### How does /execute-ticket handle Git branches and PRs?
+
+**Branch Creation:**
+
+- Uses Linear's `gitBranchName` field for consistent naming
+- Creates branch automatically at the start of execution
+- If branch already exists, uses the existing branch
+
+**Draft PR Creation:**
+
+- Creates a draft PR after the implementation phase completes
+- PR includes implementation summary and files changed
+- Draft status prevents accidental merges during quality phases
+
+**PR Updates During Execution:**
+
+Each phase adds:
+- **Comments**: Phase reports with status, summary, and findings
+- **Labels**: `code-reviewed`, `security-approved` as phases complete
+- **Status updates**: PR description updated with progress
+
+**PR Ready Conversion:**
+
+When security review passes with no critical/high issues:
+- PR converted from draft to ready for review
+- `ready-for-merge` label added
+- Ticket marked as "Done" in Linear
+
+**What you see at the end:**
+
+```
+PR: feature/TICKET-201-add-csv-export
+Status: Ready for review
+Labels: code-reviewed, security-approved, ready-for-merge
+Comments:
+  - Adaptation Report
+  - Implementation Report
+  - Testing Report (94% coverage)
+  - Documentation Report
+  - Code Review Report
+  - Security Review Report (PASSED)
+```
+
+---
 
 ### Should I run multiple commands in the same session?
 

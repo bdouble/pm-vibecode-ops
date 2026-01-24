@@ -1,6 +1,6 @@
 ---
 description: Orchestrate all ticket workflow phases (adaptation → implementation → testing → documentation → codereview → security-review) automatically
-allowed-tools: Task, Read, Grep, Glob, Bash, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
+allowed-tools: Task, Read, Grep, Glob, Bash, Bash(gh:*), Bash(git:*), mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
 argument-hint: <ticket-id>
 ---
 
@@ -42,6 +42,51 @@ Use mcp__linear-server__get_issue to fetch ticket: $ARGUMENTS
 
 If validation fails, report the error and stop.
 
+### Step 1.3: Create Feature Branch
+
+Before any phase execution, ensure we're on the correct feature branch:
+
+1. **Get branch name from Linear ticket metadata:**
+   - Linear's `gitBranchName` field provides the per-ticket branch name
+   - Example: `brian/con-98-migrate-inbox-processor`
+
+2. **Check current branch:**
+   ```bash
+   current=$(git branch --show-current)
+   ```
+
+3. **If on main/master, create or checkout feature branch:**
+   ```bash
+   git fetch origin
+
+   # Check if branch exists
+   if git branch -a | grep -q "remotes/origin/[branch-name]"; then
+     # Branch exists remotely - checkout and pull
+     git checkout [branch-name]
+     git pull origin [branch-name]
+   else
+     # Create new branch from main
+     git checkout -b [branch-name] origin/main
+     git push -u origin [branch-name]
+   fi
+   ```
+
+4. **Store branch name for later phases** (used for PR creation, PR comments)
+
+**If branch operations fail:** Report error to user with options to fix manually or abort.
+
+### Step 1.4: Update Ticket Status to In Progress
+
+After branch setup, update Linear status:
+
+```
+Use mcp__linear-server__update_issue:
+- issue_id: [ticket-id]
+- state: "In Progress"
+```
+
+Skip if already "In Progress" or later state.
+
 ---
 
 ## Step 2: Detect Resume State
@@ -80,6 +125,26 @@ Status: [current-status]
 Completed phases: [list of complete phases]
 Starting from: [next-phase]
 ```
+
+### Step 2.1: Detect Existing Branch and PR
+
+If resuming from a later phase, detect existing Git state:
+
+1. **Check for existing branch:**
+   ```bash
+   # Look for branch matching ticket ID pattern
+   git branch -a | grep -i "[ticket-id]"
+   ```
+
+2. **Check for existing PR:**
+   ```bash
+   gh pr list --head [branch-name] --json number,isDraft,state
+   ```
+
+3. **Store in workflow state:**
+   - `branchName`: Detected or from Linear metadata
+   - `prNumber`: If PR exists
+   - `prDraft`: Whether PR is still draft
 
 ---
 
@@ -186,26 +251,36 @@ Agent must return a structured report. Parse for:
 | codereview | Review Status: APPROVED/CHANGES_REQUESTED |
 | security-review | Severity levels of findings |
 
-#### 3.4.1 Validate Report Structure
+#### 3.4.1 Validate Report Structure (Enhanced)
 
-Before posting to Linear, verify the agent report contains required fields:
+Before posting to Linear, validate the agent report contains required fields:
+
+**Required fields by phase:**
 
 | Phase | Required Fields |
 |-------|-----------------|
-| ALL phases | `Status:` (COMPLETE/BLOCKED/ISSUES_FOUND), `Summary:`, `Files Changed:` or `Files Reviewed:` |
-| testing | Gate #0-3 results with explicit PASS/FAIL |
-| codereview | `Review Status:` (APPROVED/CHANGES_REQUESTED) |
-| security-review | Severity findings list OR explicit "No critical/high issues found" |
+| adaptation | `Status:`, `Summary:`, `Target Files` or `Files to Modify` |
+| implementation | `Status:`, `Summary:`, `Files Changed:` |
+| testing | `Status:`, `Gate #0`, `Gate #1`, `Gate #2`, `Gate #3` results |
+| documentation | `Status:`, `Summary:`, `Documentation Updated` or `Docs Created` |
+| codereview | `Review Status:`, `Files Reviewed:` |
+| security-review | `Status:`, `Security Checklist` or findings list |
 
-**If validation fails:**
-- Do NOT post incomplete report to Linear
-- Report to user: "Agent returned incomplete report. Missing: [list missing fields]"
-- Options:
-  1. Retry the phase
-  2. Review agent output manually
-  3. Abort execution
+**Validation algorithm:**
+```
+For each required field for current phase:
+  1. Check field header exists in report (case-insensitive)
+  2. Check field has non-empty content after the header
 
-**Only proceed to 3.5 if validation passes.**
+If ANY required field is missing or empty:
+  - DO NOT post to Linear
+  - Log: "Report validation failed: missing [field-name]"
+  - Auto-retry phase ONCE with enhanced prompt requesting the missing fields
+  - If retry also fails validation: PAUSE for user decision
+    Options: [Retry] [Review Raw Output] [Skip Phase] [Abort]
+```
+
+**IMPORTANT:** Auto-retry happens automatically before pausing. This preserves full automation in most cases.
 
 #### 3.5 Check for Blocking Conditions
 
@@ -270,6 +345,110 @@ Use mcp__linear-server__create_comment:
 *Automated by /execute-ticket*
 ```
 
+#### 3.6.0 Verify Implementation Artifacts (Implementation Phase Only)
+
+After implementation agent returns, before posting report:
+
+1. **Check for file changes:**
+   ```bash
+   changes=$(git status --porcelain | wc -l)
+   ```
+
+2. **Validate changes exist:**
+   ```
+   IF changes == 0 AND report.Status == "COMPLETE":
+     - Log warning: "Implementation reported COMPLETE but no file changes detected"
+     - Check for unstaged changes: git diff --name-only
+     - If still no changes: PAUSE for user decision
+       Options: [Retry Implementation] [Review Manually] [Mark as No-Op and Continue]
+   ```
+
+3. **If changes exist:** Proceed to posting report and PR creation
+
+#### 3.6.1 Commit and Create Draft PR (Implementation Phase Only)
+
+After posting implementation report to Linear:
+
+1. **Stage all changes:**
+   ```bash
+   git add -A
+   ```
+
+2. **Create commit with conventional message:**
+   ```bash
+   git commit -m "feat([ticket-id]): [ticket-title]
+
+   [First sentence of implementation summary]
+
+   Linear: [ticket-id]
+   Co-Authored-By: Claude <noreply@anthropic.com>"
+   ```
+
+3. **Push to remote:**
+   ```bash
+   git push origin [branch-name]
+   ```
+
+4. **Create draft PR:**
+   ```bash
+   gh pr create --draft \
+     --title "[ticket-id]: [ticket-title]" \
+     --body "## Summary
+   [Implementation summary from agent report]
+
+   ## Changes
+   [Files changed list from agent report]
+
+   ## Linear Ticket
+   https://linear.app/[workspace]/issue/[ticket-id]
+
+   ## Workflow Phases
+   - [x] Implementation
+   - [ ] Testing
+   - [ ] Documentation
+   - [ ] Code Review
+   - [ ] Security Review
+
+   ---
+   *Generated by /execute-ticket workflow*"
+   ```
+
+5. **Capture PR number for subsequent phases:**
+   ```bash
+   pr_number=$(gh pr view --json number -q '.number')
+   ```
+   Store `pr_number` for use in phases 3-6.
+
+#### 3.6.2 Add PR Phase Comment (Testing, Documentation, CodeReview, Security Phases)
+
+After posting phase report to Linear, add condensed summary to PR:
+
+```bash
+gh pr comment [pr-number] --body "## [emoji] [Phase Name] Complete
+
+[2-3 bullet point summary from agent report]
+
+Full report: Linear ticket [ticket-id]"
+```
+
+**Emoji mapping by phase:**
+- Testing: 🧪
+- Documentation: 📚
+- Code Review: 📋
+- Security Review: 🛡️
+
+#### 3.6.3 Add PR Labels (CodeReview and Security Phases)
+
+After code review phase (if status is APPROVED):
+```bash
+gh pr edit [pr-number] --add-label "code-reviewed"
+```
+
+After security review phase (if no CRITICAL/HIGH findings):
+```bash
+gh pr edit [pr-number] --add-label "security-approved"
+```
+
 #### 3.7 Continue to Next Phase
 
 If not blocked, proceed to the next phase in sequence.
@@ -278,22 +457,44 @@ If not blocked, proceed to the next phase in sequence.
 
 ## Step 4: Handle Security Review Completion
 
-When security-review completes without CRITICAL/HIGH findings:
+When security-review phase completes:
+
+### 4.1 If No CRITICAL/HIGH Findings (PASS):
 
 1. **Update ticket status to Done:**
-```
-Use mcp__linear-server__update_issue:
-- issue_id: [ticket-id]
-- state: "Done"
-```
+   ```
+   Use mcp__linear-server__update_issue:
+   - issue_id: [ticket-id]
+   - state: "Done"
+   ```
 
-2. **Convert PR from draft to ready (if applicable):**
-```bash
-# Check if PR exists and is draft
-gh pr list --head [branch-name] --json isDraft,number
-# If draft, mark ready for review
-gh pr ready [pr-number]
-```
+2. **Finalize PR:**
+
+   a. Convert draft to ready for review:
+   ```bash
+   gh pr ready [pr-number]
+   ```
+
+   b. Add final label:
+   ```bash
+   gh pr edit [pr-number] --add-label "ready-for-merge"
+   ```
+
+   c. Update PR body to mark all phases complete:
+   ```bash
+   # Get current PR body, update checkboxes, write back
+   gh pr edit [pr-number] --body "[updated body with all checkboxes checked]"
+   ```
+
+### 4.2 If CRITICAL/HIGH Findings (BLOCKED):
+
+- Keep ticket status as "In Progress"
+- Do NOT convert PR to ready
+- Add label to PR:
+  ```bash
+  gh pr edit [pr-number] --add-label "security-blocked"
+  ```
+- PAUSE for user decision (standard blocking behavior)
 
 ---
 
@@ -401,30 +602,48 @@ From Code Review Report → Security:
 
 ## Context Budget Guidelines
 
-To prevent context overflow as phases accumulate, apply these summarization limits:
+To prevent context overflow as phases accumulate, enforce these strict limits:
 
 **Maximum context from prior phases: ~2000 tokens total**
 
-| Prior Phase | Extract ONLY |
-|-------------|--------------|
-| Adaptation | Target files (list), Technical approach (1 paragraph max), Key integration points |
-| Implementation | Files changed (list), Branch name, PR number (if exists) |
-| Testing | Coverage % (single number), Gate results (PASS/FAIL per gate), Any security concerns noted |
-| Documentation | Docs created (file list only) |
-| Code Review | Status (APPROVED/CHANGES_REQUESTED), Security concerns flagged (if any) |
+**Strict token budgets per source:**
+
+| Source | Max Tokens | Extract ONLY |
+|--------|------------|--------------|
+| Ticket description | 300 | First 2 paragraphs, acceptance criteria headers |
+| Adaptation report | 400 | Target files (list), approach (1 paragraph), integration points |
+| Implementation report | 300 | Files changed (list), branch name, PR number |
+| Testing report | 200 | Gate results (PASS/FAIL only), coverage % |
+| Documentation report | 100 | Docs created (file list only) |
+| Code Review report | 200 | Status + blocking issues only |
+
+**Extraction algorithm:**
+```
+For each prior phase report:
+  1. Extract Status line (required)
+  2. Extract Summary - first sentence only
+  3. Extract file lists - paths only, no descriptions
+  4. Extract blocking issues or security concerns (if any)
+  5. SKIP: detailed explanations, code snippets, full recommendations
+
+If extracted context exceeds phase budget:
+  1. Truncate to budget limit
+  2. Append note: "[truncated - see Linear for full report]"
+  3. Prioritize: Status > Files > Summary > Details
+```
 
 **Truncation rules:**
 - If ticket has 4+ completed phases, omit Details sections entirely
-- If extracted context exceeds budget, prioritize most recent 2 phases
-- Always include: Files Changed lists (needed for all subsequent phases)
+- If extracted context still exceeds total budget, keep only most recent 2 phases
+- Always preserve: Files Changed lists (needed for all subsequent phases)
 
-**Example condensed context for security-review phase:**
+**Example condensed context for security-review phase (~400 tokens):**
 ```
 Prior Phase Summary:
-- Adaptation: 5 target files identified, event-driven approach
-- Implementation: 6 files changed (user.service.ts, auth.guard.ts, ...)
+- Adaptation: 5 target files, event-driven approach
+- Implementation: 6 files changed (user.service.ts, auth.guard.ts, ...), PR #45
 - Testing: 82% coverage, all gates PASS
-- Documentation: API docs updated
+- Documentation: API docs updated (3 files)
 - Code Review: APPROVED, flagged auth token expiry concern
 ```
 

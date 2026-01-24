@@ -15,7 +15,19 @@
 | 3 | `/epic-planning [prd] [discovery] [context]` | Create business epics | For each new feature/PRD/initiative |
 | 4 | `/planning [epic-ids]` | Break into tickets | For each new epic |
 
-### Ticket-Level (Run for Each Ticket)
+### Ticket-Level: Agentic Workflow (Recommended)
+
+| Command | Purpose | Your Action |
+|---------|---------|-------------|
+| `/execute-ticket [ticket-id]` | **Runs all 6 phases automatically** | Fix blocking issues only |
+
+**Why agentic workflow?** 8x faster, zero intervention for passing tickets, consistent quality, full traceability.
+
+The command handles: adaptation, implementation, testing, documentation, code review, and security review. Creates branch, draft PR, adds labels, and converts to ready when security passes.
+
+### Ticket-Level: Individual Phases (Advanced)
+
+For special cases requiring phase-by-phase control:
 
 | # | Command | Purpose | Your Action |
 |---|---------|---------|-------------|
@@ -26,11 +38,7 @@
 | 9 | `/codereview [ticket-id]` | Quality check | Review findings |
 | 10 | `/security-review [ticket-id]` | **Final gate** | **Fix criticals** |
 
-**Or use orchestrated execution:**
-
-| Command | Purpose | Your Action |
-|---------|---------|-------------|
-| `/execute-ticket [ticket-id]` | Runs phases 5-10 automatically | Fix blocking issues only |
+Use individual phases when debugging a specific phase or needing manual intervention.
 
 ### Epic-Level (Run After All Tickets Done)
 
@@ -88,16 +96,16 @@ Your PRD must include:
 /epic-planning my-prd.md DISC-001 "market context" "user value"
 /planning EPIC-123,EPIC-124 --discovery DISC-001
 
-# Per-ticket workflow (manual)
+# Per-ticket workflow (recommended - agentic)
+/execute-ticket TICKET-201
+
+# Per-ticket workflow (advanced - individual phases)
 /adaptation TICKET-201
 /implementation TICKET-201
 /testing TICKET-201
 /documentation TICKET-201
 /codereview TICKET-201
 /security-review TICKET-201
-
-# Per-ticket workflow (automated)
-/execute-ticket TICKET-201
 
 # Epic closure (after all tickets in epic are Done)
 /close-epic EPIC-123
@@ -139,4 +147,4 @@ Your PRD must include:
 
 ---
 
-**Version 2.13.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 2.14.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

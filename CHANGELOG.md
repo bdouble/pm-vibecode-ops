@@ -5,6 +5,34 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0] - 2026-01-23
+
+### Changed
+- **Agentic workflow is now the primary recommendation** - `/execute-ticket` positioned as the default approach for ticket-level work
+- Documentation reorganized across all files to lead with agentic workflow
+- Manual phase execution (adaptation, implementation, testing, etc.) now documented as "Individual Phases (Advanced)" for special cases
+- Benefits messaging updated: 8x faster execution, zero human intervention for passing tickets, consistent quality, full traceability
+
+### Added
+- Git branch creation using Linear's `gitBranchName` field for consistent branch naming
+- Automatic "In Progress" status update when `/execute-ticket` begins
+- Existing branch and PR detection with intelligent resume capability
+- Implementation artifact verification before commits
+- Draft PR creation with automatic commit after implementation phase
+- PR phase comments with progress indicators
+- PR labels: `code-reviewed`, `security-approved`, `ready-for-merge`
+- Draft-to-ready PR conversion when security review passes with no critical/high issues
+- Report validation with auto-retry for malformed agent responses
+- Strict context budget enforcement (~2000 tokens per agent invocation)
+
+### Improved
+- FAQ expanded with execute-ticket specific questions
+- TECHNICAL_REFERENCE.md now includes full `/execute-ticket` command documentation
+- PM_GUIDE.md simplified messaging: "one command does everything"
+- GET_STARTED.md updated to recommend agentic workflow as starting point
+
+---
+
 ## [2.13.0] - 2025-01-23
 
 ### Added
@@ -1111,6 +1139,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
 [2.12.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.12.1
 [2.11.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.11.0

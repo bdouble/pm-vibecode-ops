@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.13.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.14.0-blue.svg)
 
 ## What This Is
 
@@ -86,7 +86,7 @@ The honest truth: AI-assisted development with proper quality gates produces rel
 
 ## How It Works
 
-The workflow consists of two phases:
+The workflow consists of three phases:
 
 ### Project-Level Commands (Recurring)
 1. `/generate-service-inventory` - Catalog existing code *(run after major codebase updates)*
@@ -94,7 +94,28 @@ The workflow consists of two phases:
 3. `/epic-planning` - Create business-focused epics *(run for each new feature, PRD, or major initiative)*
 4. `/planning` - Decompose epics into engineering tickets *(run for each new epic)*
 
-### Ticket-Level Execution (For Each Feature)
+### Ticket-Level Execution: Agentic Workflow (Recommended)
+
+**`/execute-ticket [ticket-id]`** - The recommended approach for ticket-level work
+
+One command orchestrates all six phases automatically:
+- Creates feature branch using Linear's branch naming
+- Runs adaptation, implementation, testing, documentation, code review, and security review
+- Creates draft PR after implementation, converts to ready when security passes
+- Adds PR labels and phase comments for full traceability
+- Pauses only for blocking issues (failing tests, security vulnerabilities)
+
+**Why use the agentic workflow:**
+- 8x faster than running phases manually
+- Zero human intervention for tickets that pass all quality gates
+- Consistent quality across all tickets
+- Full traceability with PR comments and labels
+- Resume capability if interrupted
+
+### Ticket-Level Execution: Individual Phases (Advanced)
+
+For special cases requiring phase-by-phase control:
+
 5. `/adaptation` - Create implementation guide (reuse analysis, pattern selection)
 6. `/implementation` - AI writes production code following guide
 7. `/testing` - Build and fix comprehensive test suite until passing
@@ -102,7 +123,10 @@ The workflow consists of two phases:
 9. `/codereview` - Automated quality checks and pattern compliance
 10. `/security-review` - OWASP vulnerability scan → **closes ticket when passing**
 
-**Alternative**: `/execute-ticket [ticket-id]` - Orchestrates phases 5-10 automatically, pausing only for blocking issues
+Use individual phases when you need to:
+- Debug a specific phase that failed in agentic execution
+- Run only certain phases (e.g., just testing and security review)
+- Manually intervene between phases
 
 ### Epic-Level Completion
 11. `/close-epic` - Close completed epic with retrofit analysis → **closes epic when all tickets done**
@@ -165,7 +189,7 @@ That's it! The plugin system automatically installs all commands, agents, skills
 
 1. Write a PRD with clear success criteria → [Writing AI-Friendly PRDs](PM_GUIDE.md#writing-ai-friendly-prds)
 2. Run project-level commands (inventory, discovery, epic planning, technical planning)
-3. Run ticket-level commands for each feature (adaptation through security review)
+3. Run `/execute-ticket [ticket-id]` for each ticket - one command handles all phases automatically
 4. Merge when all quality gates pass
 
 **Detailed walkthrough**: [GET_STARTED.md](GET_STARTED.md#your-first-feature-2-4-hours)

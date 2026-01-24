@@ -428,168 +428,68 @@ Your Decision:
 
 ---
 
-#### 5️⃣ **Adaptation** (Create Implementation Guide for Ticket)
+#### 5️⃣ **Ticket Execution: Agentic Workflow (Recommended)**
+
 ```bash
-/adaptation [ticket-id]
+/execute-ticket [ticket-id]
 ```
 
-**Your Job**: Verify the adaptation guide makes sense.
+**Your Job**: Let it run. One command does everything.
 
 **What's Happening Behind the Scenes**:
-- AI analyzes service inventory for reuse opportunities
-- Identifies existing patterns to follow
-- Creates implementation guide specifying which services to use
-- Maps event-driven patterns where applicable
-- Documents anti-duplication requirements
+The agentic workflow orchestrates all six phases automatically:
+1. **Adaptation** - Analyzes reuse opportunities, creates implementation guide
+2. **Implementation** - Writes production code, creates feature branch and draft PR
+3. **Testing** - Builds test suite, runs and fixes until passing
+4. **Documentation** - Generates API docs, user guides, inline comments
+5. **Code Review** - Checks patterns, performance, quality
+6. **Security Review** - OWASP assessment, closes ticket when passing
 
-**What to Look For**:
-- Are existing services being reused appropriately?
-- Does the approach follow discovered patterns?
-- Are there good reasons if new code is needed?
+**What You Get**:
+- Feature branch created using Linear's branch naming
+- Draft PR with implementation code
+- PR comments for each phase showing progress
+- PR labels: `code-reviewed`, `security-approved`, `ready-for-merge`
+- Ticket automatically closed when security review passes
 
-**Time Investment**: 5 minutes to review
+**When It Pauses**:
+- Failing tests that can't be auto-fixed
+- Critical/high security vulnerabilities requiring attention
+- Missing context or unclear requirements
+
+**Time Investment**: 25-30 minutes of AI work, you review final results
+
+**Why This Approach**:
+- 8x faster than running phases manually
+- Zero human intervention for tickets that pass all quality gates
+- Consistent quality across all tickets
+- Full traceability with PR comments and labels
+- Resume capability if interrupted
 
 ---
 
-#### 6️⃣ **Implementation** (AI Writes the Code)
-```bash
-/implementation [ticket-id]
-```
+#### 5️⃣-🔟 **Ticket Execution: Individual Phases (Advanced)**
 
-**Your Job**: Let it run. Seriously, don't interrupt.
+For special cases requiring phase-by-phase control, you can run each phase separately:
 
-**What's Happening Behind the Scenes**:
-- AI reads ticket requirements
-- Scans service inventory for reuse
-- Follows codebase patterns from discovery
-- Writes production-quality code
-- Creates git branch and draft PR
-- Updates ticket status automatically
+| Phase | Command | What It Does |
+|-------|---------|--------------|
+| 5 | `/adaptation [ticket-id]` | Creates implementation guide with reuse analysis |
+| 6 | `/implementation [ticket-id]` | AI writes production code, creates branch/PR |
+| 7 | `/testing [ticket-id]` | Builds and fixes test suite until passing |
+| 8 | `/documentation [ticket-id]` | Generates API docs and user guides |
+| 9 | `/codereview [ticket-id]` | Quality checks and pattern compliance |
+| 10 | `/security-review [ticket-id]` | OWASP scan, **closes ticket when passing** |
 
-**When to Intervene**:
-- Never during implementation
-- Only after implementation if PR review reveals issues
+**When to Use Individual Phases**:
+- Debugging a specific phase that failed in agentic execution
+- Running only certain phases (e.g., just testing and security review)
+- Needing manual intervention between phases
+- Learning the workflow step-by-step
 
-**Time Investment**: 0 minutes (AI is working)
+**Time Investment**: 5-15 minutes per phase
 
----
-
-#### 7️⃣ **Testing** (Build Test Suite)
-```bash
-/testing [ticket-id] unit,integration,e2e 90
-```
-
-**Your Job**: Review final test coverage report
-
-**What's Happening Behind the Scenes**:
-- QA engineer agent builds comprehensive test suite
-- Tests run automatically
-- Failed tests are fixed automatically in a loop
-- Process repeats until all tests pass
-- Passing test suite is committed with the feature code
-
-**What to Look For**:
-- Are happy paths tested?
-- Are edge cases covered?
-- Are error conditions tested?
-- Does coverage meet target (default 90%)?
-
-**Non-Technical Review**:
-Look at test names—they should read like user scenarios:
-```
-✅ "should allow user to upload profile photo under 5MB"
-✅ "should reject profile photos larger than 5MB"
-✅ "should display error message when upload fails"
-```
-
-**Time Investment**: 10 minutes to review final report (AI handles the build-run-fix loop)
-
----
-
-#### 8️⃣ **Documentation** (Generate Comprehensive Docs)
-```bash
-/documentation [ticket-id]
-```
-
-**Your Job**: Review documentation for completeness
-
-**What's Happening Behind the Scenes**:
-- Technical writer agent generates API documentation
-- Creates inline JSDoc comments for all public APIs
-- Generates user guides and examples
-- Updates README if needed
-- Commits documentation with the feature
-- **Note**: Ticket remains "In Progress"—code review and security review still follow
-
-**What to Look For**:
-- Is all public functionality documented?
-- Are code examples clear and tested?
-- Do user guides explain the feature well?
-- Is API documentation complete?
-
-**Time Investment**: 10 minutes to review documentation quality
-
-**Important**: Documentation does NOT end the workflow. Code review and security review phases still follow.
-
----
-
-#### 9️⃣ **Code Review** (Quality Assurance)
-```bash
-/codereview [ticket-id]
-```
-
-**Your Job**: Review the summary, not the code
-
-**What to Look For in Summary**:
-- "✅ Code follows existing patterns"
-- "✅ No anti-patterns detected"
-- "✅ Performance concerns addressed"
-- "✅ Documentation is complete"
-- "⚠️ [Any warnings]"
-
-**Red Flags**:
-- Multiple anti-patterns detected
-- Performance issues flagged
-- Pattern violations noted
-- Missing documentation
-
-**Action**: If red flags appear, ask AI to fix them before proceeding.
-
-**Time Investment**: 5 minutes
-
----
-
-#### 🔟 **Security Review** (OWASP Compliance - Final Gate)
-```bash
-/security-review [ticket-id]
-```
-
-**Your Job**: Ensure critical issues are addressed
-
-**What's Happening Behind the Scenes**:
-- Security engineer agent performs OWASP Top 10 assessment
-- Checks for latest CVEs in frameworks
-- Reviews authentication and authorization
-- Implements security fixes when issues found
-- **This is the FINAL GATE**: Closes Linear ticket as "Done" when no critical/high issues
-- **Keeps ticket open** if critical/high issues need fixing
-
-**What to Look For**:
-- CRITICAL severity issues: **Must be fixed before merge**
-- HIGH severity issues: **Should be fixed before merge**
-- MEDIUM/LOW: Note for future improvement
-
-**Non-Technical Understanding**:
-Security report will have plain-language descriptions:
-```
-🚨 CRITICAL: User passwords stored in plain text
-   Risk: Database breach exposes all user passwords
-   Fix: Use bcrypt hashing with salt
-```
-
-**Time Investment**: 10 minutes to review, ensure criticals are fixed
-
-**Important**: This is the final workflow phase that closes the ticket. Only when security review passes with no critical/high issues is the ticket marked as "Done".
+**Important**: Security review is always the final gate that closes the ticket.
 
 ---
 

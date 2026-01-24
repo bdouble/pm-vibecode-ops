@@ -167,6 +167,51 @@ These commands run at recurring intervals throughout the project lifecycle—not
 
 These commands run for each individual ticket through the development lifecycle.
 
+#### `/execute-ticket` (Recommended)
+
+**Purpose**: Orchestrates all six ticket-level phases automatically with full Git/PR management. This is the recommended approach for most tickets.
+
+**Usage**: `/execute-ticket [ticket-id]`
+
+**Examples**:
+```bash
+/execute-ticket TICKET-201
+/execute-ticket LIN-456
+```
+
+**Key Features**:
+- **Agentic execution**: Runs adaptation, implementation, testing, documentation, code review, and security review automatically
+- **Git branch creation**: Uses Linear's `gitBranchName` field for consistent branch naming
+- **Status updates**: Sets ticket to "In Progress" at start, "Done" when security passes
+- **Resume capability**: Detects existing branches and PRs, resumes from interrupted phase
+- **Draft PR lifecycle**: Creates draft PR after implementation, converts to ready when security passes
+- **Phase comments**: Adds PR comments for each phase with progress indicators
+- **PR labels**: Adds `code-reviewed`, `security-approved`, `ready-for-merge` labels
+- **Context budget**: Enforces ~2000 token limit per agent invocation for optimal performance
+- **Report validation**: Auto-retries if agent returns malformed report
+
+**Execution Flow**:
+1. **Pre-flight**: Fetch ticket, create/detect branch, set status to "In Progress"
+2. **Adaptation**: Analyze reuse opportunities, create implementation guide
+3. **Implementation**: Write code, commit, create draft PR
+4. **Testing**: Build test suite, run and fix until passing
+5. **Documentation**: Generate API docs, user guides, inline comments
+6. **Code Review**: Check patterns, performance, add `code-reviewed` label
+7. **Security Review**: OWASP assessment, add `security-approved` label
+8. **Completion**: Convert PR to ready, add `ready-for-merge` label, close ticket
+
+**When It Pauses**:
+- Tests fail after maximum retry attempts
+- Critical/high security vulnerabilities found
+- Missing context or unclear requirements
+- Agent returns invalid report after retries
+
+**Output**: Feature branch with code, passing tests, documentation; ready-for-review PR with all labels; ticket marked "Done".
+
+**Time**: 25-30 minutes (AI autonomous, pauses only for blocking issues)
+
+---
+
 #### `/adaptation`
 
 **Purpose**: Creates a comprehensive implementation guide for a specific ticket, analyzing service reuse opportunities and determining the optimal implementation approach.

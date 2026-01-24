@@ -172,7 +172,32 @@ You need:
 
 ### Phase 4: Execution (25-30 minutes)
 
-**Remember:** Start a fresh Claude Code session for each command below.
+**Recommended: Use the Agentic Workflow**
+
+One command handles all six phases automatically:
+
+```bash
+/execute-ticket TICKET-201
+```
+
+**What happens:**
+- Creates feature branch using Linear's branch naming
+- Runs adaptation, implementation, testing, documentation, code review, and security review
+- Creates draft PR after implementation
+- Adds PR comments for each phase with progress indicators
+- Converts PR to ready when security review passes
+- Pauses only for blocking issues (failing tests, security vulnerabilities)
+
+**Why agentic workflow?**
+- 8x faster than running phases manually
+- Zero human intervention for tickets that pass all quality gates
+- Consistent quality across all tickets
+- Full traceability with PR comments and labels
+- Resume capability if interrupted
+
+**Alternative: Individual Phases (Advanced)**
+
+For special cases requiring phase-by-phase control, start a fresh Claude Code session for each:
 
 1. **New session** → Run `/adaptation` → Review output → Close session
 2. **New session** → Run `/implementation` → Review output → Close session
@@ -181,7 +206,7 @@ You need:
 5. **New session** → Run `/codereview` → Review output → Close session
 6. **New session** → Run `/security-review` → Review output → Close session
 
-Each command builds on artifacts created by previous commands (tickets, PRs, code), so starting fresh doesn't lose progress—it just gives each phase clean context to work with.
+Use individual phases when debugging a specific phase or needing manual intervention between phases.
 
 ### Phase 5: Ship It! (5 minutes)
 1. Verify security review passed (ticket marked as "Done")
