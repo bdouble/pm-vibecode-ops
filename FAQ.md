@@ -55,6 +55,7 @@ Questions from Product Managers using AI-powered development workflows.
 - [Tests are failing. What do I do?](#tests-are-failing-what-do-i-do)
 - [Security review found critical issues. Now what?](#security-review-found-critical-issues-now-what)
 - [The implementation doesn't match my PRD. Help!](#the-implementation-doesnt-match-my-prd-help)
+- [Epic closure is running out of context on large epics. How do I fix this?](#epic-closure-is-running-out-of-context-on-large-epics-how-do-i-fix-this)
 
 ---
 
@@ -1642,6 +1643,48 @@ For your next PRD:
 2. Reference existing patterns ("like the share button")
 3. Include negative examples ("NOT like...")
 4. Be more explicit about placement/UX
+
+---
+
+### Epic closure is running out of context on large epics. How do I fix this?
+
+**Good news:** Version 2.16.0 introduced automatic context management for epic closure.
+
+**How it works:**
+
+The `/close-epic` command now uses a 4-tier adaptive scaling strategy based on the number of sub-tickets:
+
+| Epic Size | Tickets | Strategy |
+|-----------|---------|----------|
+| Small | 1-6 | Direct context gathering |
+| Medium | 7-15 | 2-3 parallel batches, standard summaries |
+| Large | 16-30 | 4-6 batches, ultra-condensed summaries |
+| Very Large | 31+ | Phased execution |
+
+**What changed:**
+
+1. **Explicit token budgets**: Each component has a strict limit (~4500 tokens total for the epic-closure-agent)
+2. **Parallel context gathering**: For 7+ tickets, subagents gather context in batches and return condensed summaries
+3. **Ultra-condensed mode**: For 16+ tickets, summaries are reduced to 50 tokens per ticket (vs 100 tokens standard)
+4. **Phased execution**: For 31+ tickets, the workflow splits into separate phases (gather → retrofit → downstream → closure)
+
+**If you still hit context limits:**
+
+1. **Check ticket count**: Very large epics (50+) may need to be split into smaller epics
+2. **Clean up ticket comments**: Long comment threads increase context usage
+3. **Verify you're on version 2.16.0+**: Run `/close-epic --version` to check
+
+**Late Findings:**
+
+If epic closure discovers issues (hardcoded secrets, security vulnerabilities, incomplete features), they are now tracked in a Late Findings table:
+
+| Severity | Behavior |
+|----------|----------|
+| CRITICAL | Blocks closure, requires immediate fix |
+| HIGH | Pauses for user decision |
+| MEDIUM/LOW | Documented, closure proceeds |
+
+This ensures audit trail without context overhead.
 
 ---
 

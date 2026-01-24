@@ -5,6 +5,48 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.0] - 2026-01-24
+
+### Added
+- **Context Budget Allocation for Epic Closure**: Explicit token limits (~4500 tokens total) prevent context window overflow when closing large epics
+  - Epic description: 200 tokens (first 2 paragraphs)
+  - Epic comments: 300 tokens (key decisions only)
+  - Per-ticket summaries: 100 tokens each (max 3000 for 30 tickets)
+  - Retrofit recommendations: 400 tokens
+  - Downstream guidance: 400 tokens
+  - CLAUDE.md updates: 200 tokens
+- **Late Findings Detection**: New tracking system for issues discovered during epic closure
+  - Severity classification: CRITICAL (blocks closure), HIGH (requires user decision), MEDIUM/LOW (proceed with documentation)
+  - Late Findings table format in epic closure reports
+  - Automatic closure blocking for CRITICAL findings (hardcoded secrets, security vulnerabilities, disabled security checks)
+- **Report Validation Layer**: Validates epic-closure-agent output before posting to Linear
+  - Required fields check: Status, Retrofit Analysis, Downstream Guidance, CLAUDE.md Updates
+  - Retry-once logic for malformed responses
+  - User decision prompt for persistent validation failures
+
+### Changed
+- **4-Tier Adaptive Scaling**: Replaced single 6-ticket threshold with comprehensive tier system
+  - Small (1-6 tickets): Direct context gathering
+  - Medium (7-15 tickets): 2-3 parallel batches, standard summarization (100 tokens/ticket)
+  - Large (16-30 tickets): 4-6 batches, ultra-condensed summaries (50 tokens/ticket)
+  - Very Large (31+ tickets): Phased execution (gather → retrofit → downstream → closure)
+- **Truncation Priority Matrix**: Added explicit priority order for context overflow handling
+  - PRESERVE: Status indicators, blocking issues, key decisions, retrofit recommendations
+  - TRIM: Pattern explanations, testing details, historical context, lessons learned
+- **ticket-context-agent Output Constraints**: Enforced token limits for subagent responses
+  - Per-ticket summary: MAX 100 tokens (standard) or 50 tokens (ultra-condensed)
+  - Batch summary: MAX 150 tokens
+  - Structured table output format for efficient parsing
+- **epic-closure-agent Late Findings Detection**: Added detection rules and severity classification for issues found during closure analysis
+
+### Improved
+- Epic closure now scales to 50+ ticket epics without context overflow
+- Better traceability with Late Findings audit trail
+- More reliable Linear posting with validation layer
+- Consistent patterns with execute-ticket context management
+
+---
+
 ## [2.15.0] - 2026-01-24
 
 ### Added
@@ -1161,8 +1203,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
-[2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
-[2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.16.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.16.0
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0

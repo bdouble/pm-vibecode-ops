@@ -139,13 +139,56 @@ During closure analysis, flag any evidence of:
 
 **The orchestrator performs this before invoking you. Assume it passed if you're invoked.**
 
-However, during your analysis, if you discover:
-- Incomplete features that passed review
-- Tests that were marked as "skip" or disabled
-- Security issues flagged but not resolved
-- Documentation gaps that should have been caught
+However, during your analysis, you MUST scan for Late Findings and flag them in the required table format.
 
-**Flag these as "Late Findings" in your report.** The orchestrator will decide whether to proceed.
+#### Late Findings Detection Rules
+
+**CRITICAL Severity (Blocks Closure):**
+- Hardcoded secrets, API keys, or credentials in code
+- Security vulnerabilities flagged but not resolved
+- Disabled security checks or authentication bypasses
+- Data corruption risks or race conditions
+- Missing error handling on critical paths (payments, auth, data writes)
+
+**HIGH Severity (Requires User Decision):**
+- Incomplete features that passed review
+- Tests marked as "skip" or disabled without justification
+- TODO/FIXME comments in critical business logic
+- Performance issues on critical paths
+- Missing input validation on user-facing endpoints
+
+**MEDIUM Severity (Proceed with Note):**
+- Console.log statements in production code
+- Generic error messages that should be specific
+- Missing JSDoc on public APIs
+- Suboptimal but functional implementations
+- Minor code duplication
+
+**LOW Severity (Document Only):**
+- TODO comments about future enhancements
+- Code style inconsistencies
+- Documentation gaps in internal code
+- Opportunities for future optimization
+
+#### Late Findings Output Format (REQUIRED)
+
+```markdown
+### Late Findings
+
+| Severity | Location | Issue | Action |
+|----------|----------|-------|--------|
+| CRITICAL | path/to/file.ts:line | [Specific issue description] | Create ticket before closure |
+| HIGH | path/to/file.ts:line | [Specific issue description] | User decision required |
+| MEDIUM | path/to/file.ts:line | [Specific issue description] | Add to retrofit backlog |
+| LOW | path/to/file.ts:line | [Specific issue description] | Document in lessons learned |
+
+**Closure Status Impact:**
+- CRITICAL items found: X → Closure BLOCKED
+- HIGH items found: X → User decision required
+- MEDIUM/LOW items found: X → Proceed with documentation
+```
+
+**If no Late Findings:** Report "### Late Findings\nNone identified during closure analysis."
 
 ### Phase 2: Retrofit Analysis
 
@@ -361,8 +404,13 @@ For each gap identified in Phase 4, provide:
 
 ### Status: COMPLETE | COMPLETE_WITH_FINDINGS | BLOCKED
 
+**Status Determination:**
+- COMPLETE: No Late Findings, all work verified
+- COMPLETE_WITH_FINDINGS: MEDIUM/LOW Late Findings only, proceeding with documentation
+- BLOCKED: CRITICAL Late Findings present (closure not permitted)
+
 ### Business Value Delivered
-[Summary of accomplished goals vs. original success criteria]
+[Summary of accomplished goals vs. original success criteria - max 100 words]
 
 ### Work Summary
 | Metric | Value |
@@ -373,8 +421,16 @@ For each gap identified in Phase 4, provide:
 | Security Issues Resolved | X |
 | Documentation Pages | X |
 
-### Late Findings (if any)
-[Issues discovered during closure analysis that weren't caught earlier]
+### Late Findings
+
+| Severity | Location | Issue | Action |
+|----------|----------|-------|--------|
+| [level] | [file:line] | [description] | [action] |
+
+**Closure Impact:**
+- CRITICAL: X (if >0, status MUST be BLOCKED)
+- HIGH: X (if >0 and no CRITICAL, status is COMPLETE_WITH_FINDINGS pending user decision)
+- MEDIUM/LOW: X
 
 ### Retrofit Analysis Summary
 - **P0 (Critical)**: X patterns identified
@@ -382,7 +438,7 @@ For each gap identified in Phase 4, provide:
 - **P2 (Medium)**: X patterns identified
 - **Total Estimated Effort**: ~X hours
 
-**Note to Orchestrator**: Use the detailed retrofit items above to create Linear tickets. Each item contains full ticket-ready specifications.
+**Note to Orchestrator**: Use the detailed retrofit items in Phase 2 output to create Linear tickets. Each item contains full ticket-ready specifications.
 
 ### Downstream Impact Summary
 - **Epics Updated**: X
@@ -415,18 +471,35 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Summary
 [2-3 sentence summary of analysis performed]
 
+### Late Findings (ALWAYS INCLUDE)
+
+| Severity | Location | Issue | Action |
+|----------|----------|-------|--------|
+| [CRITICAL/HIGH/MEDIUM/LOW] | [file:line] | [issue] | [action] |
+
+**Impact**: [BLOCKED if CRITICAL / USER_DECISION if HIGH / PROCEED if MEDIUM/LOW only]
+
+*(If no findings: "None identified during closure analysis.")*
+
 ### Phase 2: Retrofit Recommendations
 [Full ticket-ready retrofit specifications - MUST include all fields for ticket creation:
 Context, Current State, Target Pattern, Implementation Guidance, Acceptance Criteria]
 
+*(If skipped: "SKIPPED per user request")*
+*(If none found: "None identified - existing code already follows established patterns")*
+
 ### Phase 3: Downstream Impact
 [Full downstream analysis output if not skipped]
+
+*(If skipped: "SKIPPED per user request")*
 
 ### Phase 4: Documentation Audit
 [Documentation coverage and gaps]
 
 ### Phase 5: CLAUDE.md Updates
 [Specific edit instructions for orchestrator to apply]
+
+*(If no updates needed: "No CLAUDE.md updates required - documentation is current")*
 
 ### Phase 6: Closure Summary
 [Full closure report for Linear]
@@ -435,15 +508,23 @@ Context, Current State, Target Pattern, Implementation Guidance, Acceptance Crit
 [Any problems encountered, or "None"]
 
 ### Orchestrator Actions Required
-1. **Create retrofit tickets** - Use `mcp__linear-server__create_issue` for each retrofit item (CRITICAL)
-2. Post closure summary to Linear epic (include retrofit ticket IDs)
-3. Add downstream guidance comments to related epics: [list]
-4. Apply CLAUDE.md updates: [list]
-5. Mark epic as Done
-6. Add labels: [list]
+1. **Validate this report** - Verify all required sections are present
+2. **Handle Late Findings** - Block if CRITICAL, prompt user if HIGH
+3. **Create retrofit tickets** - Use `mcp__linear-server__create_issue` for each retrofit item
+4. Post closure summary to Linear epic (include retrofit ticket IDs)
+5. Add downstream guidance comments to related epics: [list]
+6. Apply CLAUDE.md updates: [list]
+7. Mark epic as Done (only if status is COMPLETE or COMPLETE_WITH_FINDINGS)
+8. Add labels: [list]
 ```
 
 **This report is REQUIRED. The orchestrator cannot complete closure without it.**
+
+**VALIDATION REQUIREMENTS** (orchestrator will reject if missing):
+- Status MUST be one of: COMPLETE, COMPLETE_WITH_FINDINGS, BLOCKED
+- Late Findings section MUST be present (even if empty)
+- Each Retrofit item MUST have: Priority, Effort, Acceptance Criteria
+- CLAUDE.md Updates MUST specify exact edit locations
 
 ## Handling Skipped Phases
 
@@ -465,14 +546,28 @@ Context, Current State, Target Pattern, Implementation Guidance, Acceptance Crit
 
 Before completing your analysis, verify:
 
+**Late Findings (CRITICAL - Check First):**
+- [ ] Scanned all ticket summaries for workarounds, TODOs, disabled tests
+- [ ] Late Findings table is present (even if empty)
+- [ ] Each finding has Severity, Location, Issue, Action
+- [ ] Status reflects Late Findings impact (BLOCKED if CRITICAL)
+
+**Retrofit Analysis:**
 - [ ] All sub-tickets were analyzed for patterns worth propagating
 - [ ] No workarounds or temporary solutions were missed
-- [ ] Retrofit recommendations have clear priority and effort estimates
+- [ ] Each retrofit item has: Context, Current State, Target Pattern, Implementation Guidance
+- [ ] Retrofit recommendations have clear priority (P0-P3) and effort estimates
+- [ ] Acceptance criteria are specific and testable
+
+**Downstream & Documentation:**
 - [ ] Downstream guidance is actionable and specific
 - [ ] Documentation gaps are identified with specific locations
-- [ ] CLAUDE.md updates have precise edit instructions
+- [ ] CLAUDE.md updates have precise edit instructions (section + content)
+
+**Closure Summary:**
 - [ ] Closure summary captures business value delivered
 - [ ] Lessons learned are actionable for future work
+- [ ] Status is one of: COMPLETE, COMPLETE_WITH_FINDINGS, BLOCKED
 - [ ] Structured report follows required format for orchestrator
 
 ## Communication Style

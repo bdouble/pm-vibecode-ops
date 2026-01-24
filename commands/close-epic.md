@@ -11,6 +11,38 @@ workflow-sequence: "/security-review (closes tickets) -> **/close-epic** (FINAL 
 
 **You MUST use the Task tool to invoke the `epic-closure-agent` for this phase.**
 
+---
+
+## ⚠️ CONTEXT BUDGET ALLOCATION (CRITICAL)
+
+**Explicit token limits prevent context window overflow:**
+
+| Component | Budget | Notes |
+|-----------|--------|-------|
+| Epic description | 200 tokens | First 2 paragraphs only |
+| Epic comments | 300 tokens | Key decisions only |
+| Per-ticket summaries | 100 tokens each | Max 3000 tokens for 30 tickets |
+| Retrofit recommendations | 400 tokens | Prioritized list |
+| Downstream guidance | 400 tokens | Actionable guidance only |
+| CLAUDE.md updates | 200 tokens | Specific edits only |
+| **TOTAL BUDGET** | ~4500 tokens | For epic-closure-agent input |
+
+### Truncation Priority Matrix
+
+**When combined context exceeds budget, truncate in this order (preserve → trim):**
+
+| Priority | Component | Action |
+|----------|-----------|--------|
+| 1 (PRESERVE) | Ticket status indicators | Never truncate |
+| 2 (PRESERVE) | Blocking issues/Late Findings | Never truncate |
+| 3 (PRESERVE) | Key decisions (1 sentence each) | Truncate to 1 sentence |
+| 4 (TRIM) | Pattern explanations | Reduce to bullet points |
+| 5 (TRIM) | Testing details | Coverage % only |
+| 6 (TRIM) | Historical context | Remove entirely |
+| 7 (ALWAYS PRESERVE) | Retrofit recommendations with priority | Never truncate |
+
+---
+
 ### Step 1: Pre-Agent Context Gathering (YOU do this BEFORE invoking agent)
 
 **As the orchestrator, YOU must gather ALL context before spawning the agent.**
@@ -21,49 +53,114 @@ workflow-sequence: "/security-review (closes tickets) -> **/close-epic** (FINAL 
 2. **Fetch all sub-tickets**: Use `mcp__linear-server__list_issues` with parent filter to get all child tickets
 3. **Count tickets**: Determine the number of sub-tickets to select gathering strategy
 
-#### 1.2 Scalable Context Gathering (Based on Ticket Count)
+#### 1.2 Scalable Context Gathering (Tiered by Ticket Count)
 
-**THRESHOLD: 6 tickets**
+**Select gathering strategy based on epic size:**
 
-**If 6 or fewer tickets (Small Epic):**
+| Tier | Ticket Count | Strategy | Token Budget/Ticket |
+|------|--------------|----------|---------------------|
+| **Small** | 1-6 tickets | Direct gathering | ~150 tokens |
+| **Medium** | 7-15 tickets | Parallel subagents (standard mode) | 100 tokens |
+| **Large** | 16-30 tickets | Parallel subagents (ultra-condensed) | 50 tokens |
+| **Very Large** | 31+ tickets | Phased execution | 50 tokens |
+
+---
+
+**TIER 1: Small Epic (1-6 tickets)**
 - Gather context directly using Linear MCP tools
 - Fetch each ticket's details and comments sequentially
+- Apply truncation priority if individual tickets are verbose
 - Proceed directly to agent invocation
 
-**If more than 6 tickets (Large Epic):**
+---
+
+**TIER 2: Medium Epic (7-15 tickets)**
 - **MUST use subagents to prevent context exhaustion**
 - Split tickets into batches of 5-6 tickets each
 - Spawn parallel `ticket-context-agent` instances using Task tool
-- Each subagent fetches and SUMMARIZES ticket context
+- Use **standard mode** (100 tokens/ticket)
 - Aggregate summaries before invoking epic-closure-agent
 
-**Parallel Context Gathering Pattern:**
+**Parallel Context Gathering Pattern (Standard Mode):**
 ```
 # For an epic with 15 tickets:
-# - Batch 1 (tickets 1-5): Spawn ticket-context-agent
-# - Batch 2 (tickets 6-10): Spawn ticket-context-agent
-# - Batch 3 (tickets 11-15): Spawn ticket-context-agent
+# - Batch 1 (tickets 1-5): Spawn ticket-context-agent (standard mode)
+# - Batch 2 (tickets 6-10): Spawn ticket-context-agent (standard mode)
+# - Batch 3 (tickets 11-15): Spawn ticket-context-agent (standard mode)
 #
 # All three agents run IN PARALLEL using a single message with multiple Task tool calls
 # Wait for all to complete, then aggregate summaries
 ```
 
-**Example Task tool invocation for context gathering:**
+**Example Task tool invocation (Standard Mode):**
 ```
 Task tool call:
 - subagent_type: ticket-context-agent
 - description: "Gather context for batch 1"
 - prompt: |
     Epic: EPIC-123
+    Mode: standard (100 tokens per ticket max)
     Tickets to process: PROJ-101, PROJ-102, PROJ-103, PROJ-104, PROJ-105
 
-    Fetch and summarize each ticket's:
-    - Description and status
-    - All comments (focus on phase reports: implementation, testing, security)
-    - Key decisions and patterns introduced
+    Fetch and summarize each ticket using the TABLE FORMAT:
+    | ID | Status | Key Outcome | Key Decision | Tests | Security | Files |
 
-    Return structured summaries for aggregation.
+    Return structured table summaries for aggregation.
 ```
+
+---
+
+**TIER 3: Large Epic (16-30 tickets)**
+- **MUST use subagents with ULTRA-CONDENSED mode**
+- Split tickets into batches of 6 tickets each
+- Spawn parallel `ticket-context-agent` instances
+- Use **ultra-condensed mode** (50 tokens/ticket)
+- Aggregate minimal summaries before invoking epic-closure-agent
+
+**Example Task tool invocation (Ultra-Condensed Mode):**
+```
+Task tool call:
+- subagent_type: ticket-context-agent
+- description: "Gather context for batch 1 (ultra-condensed)"
+- prompt: |
+    Epic: EPIC-123
+    Mode: ultra-condensed (50 tokens per ticket max)
+    Tickets to process: PROJ-101, PROJ-102, PROJ-103, PROJ-104, PROJ-105, PROJ-106
+
+    Fetch and summarize each ticket using the MINIMAL TABLE FORMAT:
+    | ID | S | Outcome | P |
+    (S=Status ✓/✗, Outcome=3-5 words, P=Pattern or -)
+
+    Return ultra-condensed table for aggregation.
+```
+
+---
+
+**TIER 4: Very Large Epic (31+ tickets)**
+- **MUST use phased execution to avoid context exhaustion**
+- Execute in 4 sequential phases, each with parallel batching:
+
+```
+PHASE A: Context Gathering (Batches 1-6, parallel)
+         → Aggregate into master summary (max 1500 tokens)
+         → Discard raw batch outputs
+
+PHASE B: Retrofit Analysis
+         → Pass master summary to epic-closure-agent
+         → Request ONLY retrofit recommendations
+         → Store recommendations (max 400 tokens)
+
+PHASE C: Downstream Analysis
+         → Pass master summary to epic-closure-agent
+         → Request ONLY downstream guidance
+         → Store guidance (max 400 tokens)
+
+PHASE D: Final Closure
+         → Pass stored recommendations + guidance
+         → Generate closure report and CLAUDE.md updates
+```
+
+**Phased Execution reduces peak context by processing phases independently.**
 
 #### 1.3 Complete Context Gathering Checklist
 
@@ -115,26 +212,35 @@ Use the Task tool to invoke the `epic-closure-agent` with ALL context embedded:
 ## Epic Context
 **ID**: [epic-id]
 **Title**: [title from get_issue]
-**Description**:
-[full description text from get_issue]
+**Description** (truncated to 200 tokens):
+[first 2 paragraphs of description]
 
 ## Original Success Criteria
-[extract from epic description]
+[extract from epic description - max 100 tokens]
 
 ## Sub-Ticket Summary
-| Ticket ID | Title | Status | Key Outcomes |
-|-----------|-------|--------|--------------|
-| TICKET-1  | ...   | Done   | ...          |
-| TICKET-2  | ...   | Done   | ...          |
+| Ticket ID | Status | Key Outcome | Key Decision | Tests | Security | Files |
+|-----------|--------|-------------|--------------|-------|----------|-------|
+| TICKET-1  | Done   | [10 words]  | [8 words]    | ✓ 85% | Approved | 4     |
+| TICKET-2  | Done   | [10 words]  | [8 words]    | ✓ 78% | Approved | 3     |
 
-## Implementation Summary
-[aggregated from sub-ticket implementation reports]
+*(Note: Each ticket summary is max 100 tokens per context budget)*
 
-## Testing Summary
-[aggregated from sub-ticket testing reports]
+## Implementation Highlights
+[Key patterns and approaches - max 300 tokens aggregated]
 
-## Security Summary
-[aggregated from sub-ticket security reviews]
+## Testing Status
+| Metric | Value |
+|--------|-------|
+| Avg Coverage | X% |
+| Failing Tests | 0 |
+| Skipped Tests | X |
+
+## Security Status
+| Metric | Value |
+|--------|-------|
+| Tickets Approved | X/Y |
+| Open Findings | 0 |
 
 ## Related Epics (for Downstream Analysis)
 - EPIC-456: [title] - depends on this epic
@@ -144,15 +250,20 @@ Use the Task tool to invoke the `epic-closure-agent` with ALL context embedded:
 --skip-retrofit: [true/false based on user input]
 --skip-downstream: [true/false based on user input]
 
+## Context Budget Note
+This prompt has been constructed within the 4500 token budget.
+Truncation applied per priority matrix if source data exceeded limits.
+
 ## Your Task
 Perform epic closure analysis following the six-phase workflow:
-1. Verify completion (already done by orchestrator)
+1. Late Findings scan (REQUIRED - check for workarounds, disabled tests, TODOs)
 2. Retrofit analysis (unless --skip-retrofit)
 3. Downstream impact (unless --skip-downstream)
 4. Documentation audit
 5. CLAUDE.md updates
 6. Closure summary
 
+**CRITICAL**: Return Late Findings table even if empty.
 Return a structured epic closure report when complete.
 ```
 
@@ -161,6 +272,43 @@ Return a structured epic closure report when complete.
 ### Step 4: Post-Agent Completion (YOU Write to Linear and Close Epic)
 
 After the agent returns its report:
+
+#### 4.0 VALIDATE AGENT REPORT (BLOCKING)
+
+**Before proceeding, validate the agent's report has required fields:**
+
+| Section | Required Fields | Validation |
+|---------|-----------------|------------|
+| **Status** | COMPLETE / COMPLETE_WITH_FINDINGS / BLOCKED | Must be one of three values |
+| **Retrofit Analysis** | At least 1 recommendation OR "None identified" | Cannot be empty |
+| **Per Retrofit Item** | Priority (P0-P3), Effort estimate, Acceptance criteria | All required for ticket creation |
+| **Downstream Guidance** | Affected epics list, Propagation notes | Can be "None" if skipped |
+| **CLAUDE.md Updates** | Specific sections, Proposed content | Can be "No updates needed" |
+| **Late Findings** | Table with Severity, Location, Issue, Action | Can be empty |
+
+**Validation Actions:**
+
+```
+IF missing required fields:
+  → Retry ONCE with enhanced prompt:
+    "Your report is missing required fields: [list].
+     Please regenerate with complete:
+     - Status section
+     - Retrofit recommendations (or 'None identified')
+     - [other missing sections]"
+
+IF still missing after retry:
+  → PAUSE for user decision
+  → Do NOT post incomplete report to Linear
+  → Ask: "The agent report is incomplete. Should I:
+          a) Retry with different parameters
+          b) Close epic with partial report
+          c) Abort closure"
+```
+
+**NEVER post incomplete reports to Linear.** Partial reports create confusion and lose critical information.
+
+---
 
 1. **Parse the agent's report** - Extract retrofit actions, downstream updates, CLAUDE.md changes
 
@@ -391,7 +539,7 @@ After completing the analysis, the orchestrator adds the following comment to th
 ```markdown
 ## Epic Closure Report
 
-### Status: COMPLETE
+### Status: COMPLETE | COMPLETE_WITH_FINDINGS | BLOCKED
 
 ### Business Value Delivered
 [Summary of what was accomplished vs. original goals]
@@ -401,6 +549,14 @@ After completing the analysis, the orchestrator adds the following comment to th
 |--------|-------|--------|--------------|
 | TICK-1 | ... | Done | ... |
 | TICK-2 | ... | Done | ... |
+
+### Late Findings
+| Severity | Location | Issue | Action Taken |
+|----------|----------|-------|--------------|
+| MEDIUM | utils/format.ts:23 | Missing error handling | Created PROJ-XXX |
+| LOW | types/user.ts:12 | TODO comment | Documented below |
+
+*(If no findings: "None identified during closure analysis.")*
 
 ### Retrofit Analysis
 **Patterns to Propagate Backward:**
@@ -437,6 +593,7 @@ After completing the analysis, the orchestrator adds the following comment to th
 - Total Implementation Time: ~X hours
 - Security Issues Found/Fixed: X/X
 - Test Coverage Achieved: X%
+- Late Findings: X (CRITICAL: 0, HIGH: 0, MEDIUM: X, LOW: X)
 
 **Epic Closed**: [Date/Time]
 **Closure Coordinator**: AI Epic Closure Agent
@@ -475,6 +632,58 @@ When the agent identifies CLAUDE.md updates:
 - **Authentication**: [auth requirements]
 - **Usage**: [typical use cases]
 ```
+
+---
+
+## Late Findings Handling (CRITICAL)
+
+**Late Findings are issues discovered during closure analysis that weren't caught in earlier phases.**
+
+### Late Findings Table Format
+
+The agent may return a Late Findings table:
+
+```markdown
+### Late Findings
+| Severity | Location | Issue | Action |
+|----------|----------|-------|--------|
+| CRITICAL | auth/login.ts:45 | Hardcoded API timeout (30s) bypasses circuit breaker | Create ticket before closure |
+| HIGH | utils/format.ts:23 | Missing error handling in date parser | Add to retrofit backlog |
+| MEDIUM | components/Modal.tsx:89 | Console.log left in production | Include in cleanup task |
+| LOW | types/user.ts:12 | TODO comment about future enhancement | Document in lessons learned |
+```
+
+### Severity Handling Rules
+
+| Severity | Closure Action | Required Response |
+|----------|----------------|-------------------|
+| **CRITICAL** | ⛔ BLOCKED | Create blocking ticket(s), do NOT close epic |
+| **HIGH** | ⚠️ REQUIRES DECISION | Ask user: close with findings OR create tickets first |
+| **MEDIUM** | ✓ PROCEED | Add to retrofit tickets, note in closure report |
+| **LOW** | ✓ PROCEED | Document in lessons learned only |
+
+### Blocking Logic
+
+```
+IF Late Findings contains CRITICAL items:
+  → DO NOT close epic
+  → Create Linear ticket(s) for each CRITICAL item
+  → Report: "Epic closure blocked by X critical findings. Created tickets: [IDs]"
+  → User must address and re-run /close-epic
+
+IF Late Findings contains HIGH items (no CRITICAL):
+  → PAUSE for user decision
+  → Ask: "Found X high-severity issues. Options:
+          a) Create tickets and close epic with findings
+          b) Abort closure to address first
+          c) Proceed anyway (not recommended)"
+
+IF only MEDIUM/LOW:
+  → Proceed with closure
+  → Include findings in retrofit tickets and closure report
+```
+
+**Late Findings are EXEMPT from truncation** - they form the audit trail for quality assurance.
 
 ---
 
