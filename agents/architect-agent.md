@@ -520,6 +520,19 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Issues/Blockers
 [Any problems encountered, or "None"]
 
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| [LOW/INFO] | [file/area] | [Issue or alternative] | [Why deferred] |
+
+**Include in Deferred Items:**
+- Alternative architectural approaches considered but rejected (with rationale)
+- Risks identified but accepted (with mitigation strategy)
+- Technical debt that will be created (with future remediation plan)
+- Optimization opportunities noted but out of scope
+- Edge cases or scenarios not addressed in current scope
+- Future enhancement possibilities identified during analysis
+
 ### Recommendations
 [Suggestions for next phase, or "Ready for next phase"]
 ```

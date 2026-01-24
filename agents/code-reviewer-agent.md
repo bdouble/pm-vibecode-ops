@@ -327,6 +327,19 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Issues/Blockers
 [Any problems encountered, or "None"]
 
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| [MEDIUM/LOW/INFO] | [file:line] | [Finding] | [Why not blocking] |
+
+**Include in Deferred Items:**
+- Style/pattern deviations that don't break functionality
+- Minor optimization opportunities
+- Suggested refactors that are out of scope
+- Non-critical missing tests
+- Documentation gaps (if not blocking)
+- Code smells that don't affect correctness
+
 ### Recommendations
 [Suggestions for next phase, or "Ready for next phase"]
 ```

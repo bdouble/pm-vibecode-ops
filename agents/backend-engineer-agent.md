@@ -362,6 +362,18 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Issues/Blockers
 [Any problems encountered, or "None"]
 
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| [LOW/INFO] | [file:line] | [Issue noted] | [Why deferred] |
+
+**Include in Deferred Items:**
+- Tech debt discovered but out of scope for this ticket
+- Refactoring opportunities noted for future
+- Pattern improvements identified but not implemented
+- Edge cases not handled (if low-risk and out of scope)
+- Performance optimizations noted but not critical
+
 ### Recommendations
 [Suggestions for next phase, or "Ready for next phase"]
 ```

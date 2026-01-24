@@ -459,6 +459,19 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Issues/Blockers
 [Any problems encountered, or "None"]
 
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| [LOW/INFO] | [file:line] | [Issue noted] | [Why deferred] |
+
+**Include in Deferred Items:**
+- Accessibility improvements noted but not critical
+- Performance optimizations identified but out of scope
+- Design system enhancements for future consideration
+- Browser compatibility edge cases (if low-impact)
+- Component refactoring opportunities
+- UX improvements noted but not in ticket scope
+
 ### Recommendations
 [Suggestions for next phase, or "Ready for next phase"]
 ```

@@ -864,6 +864,19 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Issues/Blockers
 [Any problems encountered, or "None"]
 
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| [INFO] | [file/module] | [Coverage gap or issue] | [Why not tested] |
+
+**Include in Deferred Items:**
+- Coverage gaps in low-priority areas (per testing philosophy)
+- Tests deemed low-value per priority criteria (trivial code, getters/setters)
+- Edge cases not covered (with justification)
+- Integration points not fully tested (if low-risk)
+- Flaky test areas that need future stabilization
+- Performance test scenarios deferred for later
+
 ### Recommendations
 [Suggestions for next phase, or "Ready for next phase"]
 ```

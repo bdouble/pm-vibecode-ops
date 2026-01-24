@@ -624,18 +624,19 @@ For each prior phase report:
   2. Extract Summary - first sentence only
   3. Extract file lists - paths only, no descriptions
   4. Extract blocking issues or security concerns (if any)
-  5. SKIP: detailed explanations, code snippets, full recommendations
+  5. Extract Deferred Items table (if present) - PRESERVE FULLY
+  6. SKIP: detailed explanations, code snippets, full recommendations
 
 If extracted context exceeds phase budget:
   1. Truncate to budget limit
   2. Append note: "[truncated - see Linear for full report]"
-  3. Prioritize: Status > Files > Summary > Details
+  3. Prioritize: Status > Files > Deferred Items > Summary > Details
 ```
 
 **Truncation rules:**
 - If ticket has 4+ completed phases, omit Details sections entirely
 - If extracted context still exceeds total budget, keep only most recent 2 phases
-- Always preserve: Files Changed lists (needed for all subsequent phases)
+- Always preserve: Files Changed lists, Deferred Items tables (both needed for traceability)
 
 **Example condensed context for security-review phase (~400 tokens):**
 ```
@@ -645,6 +646,41 @@ Prior Phase Summary:
 - Testing: 82% coverage, all gates PASS
 - Documentation: API docs updated (3 files)
 - Code Review: APPROVED, flagged auth token expiry concern
+```
+
+---
+
+## Deferred Items Handling
+
+When agents bypass issues (correct behavior for low-priority items), they MUST document them in a Deferred Items table for user traceability:
+
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| [CRITICAL/HIGH/MEDIUM/LOW/INFO] | [file:line] | [Brief description] | [Why deferred] |
+
+**Rules for Deferred Items:**
+1. ANY issue found but not addressed MUST appear in this table
+2. Location must include file:line for traceability
+3. Reason must explain the bypass decision (e.g., "Defense-in-depth, not exploitable")
+4. Table is preserved during context truncation (treated like Files Changed)
+5. Orchestrator posts full table to Linear (not summarized)
+
+**When to defer (examples by phase):**
+- **Security**: LOW severity findings, confidence <7/10, defense-in-depth measures
+- **Code Review**: Style nits, minor optimizations, non-blocking pattern deviations
+- **Testing**: Coverage gaps in low-risk areas, trivial code not tested
+- **Implementation**: Tech debt noted but out of scope, refactoring opportunities
+- **Documentation**: Doc gaps noted but low priority
+- **Adaptation**: Alternative approaches considered but rejected, accepted risks
+
+**Example Deferred Items table:**
+```markdown
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| LOW | auth.ts:45 | Missing rate limit on admin login | Defense-in-depth, admin-only endpoint |
+| INFO | user.service.ts:120 | Could add input sanitization | Low risk, trusted internal call |
+| LOW | api.controller.ts:88 | Consider adding request logging | Enhancement, not security critical |
 ```
 
 ---

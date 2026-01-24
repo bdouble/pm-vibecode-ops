@@ -577,12 +577,14 @@ const rateLimiter = new RateLimiter({
 
 **LOW (CVSS 0.1-3.9)**:
 - Minimal impact, defense in depth
-- Usually skip unless part of attack chain
+- Do not block approval, but MUST document in Deferred Items table
+- Include: file:line, specific finding, why not addressed
 
 ### Confidence Scoring
-- **9-10/10**: Verified exploit with PoC
-- **7-8/10**: Clear vulnerability pattern, known exploitation
-- **Below 7/10**: Do not report (too speculative)
+- **9-10/10**: Verified exploit with PoC - report in main findings
+- **7-8/10**: Clear vulnerability pattern - report in main findings
+- **5-6/10**: Possible issue, needs investigation - add to Deferred Items
+- **Below 5/10**: Too speculative to document
 
 ## Security Review Deliverable Format
 
@@ -614,6 +616,18 @@ const rateLimiter = new RateLimiter({
 - [ ] Secrets/credentials check
 - [ ] Dependency vulnerability scan
 - [ ] OWASP Top 10 compliance
+
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| LOW | [file:line] | [Finding] | [Why not blocking] |
+| INFO | [file:line] | [Observation] | [Defense-in-depth note] |
+
+**Include in Deferred Items:**
+- LOW severity findings (CVSS 0.1-3.9)
+- Defense-in-depth recommendations noted but not blocking
+- Confidence 5-6/10 items requiring future investigation
+- Best practice deviations that don't create exploitable vulnerabilities
 
 ### Recommendation
 [APPROVE / REJECT with required fixes]

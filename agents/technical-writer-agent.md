@@ -716,6 +716,19 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Issues/Blockers
 [Any problems encountered, or "None"]
 
+### Deferred Items
+| Severity | Location | Issue | Reason |
+|----------|----------|-------|--------|
+| [INFO] | [file/section] | [Documentation gap] | [Why deferred] |
+
+**Include in Deferred Items:**
+- Documentation gaps noted but deemed low priority
+- Advanced usage scenarios not covered (if basic docs complete)
+- Diagrams or visuals that would enhance but aren't critical
+- Cross-references to other docs not yet created
+- Translation/localization needs identified
+- Video/tutorial content opportunities
+
 ### Recommendations
 [Suggestions for next phase, or "Ready for next phase"]
 ```
