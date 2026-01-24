@@ -5,6 +5,28 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.0] - 2026-01-24
+
+### Added
+- **Deferred Items documentation section** for all agent reports
+  - Structured table format for documenting bypassed low-priority issues
+  - Includes: Severity, Location (file:line), Issue description, Reason for deferral
+  - Preserved during context truncation (treated like Files Changed)
+  - Posted to Linear for user traceability and future remediation
+
+### Changed
+- **Security agent LOW severity handling**: Now requires documentation in Deferred Items instead of "usually skip"
+- **Confidence scoring**: Added 5-6/10 range for Deferred Items (previously undocumented)
+- **Context budget extraction**: Updated to preserve Deferred Items tables during truncation
+- **Truncation priority**: Now prioritizes Status > Files > Deferred Items > Summary > Details
+
+### Improved
+- All 7 ticket-level agents (architect, backend, frontend, QA, security, code-reviewer, technical-writer) now include Deferred Items in their report format
+- Execute-ticket command documents Deferred Items handling with phase-specific examples
+- Better traceability for issues found but intentionally not addressed during workflow
+
+---
+
 ## [2.14.0] - 2026-01-23
 
 ### Changed
@@ -1139,6 +1161,9 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
+[2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
 [2.12.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.12.1
