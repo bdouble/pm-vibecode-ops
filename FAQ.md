@@ -52,6 +52,7 @@ Questions from Product Managers using AI-powered development workflows.
 
 **Troubleshooting**
 - [The AI created duplicate epics. How do I fix this?](#the-ai-created-duplicate-epics-how-do-i-fix-this)
+- [Planning created tickets for the wrong epic. What happened?](#planning-created-tickets-for-the-wrong-epic-what-happened)
 - [Tests are failing. What do I do?](#tests-are-failing-what-do-i-do)
 - [Security review found critical issues. Now what?](#security-review-found-critical-issues-now-what)
 - [The implementation doesn't match my PRD. Help!](#the-implementation-doesnt-match-my-prd-help)
@@ -1361,6 +1362,29 @@ The workflow has built-in duplicate prevention. Make sure you:
 - Always review existing epics manifest before approving
 - Use unique, descriptive epic titles
 - Keep service inventory updated after each feature
+
+---
+
+### Planning created tickets for the wrong epic. What happened?
+
+**This was a known issue fixed in version 2.17.0.** Previously, when you ran `/planning` on a single epic while providing a multi-epic PRD, the agent could create tickets for ALL epics described in the PRD instead of just the one you requested.
+
+**How it's fixed now (v2.17.0+):**
+
+The workflow enforces scope isolation at three layers:
+
+1. **Feature-to-Epic Mapping**: When you run `/epic-planning`, it appends a mapping table to your PRD that documents which PRD sections belong to each epic. The `/planning` command uses this mapping to filter the PRD before passing it to the agent.
+
+2. **Agent scope boundaries**: The architect-agent has strict scope rules requiring it to restrict ticket creation to the requested epic(s) only. It must explicitly state which PRD sections are in-scope and out-of-scope.
+
+3. **Post-agent validation**: After the agent returns its plan, the orchestrator validates that all proposed tickets belong to the correct epic before creating them in Linear. If scope violations are detected, it flags them and asks for your decision.
+
+**If you still see scope issues:**
+
+- Verify you are on version 2.17.0+ of the plugin
+- Run `/epic-planning` first to generate the Feature-to-Epic Mapping in your PRD
+- Pass a specific epic ID (not a project ID) to `/planning`
+- If planning multiple epics, provide all IDs explicitly: `/planning LIN-123,LIN-124`
 
 ---
 

@@ -116,7 +116,10 @@ These commands run at recurring intervals throughout the project lifecycle—not
 - **Epic Association**: Links epics to appropriate project milestones with unique labels
 - **Business Metrics**: Tracks user outcomes and success metrics in epic descriptions
 
-**Output**: Creates epics in Linear/Jira with complete business context.
+**Feature-to-Epic Mapping (Step 11)**:
+After creating all epics, appends a Feature-to-Epic Mapping table to the PRD file. This mapping documents which PRD sections and features belong to each epic, enabling the downstream `/planning` command to correctly scope tickets to individual epics when processing a multi-epic PRD.
+
+**Output**: Creates epics in Linear/Jira with complete business context. Appends Feature-to-Epic Mapping to the PRD file.
 
 **Time**: 10-15 minutes + 20-30 minutes PM review
 
@@ -139,23 +142,26 @@ These commands run at recurring intervals throughout the project lifecycle—not
 # Epic with all context sources
 /planning LIN-456 --prd requirements.md --discovery DISC-002 --context "Must support 10k concurrent users"
 
-# Process all epics in a project
-/planning PROJ-789 --discovery DISC-003
+# Multiple epics with all context sources
+/planning LIN-456,LIN-457 --discovery DISC-003
 
 # Alternative: using discovery markdown file
 /planning LIN-123 --discovery ./discovery-report.md
 ```
 
 **Key Features**:
-- **Primary Input**: Epic IDs (comma-separated) or Project ID
+- **Primary Input**: Epic IDs (comma-separated). Project IDs (`PROJ-*`) are not accepted; use explicit epic IDs
+- **Epic Scope Isolation**: When given a single epic ID, ALL tickets are restricted to that epic's features only. A multi-epic PRD is filtered to in-scope sections before passing to the architect-agent
+- **Feature-to-Epic Mapping**: If the PRD contains a Feature-to-Epic Mapping section (appended by `/epic-planning`), the command uses it to identify which PRD sections belong to the target epic
+- **Post-Agent Validation**: After the architect-agent returns its plan, the orchestrator validates scope compliance (parent ID check, ticket count sanity check, cross-epic distribution check) before creating tickets in Linear
 - **Optional Context**:
-  - `--prd`: Original PRD for detailed requirements
+  - `--prd`: Original PRD for detailed requirements (filtered to epic scope)
   - `--discovery`: Discovery ticket ID (e.g., `DISC-001`) or markdown file with technical patterns and service inventory
   - `--context`: Ad-hoc constraints or requirements
 - **Sub-ticket Creation**: All tickets created as children of parent epics
 - **Technical Sizing**: 2-8 hour implementation chunks
 - **Dependencies**: Maps blocking relationships between sub-tickets
-- **Context Priority**: Epic → User context → Discovery → PRD
+- **Context Priority**: Epic → User context → Discovery → PRD (filtered)
 
 **Output**: Creates sub-tickets in ticketing system with technical specifications.
 
@@ -467,6 +473,7 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 - Breaks down epics into technical tickets while preserving context
 - Identifies reuse opportunities with specific service references
 - Documents technical constraints and performance baselines
+- Enforces strict scope boundaries during planning (tickets restricted to requested epic(s) only)
 
 **Used By**: `/discovery`, `/planning`, `/adaptation`
 

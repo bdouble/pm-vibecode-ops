@@ -21,6 +21,29 @@ DO NOT attempt to perform planning work directly. The specialized architect-agen
 
 ---
 
+## CRITICAL: Epic Scope Isolation
+
+**The `/planning` command operates on ONE EPIC AT A TIME.** When given a single epic ID, ALL tickets created MUST belong exclusively to that epic's features.
+
+### Scope Rules:
+1. **Single epic = single feature scope.** If the user passes `CON-146` (Habit Tracker), you plan ONLY the Habit Tracker. You do NOT plan Health Metrics, Content Calendar, or any other feature—even if the PRD describes them.
+2. **PRD is REFERENCE CONTEXT, not scope.** When a PRD is provided alongside a specific epic, the PRD helps you understand the broader system but does NOT expand your planning scope. You must filter the PRD to extract only sections relevant to the epic being planned.
+3. **Epic description defines scope.** The epic's title and description are the authoritative source for what features to plan. If the epic says "Enable habit tracking," you plan habit tracking—nothing else.
+4. **Never distribute tickets across multiple epics.** If you are planning epic CON-146, every ticket you create has `parentId: CON-146`. You do NOT create tickets under CON-147, CON-148, or any other epic.
+5. **When the PRD contains features for multiple epics**, you MUST:
+   - Identify which PRD sections map to the epic being planned
+   - Explicitly state which PRD sections you are INCLUDING and which you are EXCLUDING
+   - If uncertain about feature-to-epic mapping, ASK the user before creating tickets
+6. **Multi-epic planning requires explicit opt-in.** To plan multiple epics at once, the user must provide comma-separated IDs (e.g., `LIN-123,LIN-124,LIN-125`). A single epic ID always means single-epic scope.
+
+### Scope Violation Detection:
+If at any point during planning you find yourself creating tickets that don't directly serve the epic's stated capability, **STOP and reassess**. Ask:
+- "Does this ticket implement a feature described in the epic's title/description?"
+- "Would this ticket make more sense under a different epic?"
+- If yes to the second question, **do not create the ticket**. Note it as out-of-scope.
+
+---
+
 ## Required Skills
 - **divergent-exploration** - Explore technical approaches before decomposition
 - **service-reuse** - Factor in existing services during planning
@@ -63,7 +86,11 @@ Transform Linear epics into technical implementation tickets with clear dependen
 ## Input Parameters
 
 ### Required:
-**Epic IDs**: **$1** (Comma-separated Linear epic IDs like "LIN-123,LIN-124" or single project ID)
+**Epic IDs**: **$1** (One or more Linear epic IDs, comma-separated like "LIN-123,LIN-124")
+
+**SCOPE RULE**: Each epic ID defines a discrete planning scope. A single epic ID means you plan ONLY that epic's features. Multiple comma-separated IDs mean you plan each epic's features independently, creating sub-tickets under their respective parent epics.
+
+**NOTE**: Project IDs (PROJ-*) are NOT accepted. Use specific epic IDs from the project. If the user wants to plan all epics in a project, they should provide all epic IDs explicitly (e.g., `LIN-123,LIN-124,LIN-125`).
 
 ### Optional Context (Flags):
 **--prd**: Original PRD document for additional business context
@@ -122,11 +149,12 @@ while [[ $# -gt 1 ]]; do
 done
 
 # Load epics from Linear
+# NOTE: Project IDs (PROJ-*) are NOT supported. Use explicit epic IDs.
 if [[ "$EPIC_IDS" == PROJ-* ]]; then
-    echo "Loading all epics from project: $EPIC_IDS"
-    # MCP: mcp__linear-server__get_project - retrieve project
-    # MCP: mcp__linear-server__list_issues - get all epics in project
-    # For each epic: mcp__linear-server__list_comments - get all comments
+    echo "❌ ERROR: Project IDs are not accepted by /planning."
+    echo "   Use specific epic IDs instead: /planning LIN-123 or /planning LIN-123,LIN-124"
+    echo "   To find epic IDs in a project, use: mcp__linear-server__list_issues with project filter"
+    exit 1
 else
     echo "Loading specific epics: $EPIC_IDS"
     # Split comma-separated epic IDs and load each
@@ -170,13 +198,31 @@ Extract from each epic (description and comments combined):
 - **Dependencies**: Other epics this depends on or enables
 - **Previous Phase Outputs**: Planning reports, discovery findings, etc. (often in comments)
 
-#### Optional Enhancement: PRD Document
-If PRD provided, extract additional context:
-- **Detailed Requirements**: Specific features not in epic
-- **Edge Cases**: Special scenarios to handle
-- **Compliance**: Regulatory requirements
-- **Timeline**: Original timeline expectations
-- **Constraints**: Budget, resource, or technical limits
+#### Optional Enhancement: PRD Document (FILTERED TO EPIC SCOPE)
+If PRD provided, you MUST filter it before passing to the agent:
+
+**Step 1: Check for Feature-to-Epic Mapping**
+If the PRD contains a `## Feature-to-Epic Mapping` section (appended by `/epic-planning`), use it to identify which PRD sections belong to the epic(s) being planned. Extract ONLY those sections.
+
+**Step 2: Manual Filtering (if no mapping exists)**
+If no mapping exists in the PRD:
+1. Read the epic's title and description
+2. Identify which PRD sections/features correspond to the epic's capability
+3. Extract ONLY those sections as filtered context
+4. Explicitly document which PRD sections are IN SCOPE and which are EXCLUDED
+
+**Step 3: Pass Filtered Context to Agent**
+When invoking the architect-agent, include:
+- The epic description (primary scope)
+- The FILTERED PRD sections (not the full PRD)
+- A clear statement: "Plan ONLY for epic [ID]: [title]. The following PRD sections are in scope: [list]. All other PRD sections are OUT OF SCOPE."
+
+From the filtered PRD sections, extract:
+- **Detailed Requirements**: Features specific to this epic
+- **Edge Cases**: Scenarios relevant to this epic's capability
+- **Compliance**: Regulatory requirements affecting this epic
+- **Timeline**: Timeline expectations for this epic's phase
+- **Constraints**: Constraints relevant to this epic
 
 #### Optional Enhancement: Discovery Report
 If discovery provided (as Linear ticket ID or file), leverage:
@@ -470,9 +516,27 @@ After completing technical planning, add comment to epic:
 **Total Technical Tickets Created**: X
 ```
 
+## Post-Agent Validation (MANDATORY)
+
+After the architect-agent returns its report, the orchestrator MUST validate scope compliance before posting to Linear:
+
+### Validation Checklist:
+1. **Epic Scope Check**: Verify every proposed ticket maps to a feature in the planned epic's description. If any ticket serves a feature from a DIFFERENT epic, flag it as out-of-scope.
+2. **Parent ID Check**: Confirm all tickets use the correct `parentId` matching the requested epic(s). No tickets should be created under epics that were not explicitly requested.
+3. **Ticket Count Sanity Check**: For a single epic, expect 3-10 sub-tickets. If the agent proposes 15+ tickets for a single epic, this likely indicates scope creep into other epics. Review carefully.
+4. **Cross-Epic Distribution Check**: If the agent's report mentions distributing tickets across multiple epics but only one epic was requested, this is a SCOPE VIOLATION. Do not proceed—re-invoke the agent with stronger scope constraints.
+
+### If Scope Violation Detected:
+1. **Do NOT create the out-of-scope tickets**
+2. **Inform the user**: "The planning agent proposed [N] tickets, but [M] appear to belong to other epics. Only [N-M] tickets are in scope for [EPIC-ID]."
+3. **List the out-of-scope tickets** with their apparent parent epic
+4. **Ask the user** whether to proceed with only the in-scope tickets or re-plan
+
 ## Success Criteria
 
 Technical planning is successful when:
+- **SCOPE COMPLIANCE: All tickets belong exclusively to the requested epic(s)** — no tickets created under unrelated epics
+- **SCOPE COMPLIANCE: PRD was filtered to only in-scope sections** before passing to agent
 - **All epic capabilities have technical implementation tickets**
 - **All available context sources integrated appropriately**
 - **Each ticket created as sub-ticket of parent epic**
@@ -481,6 +545,7 @@ Technical planning is successful when:
 - **Timeline aligns with PRD expectations**
 - **All tickets include production-ready requirements**
 - **Clear "Definition of Done" for each ticket**
+- **Post-agent validation completed** with no scope violations
 
 ## Common PRD Patterns and Ticket Mapping
 

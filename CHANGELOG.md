@@ -5,6 +5,23 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.0] - 2026-01-28
+
+### Added
+- **Feature-to-Epic Mapping artifact** in `/epic-planning` (Step 11): After creating epics, appends a structured mapping table to the PRD file documenting which PRD sections and features belong to each epic, enabling downstream `/planning` to correctly scope tickets
+- **Planning phase scope boundaries** in `architect-agent`: Mandatory scope rules, scope violation indicators, and pre-completion checklist items ensure the agent restricts ticket creation to the requested epic(s) only
+- **Post-agent validation** in `/planning` command: After the architect-agent returns its report, the orchestrator validates scope compliance (epic scope check, parent ID check, ticket count sanity check, cross-epic distribution check) before creating tickets in Linear
+
+### Changed
+- **Planning command now rejects project IDs**: `/planning` no longer accepts `PROJ-*` identifiers; users must provide explicit epic IDs to ensure unambiguous scope
+- **PRD filtering enforced** before passing to architect-agent: When a multi-epic PRD is provided alongside a single epic, the orchestrator extracts only the relevant PRD sections using the Feature-to-Epic Mapping (or manual filtering) before invoking the agent
+- **Success criteria updated** with scope compliance checks in both the planning command and architect-agent, including verification that all tickets belong to requested epics and PRD was filtered to in-scope sections only
+
+### Fixed
+- **Planning command no longer creates tickets across multiple epics** when given a single epic ID with a multi-epic PRD: previously, the agent would create tickets for ALL epics described in the PRD instead of restricting to the one requested
+
+---
+
 ## [2.16.0] - 2026-01-24
 
 ### Added
@@ -1203,6 +1220,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 
 ---
 
+[2.17.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.17.0
 [2.16.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.16.0
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0

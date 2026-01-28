@@ -405,13 +405,14 @@ Your Decision:
 
 #### 4️⃣ **Technical Planning** (Epic → Engineering Tasks)
 ```bash
-/planning EPIC-123,EPIC-124 --discovery [discovery-ticket]
+/planning EPIC-123 --discovery [discovery-ticket]
 ```
 
 **Your Job**:
 - Review task breakdown for completeness
 - Verify dependencies make sense
 - Spot any missing user-facing functionality
+- Confirm all tickets belong to the correct epic (scope isolation)
 
 **What NOT to worry about**:
 - Specific technologies chosen
@@ -423,6 +424,9 @@ Your Decision:
 - UI/UX tasks are included
 - Testing is planned
 - Documentation is planned
+- All tickets belong to the epic you requested (no cross-epic leakage)
+
+**Scope Isolation**: When you plan a single epic, only tickets for that epic are created -- even if the PRD describes multiple epics. The command filters the PRD to the relevant sections automatically, using the Feature-to-Epic Mapping generated during epic planning.
 
 **Time Investment**: 15 minutes per epic
 
