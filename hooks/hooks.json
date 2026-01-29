@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Before stopping, provide a brief end-of-session summary:\n\n1. **Code review notes**: Check `git diff --name-only` for modified files. For files in production code paths (src/, lib/, app/, services/, modules/, controllers/) that are code files (.ts, .js, .tsx, .jsx), note any TODO/FIXME comments, empty catch blocks, or console.log statements. Present findings as a short list, or state 'None' if clean. Skip this check entirely for: scripts/, tests/, __tests__/, *.test.*, *.spec.*, config files, documentation, and non-code changes.\n\n2. **Linear ticket status**: If this session used workflow commands (/adaptation, /implementation, /testing, /documentation, /codereview, /security-review) on a Linear ticket, remind the user to verify ticket status is updated.\n\nIf no code changes were made and no workflow commands were used, approve stopping without comment.",
+            "prompt": "You MUST respond with valid JSON only. No markdown, no extra text.\n\nCheck for end-of-session issues:\n1. Run `git diff --name-only` for modified files. For files in production code paths (src/, lib/, app/, services/, modules/, controllers/) that are code files (.ts, .js, .tsx, .jsx), check for TODO/FIXME comments, empty catch blocks, or console.log statements. Skip scripts/, tests/, __tests__/, *.test.*, *.spec.*, config files, documentation, and non-code changes.\n2. If workflow commands (/adaptation, /implementation, /testing, /documentation, /codereview, /security-review) were used on a Linear ticket, note whether ticket status needs updating.\n\nRespond with ONLY one of these JSON formats:\n- If no issues found or no code changes: {\"ok\": true}\n- If issues found: {\"ok\": true, \"reason\": \"Session summary: <brief findings>\"}\n\nDo NOT block stopping. Always set ok to true. Use the reason field to surface findings.",
             "timeout": 30
           }
         ]
@@ -25,8 +25,6 @@
     ],
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear|compact",
-        "description": "Inject PM workflow context and skill reminders at session start",
         "hooks": [
           {
             "type": "command",
