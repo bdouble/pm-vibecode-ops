@@ -14,12 +14,11 @@
     ],
     "Stop": [
       {
-        "matcher": ".*",
-        "description": "End-of-session summary with code review notes and Linear reminders",
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Before stopping, provide a brief end-of-session summary:\n\n1. **Code review notes**: Check `git diff --name-only` for modified files. For files in production code paths (src/, lib/, app/, services/, modules/, controllers/) that are code files (.ts, .js, .tsx, .jsx), note any TODO/FIXME comments, empty catch blocks, or console.log statements. Present findings as a short list, or state 'None' if clean. Skip this check entirely for: scripts/, tests/, __tests__/, *.test.*, *.spec.*, config files, documentation, and non-code changes.\n\n2. **Linear ticket status**: If this session used workflow commands (/adaptation, /implementation, /testing, /documentation, /codereview, /security-review) on a Linear ticket, remind the user to verify ticket status is updated.\n\nIf no code changes were made and no workflow commands were used, approve stopping without comment."
+            "prompt": "Before stopping, provide a brief end-of-session summary:\n\n1. **Code review notes**: Check `git diff --name-only` for modified files. For files in production code paths (src/, lib/, app/, services/, modules/, controllers/) that are code files (.ts, .js, .tsx, .jsx), note any TODO/FIXME comments, empty catch blocks, or console.log statements. Present findings as a short list, or state 'None' if clean. Skip this check entirely for: scripts/, tests/, __tests__/, *.test.*, *.spec.*, config files, documentation, and non-code changes.\n\n2. **Linear ticket status**: If this session used workflow commands (/adaptation, /implementation, /testing, /documentation, /codereview, /security-review) on a Linear ticket, remind the user to verify ticket status is updated.\n\nIf no code changes were made and no workflow commands were used, approve stopping without comment.",
+            "timeout": 30
           }
         ]
       }
