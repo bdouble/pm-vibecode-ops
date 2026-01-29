@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.3] - 2026-01-29
+
+### Removed
+- **Stop hook**: Removed the Stop hook entirely — prompt-based hooks cannot access the file system (run `git diff`, read files), so the hook's code quality checks were fundamentally impossible and caused `JSON validation failed` errors on every session end. These checks are already handled elsewhere in the workflow (code review, security review phases).
+
+---
+
 ## [2.17.2] - 2026-01-29
 
 ### Fixed
@@ -1242,6 +1249,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.17.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.17.3
 [2.12.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.12.1
 [2.11.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.11.0
 [2.10.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.10.0
