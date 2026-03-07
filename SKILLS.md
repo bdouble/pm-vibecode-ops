@@ -151,6 +151,20 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 **Example trigger**: "Close EPIC-123" or "Mark epic as done"
 
+### 11. systematic-debugging
+
+**Activates when**: Encountering bugs, test failures, build errors, runtime exceptions, or unexpected behavior
+
+**Enforces**:
+- Root cause investigation before any fix attempt
+- 4-phase process: investigate → analyze → hypothesize → implement
+- No guessing, no "quick fixes", no multiple changes at once
+- 3-fix architectural stop: if 3 consecutive fixes fail, escalate to user
+- State hypothesis explicitly before changing code
+- Before/after evidence for every bug fix (ties to verify-implementation)
+
+**Example trigger**: "Tests are failing" or "This endpoint returns a 500 error"
+
 ## Skills vs Commands vs Agents
 
 | Aspect | Skills | Commands | Agents |
@@ -202,7 +216,7 @@ Skills are automatically installed when you install the PM workflow plugin:
 /plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
-This installs all 10 skills automatically along with commands, agents, and hooks.
+This installs all 11 skills automatically along with commands, agents, and hooks.
 
 ### Manual Installation (Not Recommended)
 
@@ -253,7 +267,9 @@ skills/
 │   └── SKILL.md
 ├── verify-implementation/
 │   └── SKILL.md
-└── epic-closure-validation/
+├── epic-closure-validation/
+│   └── SKILL.md
+└── systematic-debugging/
     └── SKILL.md
 ```
 

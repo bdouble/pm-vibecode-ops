@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.17.3-blue.svg)
+![Version](https://img.shields.io/badge/version-2.18.0-blue.svg)
 
 ## What This Is
 
@@ -213,7 +213,7 @@ Start here if you don't have a development background:
 Detailed command syntax and architecture:
 
 - **[TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md)** - Complete command documentation, agent specifications, architecture details
-- **[SKILLS.md](SKILLS.md)** - Auto-activated quality enforcement (production standards, security patterns, testing philosophy)
+- **[SKILLS.md](SKILLS.md)** - Auto-activated quality enforcement (production standards, security patterns, testing philosophy, systematic debugging)
 - **[INSTALLATION.md](docs/INSTALLATION.md)** - Comprehensive installation guide
 
 ---

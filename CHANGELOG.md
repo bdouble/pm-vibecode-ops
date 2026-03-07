@@ -5,6 +5,17 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.0] - 2026-03-07
+
+### Added
+- **New skill: `systematic-debugging`** — 4-phase root cause debugging process (investigate → analyze → hypothesize → implement) with a hard 3-fix architectural stop that forces escalation to the user instead of thrashing. Includes inline rationalization prevention table and PM-facing framing explaining why debugging discipline matters for non-engineers. Reference file `root-cause-tracing.md` provides backward tracing technique for deep call stack bugs.
+- **Anti-rationalization armor for `verify-implementation`** — Inline rationalization prevention table (9 excuse/reality pairs), "spirit over letter" anti-gaming rule, agent delegation verification pattern requiring independent VCS verification of subagent results, and promoted red-flag phrases from reference file into main SKILL.md for guaranteed context loading.
+
+### Attribution
+- The rationalization prevention table, "spirit over letter" principle, agent delegation verification pattern, 4-phase debugging process, 3-fix architectural stop, and root cause tracing technique were adapted from [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, licensed under MIT.
+
+---
+
 ## [2.17.3] - 2026-01-29
 
 ### Removed
@@ -1249,6 +1260,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.18.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.18.0
 [2.17.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.17.3
 [2.12.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.12.1
 [2.11.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.11.0
