@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.18.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.19.0-blue.svg)
 
 ## What This Is
 
@@ -120,7 +120,7 @@ For special cases requiring phase-by-phase control:
 6. `/implementation` - AI writes production code following guide
 7. `/testing` - Build and fix comprehensive test suite until passing
 8. `/documentation` - Generate API docs, user guides, inline documentation
-9. `/codereview` - Automated quality checks and pattern compliance
+9. `/codereview` - Requirements verification, best practices, SOLID/DRY analysis, and pattern compliance
 10. `/security-review` - OWASP vulnerability scan → **closes ticket when passing**
 
 Use individual phases when you need to:

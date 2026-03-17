@@ -5,6 +5,23 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-03-17
+
+### Added
+- **Requirements Verification (Step 0) in code review** — Code reviewer agent now systematically verifies every acceptance criterion and technical note against the implementation before reviewing code quality. Missing implementations are flagged as ❌ MISSING (automatically CHANGES_REQUESTED). Scope reductions from adaptation that weren't reflected in ticket AC are flagged as SCOPE_GAP.
+- **Framework & Language Best Practices (Step 1) in code review** — Auto-detects the tech stack from file extensions and imports (React, Next.js, TypeScript, Inngest, Prisma, Zod, etc.) and evaluates the changeset against framework-specific best practices with ERROR/WARNING/INFO severity levels.
+- **SOLID/DRY Analysis (Step 2) in code review** — Evaluates Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion, and DRY principles across the changeset. Cross-references new routes against parallel implementations to catch inconsistent error handling. Uses MUST_FIX/SHOULD_FIX/CONSIDER severity levels.
+- **Three new report sections** in code review output — Requirements Checklist, Best Practices Assessment, and SOLID/DRY Assessment tables are now mandatory parts of every code review report.
+
+### Changed
+- **Context budgets relaxed for 1M context windows** — Total prior-phase context budget increased from ~2,000 to ~15,000 tokens. Every phase now receives full ticket description, acceptance criteria, and Technical Notes (previously truncated to 300 tokens). Individual source budgets increased 5-10x.
+- **Full ticket context for all phases** — Previously only the code review phase received full AC. Now every phase (implementation, testing, documentation, code review, security review) receives the complete ticket description, AC, and Technical Notes.
+- **Security review gets expanded context** — Security review now receives full ticket context, adaptation architecture decisions, implementation details, and code review security flags instead of a ~400-token summary.
+- **Testing gets full implementation context** — QA agent now receives the full implementation report (what was built, edge cases, concerns) instead of just a file list and PR number.
+- **Context philosophy inverted** — Changed from "keep orchestrator context minimal" to "provide agents with rich, relevant context." Default is now inclusion over exclusion. Aggressive truncation rules (drop phases at 4+, keep only 2 most recent) replaced with graceful condensation that never drops a phase entirely.
+
+---
+
 ## [2.18.0] - 2026-03-07
 
 ### Added
@@ -1260,6 +1277,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.19.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.19.0
 [2.18.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.18.0
 [2.17.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.17.3
 [2.12.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.12.1
