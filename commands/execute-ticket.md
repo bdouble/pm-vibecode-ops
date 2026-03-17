@@ -158,23 +158,28 @@ For each phase that needs to run:
 
 #### 3.1 Gather Context
 
-**From ticket:**
-- Title, description, acceptance criteria
+**From ticket (FULL — do not truncate):**
+- Title and full description
+- Full acceptance criteria (verbatim)
+- Full Technical Notes section (verbatim)
 - Labels (for agent type selection)
 - Parent epic (if any)
 
-**From prior phase reports (extract key sections):**
-- Adaptation: Implementation approach, technical decisions, file targets
-- Implementation: Files changed, patterns used, any noted concerns
-- Testing: Test coverage summary, any skipped areas
+**From prior phase reports (extract substantive sections):**
+- Adaptation: Implementation approach, technical decisions, file targets, trade-off reasoning, constraints, deferred/descoped items
+- Implementation: Files changed, patterns used, edge cases noted, concerns flagged, integration points
+- Testing: Gate results, coverage summary, skipped areas, failure details
 - Documentation: Docs created, API changes documented
-- Code Review: Issues found, recommendations
+- Code Review: Issues found, recommendations, requirements checklist results
 
-**Keep context condensed** - extract only:
+**Keep context focused** - include:
 - Status from each prior phase
-- Key decisions/changes made
+- Key decisions/changes made and **why**
 - Files affected
-- Any warnings or concerns raised
+- Any warnings, concerns, or risks raised
+- Deferred Items tables (full)
+
+**Note:** With 1M context windows, including full prior phase context is cheap. Losing context that causes an agent to make wrong decisions or miss requirements is expensive. When in doubt, include more context rather than less.
 
 #### 3.2 Select Agent
 
@@ -263,7 +268,7 @@ Before posting to Linear, validate the agent report contains required fields:
 | implementation | `Status:`, `Summary:`, `Files Changed:` |
 | testing | `Status:`, `Gate #0`, `Gate #1`, `Gate #2`, `Gate #3` results |
 | documentation | `Status:`, `Summary:`, `Documentation Updated` or `Docs Created` |
-| codereview | `Review Status:`, `Files Reviewed:` |
+| codereview | `Review Status:`, `Requirements Checklist`, `Best Practices Assessment`, `SOLID/DRY Assessment`, `Files Reviewed:` |
 | security-review | `Status:`, `Security Checklist` or findings list |
 
 **Validation algorithm:**
@@ -569,83 +574,179 @@ If user needs to re-run a phase that shows as complete:
 
 ## Context Management Principles
 
-**Keep orchestrator context minimal:**
-- Track only: ticket ID, current phase, blocking status
-- Full details stay in Linear comments
-- Each phase agent gets fresh context window
-- Pass only relevant condensed context to each phase
+**Provide agents with rich, relevant context:**
+- Each phase agent gets a fresh context window — use it generously
+- With 1M token context windows, the cost of over-providing context is near zero
+- The cost of under-providing context is high: wrong decisions, missed requirements, rework
+- Full details also stay in Linear comments for human reference
+- Orchestrator tracks: ticket ID, current phase, blocking status, branch/PR info
+
+**Default to inclusion, not exclusion:**
+- When unsure whether context is relevant to the next phase, include it
+- Prior phase reasoning (the "why") is as important as outcomes (the "what")
+- Edge cases, concerns, and risks noted by earlier agents should propagate forward
+- Deferred Items tables should always propagate — they represent known gaps
 
 **Context extraction from prior reports:**
+
+Every phase receives the **full ticket description, acceptance criteria, and Technical Notes**. In addition, each phase receives substantive context from prior reports:
+
 ```
 From Adaptation Report → Implementation:
-- Target files
-- Technical approach
-- Integration points
+- Target files and rationale for each
+- Technical approach with trade-off reasoning
+- Integration points and dependencies
+- Service reuse mandates (specific services to use, not just "reuse existing")
+- Constraints and risks identified
+- Deferred/descoped items with reasoning
 
 From Implementation Report → Testing:
-- Files changed
-- New endpoints/functions
-- Edge cases noted
+- Files changed with brief description of what each does
+- New endpoints/functions and their behavior
+- Edge cases the implementer noted or flagged as risky
+- Integration points and external dependencies
+- Any concerns or known limitations
+- Patterns used (needed to test pattern compliance)
 
 From Testing Report → Documentation:
-- API coverage
+- API coverage and tested scenarios
 - Test scenarios (inform docs examples)
+- Coverage gaps (inform docs about untested areas)
+
+From Testing Report → Code Review:
+- Gate results with failure details (not just PASS/FAIL)
+- Coverage gaps and skipped areas
 
 From Documentation Report → Code Review:
 - API docs location
 - Any doc gaps noted
 
-From Code Review Report → Security:
-- Security concerns flagged
-- Auth/authz patterns used
+From All Prior Reports → Code Review:
+- Full verbatim Acceptance Criteria (from ticket)
+- Full verbatim Technical Notes (from ticket)
+- Adaptation scope decisions (deferred/descoped items with original AC)
+
+From All Prior Reports → Security Review:
+- Full verbatim ticket description, AC, and Technical Notes
+- Adaptation decisions (architecture, trust boundaries, data flow)
+- Implementation details (what was built, auth/authz patterns, data handling)
+- Code review security concerns flagged
+- Code review findings (especially error handling, validation gaps)
 ```
 
 ## Context Budget Guidelines
 
-To prevent context overflow as phases accumulate, enforce these strict limits:
+With 1M token context windows, the primary risk is **losing context that causes agents to make wrong decisions**, not context overflow. Budgets are generous defaults — include more when available, truncate only when a source is genuinely large.
 
-**Maximum context from prior phases: ~2000 tokens total**
+**Maximum context from prior phases: ~15,000 tokens total**
 
-**Strict token budgets per source:**
+This is a soft cap. If total context reaches ~15,000 tokens, begin applying the extraction priorities below. Most tickets will stay well under this limit.
 
-| Source | Max Tokens | Extract ONLY |
-|--------|------------|--------------|
-| Ticket description | 300 | First 2 paragraphs, acceptance criteria headers |
-| Adaptation report | 400 | Target files (list), approach (1 paragraph), integration points |
-| Implementation report | 300 | Files changed (list), branch name, PR number |
-| Testing report | 200 | Gate results (PASS/FAIL only), coverage % |
-| Documentation report | 100 | Docs created (file list only) |
-| Code Review report | 200 | Status + blocking issues only |
+**Default token budgets per source:**
 
-**Extraction algorithm:**
+| Source | Budget | Include |
+|--------|--------|---------|
+| Ticket description | 2,000 | Full description, all AC (verbatim), all Technical Notes (verbatim) |
+| Adaptation report | 3,000 | Full approach with trade-off reasoning, target files, integration points, constraints, deferred items with rationale |
+| Implementation report | 3,000 | Files changed with descriptions, patterns used, edge cases noted, concerns, integration points |
+| Testing report | 2,000 | Gate results with failure details, coverage %, skipped areas, risk notes |
+| Documentation report | 500 | Docs created, API changes documented, any gaps noted |
+| Code Review report | 2,000 | Status, requirements checklist results, best practices findings, SOLID/DRY findings, security concerns flagged |
+
+**Essential context (NEVER truncate regardless of budget pressure):**
+
+These items are protected across ALL phases, not just code review:
+
+| Source | Rationale |
+|--------|-----------|
+| Full Acceptance Criteria (from ticket) | Every phase needs to understand what "done" looks like |
+| Full Technical Notes (from ticket) | Contains explicit implementation requirements that are frequently missed |
+| Files Changed lists | Needed for scope in every downstream phase |
+| Deferred Items tables | Needed for traceability — items deferred in one phase may need attention in the next |
+| Adaptation scope decisions | Needed to detect SCOPE_GAPs and understand why certain approaches were chosen |
+
+**Phase-specific expanded context:**
+
+| Phase | Additional Essential Context | Rationale |
+|-------|------------------------------|-----------|
+| implementation | Full adaptation trade-off reasoning, service reuse mandates with specifics | Implementer needs to understand architectural decisions, not just file targets |
+| testing | Full implementation report (what was built, edge cases, concerns) | QA needs to understand what was built to test it properly, not rediscover from scratch |
+| codereview | Full AC, Technical Notes, adaptation scope decisions, implementation details | Requirements Verification (Step 0) checks every AC individually |
+| security-review | Full ticket context, adaptation architecture decisions, implementation details, code review security flags | Security needs to understand data flow, trust boundaries, and attack surface |
+
+**Extraction algorithm (when context exceeds budget):**
 ```
 For each prior phase report:
   1. Extract Status line (required)
-  2. Extract Summary - first sentence only
-  3. Extract file lists - paths only, no descriptions
-  4. Extract blocking issues or security concerns (if any)
-  5. Extract Deferred Items table (if present) - PRESERVE FULLY
-  6. SKIP: detailed explanations, code snippets, full recommendations
+  2. Extract Summary (full, not just first sentence)
+  3. Extract file lists with descriptions
+  4. Extract key decisions and trade-off reasoning
+  5. Extract blocking issues, concerns, or security flags
+  6. Extract Deferred Items table (FULL — never truncate)
+  7. Extract edge cases, risks, and warnings
 
-If extracted context exceeds phase budget:
-  1. Truncate to budget limit
-  2. Append note: "[truncated - see Linear for full report]"
-  3. Prioritize: Status > Files > Deferred Items > Summary > Details
+If total context approaches ~15,000 tokens:
+  1. Reduce older phase reports first (adaptation before implementation)
+  2. Trim detailed explanations, keep decisions and outcomes
+  3. Trim code snippets (keep file:line references)
+  4. Append note: "[condensed - see Linear for full report]"
+  5. NEVER truncate: AC, Technical Notes, Adaptation Scope Decisions,
+     Files Changed, Deferred Items
+
+Priority order (last to cut → first to cut):
+  Essential context (protected) > Decisions/reasoning > Files with descriptions >
+  Concerns/risks > Summary > Detailed explanations > Code snippets
 ```
 
 **Truncation rules:**
-- If ticket has 4+ completed phases, omit Details sections entirely
-- If extracted context still exceeds total budget, keep only most recent 2 phases
-- Always preserve: Files Changed lists, Deferred Items tables (both needed for traceability)
+- Always preserve essential context (listed above) regardless of phase count
+- If total context exceeds budget, condense the **oldest** phase reports first
+- Never drop a phase entirely — keep at minimum: Status + Summary + Files Changed + Deferred Items
+- Prefer condensing 3 phases lightly over dropping 1 phase completely
 
-**Example condensed context for security-review phase (~400 tokens):**
+**Example context for security-review phase (~2,500 tokens):**
 ```
-Prior Phase Summary:
-- Adaptation: 5 target files, event-driven approach
-- Implementation: 6 files changed (user.service.ts, auth.guard.ts, ...), PR #45
-- Testing: 82% coverage, all gates PASS
-- Documentation: API docs updated (3 files)
-- Code Review: APPROVED, flagged auth token expiry concern
+## Ticket Context
+[Full ticket description, AC, Technical Notes - verbatim]
+
+## Prior Phase Summary
+
+### Adaptation
+- Approach: Event-driven architecture using existing NotificationService
+  and UserRepository. Chose async processing over sync to handle scale.
+- Target files: user.service.ts, auth.guard.ts, notification.handler.ts,
+  user.routes.ts, user.schema.ts
+- Integration: Connects to existing auth middleware, uses Inngest for
+  async event processing
+- Deferred: Rate limiting on admin endpoints (defense-in-depth, not critical path)
+- Scope decisions: Deferred batch import UI (AC #4) to follow-up ticket
+
+### Implementation
+- 6 files changed: user.service.ts (new CRUD + validation), auth.guard.ts
+  (role-based access), notification.handler.ts (event consumer),
+  user.routes.ts (REST endpoints), user.schema.ts (Zod schemas),
+  user.test.ts (integration tests)
+- Branch: feature/PRJ-123-user-profile, PR #45
+- Auth pattern: JWT validation via existing auth middleware, role enum check
+- Edge cases noted: email uniqueness handled via DB constraint + friendly error
+- Concerns: Large payload handling on profile update not explicitly bounded
+
+### Testing
+- All gates PASS, 87% coverage
+- Skipped: Visual regression (no UI), E2E for notification delivery (async)
+- Tested: All CRUD operations, auth scenarios, validation edge cases
+- Risk note: Async notification delivery tested via event spy, not full E2E
+
+### Documentation
+- API docs updated: user-endpoints.md, auth-patterns.md, event-catalog.md
+
+### Code Review
+- Status: APPROVED
+- Requirements: 6/7 AC verified (batch import deferred per adaptation)
+- Security concerns flagged: auth token expiry check uses > not >=,
+  profile update accepts unbounded payload size
+- SOLID/DRY: No MUST_FIX items. 1 SHOULD_FIX (validation logic
+  duplicated between route handler and service layer)
 ```
 
 ---

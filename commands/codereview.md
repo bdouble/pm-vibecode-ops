@@ -19,14 +19,18 @@ workflow-sequence: "documentation → **code-review** → security-review"
 2. **Fetch all comments**: Use `mcp__linear-server__list_comments` to get complete history
 3. **Extract and prepare the following for the agent prompt:**
    - Ticket ID, title, and full description
+   - **Full verbatim Acceptance Criteria** from the ticket description (ESSENTIAL - do NOT truncate)
+   - **Full verbatim Technical Notes** section from the ticket description (ESSENTIAL - these contain explicit implementation requirements like truncation thresholds, file limits, etc. that are frequently missed)
+   - **Adaptation Scope Decisions** - any items the adaptation report explicitly deferred, with the original AC for comparison (needed to detect SCOPE_GAPs)
    - The adaptation report (service reuse mandates, patterns to follow)
    - The implementation report (what was built, files changed)
    - The testing report (coverage achieved)
    - The documentation report (docs created)
-   - Acceptance criteria
 4. **Get git context**: Run `git diff`, `git log` for changes to review
 
 **IMPORTANT**: The agent does NOT have access to Linear. You must include ALL relevant context in the prompt.
+
+**CRITICAL FOR REQUIREMENTS VERIFICATION**: The full AC list, Technical Notes, and adaptation scope decisions are essential context that must NOT be truncated or summarized. These enable the agent to verify that every requirement was implemented - the most impactful part of the review.
 
 ### Step 2: Agent Invocation (Provide Full Context)
 
@@ -48,6 +52,26 @@ Use the Task tool to invoke the `code-reviewer-agent` with ALL context embedded:
 **Description**:
 [full description text from get_issue]
 
+## Acceptance Criteria (from ticket - VERBATIM)
+[Full verbatim AC list exactly as written in the ticket description.
+Do NOT summarize, truncate, or paraphrase. Each criterion must be
+individually verifiable by the agent.]
+
+## Technical Notes (from ticket - VERBATIM)
+[Full verbatim Technical Notes section from the ticket description.
+These contain explicit implementation requirements (e.g., "truncate at
+8000 chars", "max 5 files", "use existing X service") that are
+frequently missed because they appear in prose rather than the AC checklist.]
+
+## Adaptation Scope Decisions
+[Items the adaptation report explicitly deferred or descoped, with the
+original AC for comparison. Example:
+- DEFERRED: "Existing workspace path supports upload" — adaptation chose
+  to implement only the new project path. Original AC was not updated.
+- DEFERRED: "Document text truncated >8000 chars" — deemed out of scope
+  for this ticket by adaptation phase.
+If no items were deferred, state "No scope reductions in adaptation."]
+
 ## Phase Reports Summary
 ### Adaptation
 [paste key points from adaptation report - service reuse mandates]
@@ -67,7 +91,25 @@ Use the Task tool to invoke the `code-reviewer-agent` with ALL context embedded:
 **Review Depth**: [from $3 or default "standard"]
 
 ## Your Task
-Perform code quality review for this ticket. Focus on SOLID principles, pattern compliance, and service reuse verification. Return a structured code review report when complete, including:
+Perform code review for this ticket following the mandatory pre-review steps:
+
+1. **Requirements Verification (Step 0)**: Verify each acceptance criterion and
+   technical note against the implementation. Output a Requirements Checklist table.
+   Any ❌ items are automatically CHANGES_REQUESTED.
+
+2. **Framework & Language Best Practices (Step 1)**: Evaluate the changeset against
+   best practices for the detected stack (React, Next.js, TypeScript, etc.).
+
+3. **SOLID/DRY Analysis (Step 2)**: Check for design principle violations,
+   especially duplicated logic across parallel implementations.
+
+4. **Code Quality Review**: Then proceed with standard review — SOLID principles,
+   pattern compliance, service reuse verification.
+
+Return a structured code review report including:
+- Requirements Checklist (from Step 0)
+- Best Practices Assessment (from Step 1)
+- SOLID/DRY Assessment (from Step 2)
 - Issues found and fixed
 - Security concerns (logged, not fixed)
 - Duplication analysis
@@ -770,6 +812,31 @@ After completing the code review, add the following structured comment to the Li
 
 ### Review Status: [APPROVED/CHANGES_REQUESTED/BLOCKED]
 
+### 📋 Requirements Checklist
+| AC / Requirement | Status | Evidence |
+|-----------------|--------|----------|
+| [Acceptance criterion 1] | ✅ Implemented | file.tsx:line |
+| [Acceptance criterion 2] | ❌ MISSING | Not found in [expected location] |
+| [Technical note requirement] | ⚠️ Partial | Implemented in path A but not path B |
+| [Deferred item] | ❌ SCOPE_GAP | Deferred by adaptation, AC not updated |
+
+**Requirements Summary**: X/Y acceptance criteria implemented, Z technical notes verified
+**Blocking**: [Yes/No - any ❌ items automatically block approval]
+
+### 🏗️ Best Practices Assessment
+| Category | Finding | Severity | Location |
+|----------|---------|----------|----------|
+| [React/Next.js/TypeScript/etc.] | [Description] | ERROR/WARNING/INFO/OK | file:line |
+
+**Best Practices Summary**: X errors, Y warnings, Z info items
+
+### 🔧 SOLID/DRY Assessment
+| Principle | Finding | Severity | Location |
+|-----------|---------|----------|----------|
+| [S/O/L/I/D/DRY] | [Description] | MUST_FIX/SHOULD_FIX/CONSIDER | file:line |
+
+**SOLID/DRY Summary**: X must-fix, Y should-fix, Z suggestions
+
 ### ✅ Correctly Implemented
 - [List elements that meet quality standards]
 - [Patterns properly followed]
@@ -802,6 +869,9 @@ After completing the code review, add the following structured comment to the Li
 - **Note**: These will be addressed in the dedicated security review
 
 ### 📊 Quality Metrics
+- **Requirements Coverage**: ✅ All AC verified [X/Y implemented]
+- **Best Practices**: ✅ No ERROR-level findings [or ⚠️ X errors found]
+- **SOLID/DRY**: ✅ No MUST_FIX items [or ⚠️ X must-fix items]
 - **Code Quality**: ✅ Passed after fixes
 - **Pattern Compliance**: ✅ Meets architectural standards
 - **Duplication Prevention**: ✅ No unnecessary duplication
@@ -818,6 +888,7 @@ After completing the code review, add the following structured comment to the Li
 ### 🎯 Next Steps
 - Security review phase can begin
 - [Any specific recommendations]
+- [Any ❌ MISSING requirements that need implementation before security review]
 
 **Code Review Completed**: [Date/Time]
 **Reviewer**: Code Review Agent
@@ -826,6 +897,10 @@ After completing the code review, add the following structured comment to the Li
 ## Success Criteria
 
 Code review is successful when:
+- **All acceptance criteria verified against implementation** (Requirements Checklist complete with no ❌ items)
+- **All technical notes from ticket verified** (prose requirements like thresholds, limits, behaviors)
+- **Framework/language best practices assessed** (no ERROR-level findings remaining)
+- **SOLID/DRY principles evaluated** (no MUST_FIX items remaining)
 - **No duplication of existing services or infrastructure components**
 - **All adaptation guide reuse mandates verified and followed**
 - **Service inventory checked and no violations found**
@@ -834,7 +909,7 @@ Code review is successful when:
 - Performance acceptable (no obvious regressions)
 - Security concerns logged (NOT fixed) for security review phase
 - PR updated with review results and appropriate status/labels
-- Linear ticket updated with comprehensive review comment including duplication analysis and security notes (status remains "In Progress")
+- Linear ticket updated with comprehensive review comment including requirements checklist, best practices, SOLID/DRY, duplication analysis, and security notes (status remains "In Progress")
 - PR ready for security review phase
 
-The code review phase ensures code quality, patterns, maintainability, and **prevention of code duplication** through iterative improvement, while logging (not fixing) security concerns for the dedicated security review phase. This separation of concerns ensures proper expertise is applied to each type of issue.
+The code review phase ensures **requirements completeness**, **framework best practices**, **design principle adherence**, code quality, patterns, maintainability, and **prevention of code duplication** through iterative improvement, while logging (not fixing) security concerns for the dedicated security review phase. This separation of concerns ensures proper expertise is applied to each type of issue.
