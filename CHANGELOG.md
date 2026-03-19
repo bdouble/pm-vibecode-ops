@@ -5,6 +5,24 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.0] - 2026-03-19
+
+### Added
+- **Progressive disclosure for 5 bare skills** — Created references/ and examples/ directories with supporting files for `epic-closure-validation`, `security-patterns`, `systematic-debugging`, `mvd-documentation`, and `testing-philosophy`. Each SKILL.md now has an "Additional Resources" section linking to its supporting files.
+- **Context isolation for ticket-context-agent** — Added context isolation guardrails ("IGNORE session summaries") and phase guardrails (valid/invalid task lists) matching the pattern used by all other agents. Previously the only agent without these safety rails.
+- **Measurable success criteria for discovery command** — Replaced qualitative success criteria with a required outputs checklist and quality gates (reuse mapping thresholds, actionable recommendations, prioritized technical debt).
+- **Post-generation validation for generate-service-inventory** — Added bash validation commands to verify YAML validity and check for stale file paths after inventory generation.
+- **Agent reference extraction (QA)** — Extracted Gate #0-3 procedures, API discovery phases, and test code examples from `qa-engineer-agent` (899→454 lines, 50% reduction) into `agents/references/qa-testing-gates-reference.md`.
+- **Agent reference extraction (Security)** — Extracted OWASP Top 10 detailed patterns and Modern SaaS security guidelines from `security-engineer-agent` (919→480 lines, 48% reduction) into `agents/references/security-owasp-reference.md` and `agents/references/security-saas-patterns.md`.
+
+### Changed
+- **Removed XML angle brackets from using-pm-workflow** — Replaced `<EXTREMELY_IMPORTANT>` tags with markdown bold formatting per Anthropic frontmatter spec.
+- **Fixed unreferenced supporting files** — `service-reuse` SKILL.md now references its 2 existing files (service-inventory-template.md, inventory-search-session.md). `model-aware-behavior` now references scope-creep-patterns.md.
+- **Security agent OWASP section condensed** — Replaced 700+ line inline OWASP section with a 10-row checklist table referencing the extracted reference file. Consolidated duplicate severity classification sections into one.
+- **QA agent Gate #0 condensed** — Replaced ~200 line inline gate explanation with concise summary referencing the extracted reference file.
+
+---
+
 ## [2.21.0] - 2026-03-19
 
 ### Added
@@ -1309,6 +1327,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.22.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.22.0
 [2.21.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.21.0
 [2.20.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.20.0
 [2.19.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.19.0
