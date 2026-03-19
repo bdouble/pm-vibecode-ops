@@ -118,13 +118,21 @@ Use mcp__linear-server__list_comments for ticket: $ARGUMENTS
 
 **Important:** Do not rely solely on header presence. A phase report may exist from a previous blocked run that needs to be re-executed.
 
-**Report to user:**
+**Report to user (including context mode):**
+
+Assess your available context window and select context mode:
+- **500K+ tokens** → Full context mode (default — complete verbatim reports, no budget)
+- **Under 500K tokens** → Budget mode (read and apply `commands/references/context-budget-legacy.md`)
+
 ```
 Ticket: [ticket-id] - [ticket-title]
 Status: [current-status]
+Context mode: [Full context (1M window) | Budget mode (Xk window — see context-budget-legacy.md)]
 Completed phases: [list of complete phases]
 Starting from: [next-phase]
 ```
+
+The context mode line tells the user whether agents will receive full verbatim reports or condensed extracts. This is important for diagnosing incomplete implementations — if budget mode is active and results are poor, the user may need to upgrade to a model with a larger context window.
 
 ### Step 2.1: Detect Existing Branch and PR
 
@@ -637,7 +645,7 @@ From All Prior Reports → Security Review:
 
 ## Full Context Inclusion Policy
 
-**There is no context budget. Include everything.**
+**Default (1M context): There is no context budget. Include everything.**
 
 With 1M token context windows, typical ticket workflows use ~25% of available context. The primary risk is **under-providing context** — which leads to wrong decisions, missed requirements, and incomplete implementations. There is no meaningful risk of over-providing context.
 
@@ -654,6 +662,15 @@ With 1M token context windows, typical ticket workflows use ~25% of available co
 - Truncate any section for length
 
 **Why this matters:** Agents that receive condensed summaries miss details that lead to incomplete implementations, skipped acceptance criteria, and wrong architectural decisions. Agents that receive full reports self-filter to what they need and produce more complete work.
+
+### Context window auto-detection
+
+At the start of execution, assess your available context window:
+
+- **500K+ tokens (default):** Follow the full-context policy above. Include complete, verbatim prior phase reports in every agent prompt.
+- **Under 500K tokens:** Read and apply the budget rules in `commands/references/context-budget-legacy.md`. These rules cap total prior-phase context at ~15,000 tokens using an extraction algorithm that preserves essential context (AC, Technical Notes, Deferred Items, Files Changed) while condensing older reports first.
+
+The threshold is 500K because security review — the final phase — receives 5 prior reports plus full ticket context. On a 250K window, full verbatim inclusion of all reports could exhaust context before the agent finishes its analysis.
 
 ---
 
