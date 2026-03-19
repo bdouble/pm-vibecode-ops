@@ -717,9 +717,11 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 [Any problems encountered, or "None"]
 
 ### Deferred Items
-| Severity | Location | Issue | Reason |
-|----------|----------|-------|--------|
-| [INFO] | [file/section] | [Documentation gap] | [Why deferred] |
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| [DISCOVERED/OUT-OF-SCOPE] | [INFO] | [file/section] | [Documentation gap] | [Why deferred] |
+
+**Classification guide:** Use DISCOVERED for issues found during documentation, OUT-OF-SCOPE for findings belonging to another ticket. Never classify acceptance criteria deferrals yourself — the orchestrator validates this.
 
 **Include in Deferred Items:**
 - Documentation gaps noted but deemed low priority

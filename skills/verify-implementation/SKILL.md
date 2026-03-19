@@ -62,6 +62,27 @@ Agent reports success → Check VCS diff → Verify changes independently → Re
 
 This applies to `/execute-ticket` orchestration and any Task tool delegation. The orchestrator must independently verify agent output before reporting completion.
 
+## Agent Self-Assessment Triggers
+
+This skill MUST also activate when an agent is about to set a completion status in its report:
+
+| Status Being Set | Activation Required |
+|-----------------|---------------------|
+| `Status: COMPLETE` | Agent must produce evidence for each major claim before setting this status |
+| `Review Status: APPROVED` | Reviewer must show verification command output for each AC before approving |
+| `Status: PASS` (security) | Security checks must be run against actual code, not just read |
+
+### Evidence Requirements by Phase
+
+| Phase | Evidence Required |
+|-------|-------------------|
+| Implementation | `git diff` shows files listed in AC; `grep` confirms structural AC (imports, exports, patterns) |
+| Code Review | Verification commands for each AC in requirements checklist (not just file:line citations) |
+| Security | OWASP checks run against actual code paths, not just code reading |
+| Testing | Test execution output with pass/fail counts (not just "tests pass" claim) |
+
+**The orchestrator will independently verify agent claims** (see execute-ticket Step 3.4.2), but agents should self-verify before reporting completion to reduce rework cycles.
+
 ## Rationalization Prevention
 
 These are the excuses the model generates to skip verification. Recognizing them is the first defense:

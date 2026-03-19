@@ -363,9 +363,11 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 [Any problems encountered, or "None"]
 
 ### Deferred Items
-| Severity | Location | Issue | Reason |
-|----------|----------|-------|--------|
-| [LOW/INFO] | [file:line] | [Issue noted] | [Why deferred] |
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| [DISCOVERED/OUT-OF-SCOPE] | [LOW/INFO] | [file:line] | [Issue noted] | [Why deferred] |
+
+**Classification guide:** Use DISCOVERED for issues found during implementation, OUT-OF-SCOPE for work belonging to another ticket. Never classify acceptance criteria deferrals yourself — the orchestrator validates this.
 
 **Include in Deferred Items:**
 - Tech debt discovered but out of scope for this ticket

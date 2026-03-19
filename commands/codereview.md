@@ -94,8 +94,15 @@ If no items were deferred, state "No scope reductions in adaptation."]
 Perform code review for this ticket following the mandatory pre-review steps:
 
 1. **Requirements Verification (Step 0)**: Verify each acceptance criterion and
-   technical note against the implementation. Output a Requirements Checklist table.
-   Any ❌ items are automatically CHANGES_REQUESTED.
+   technical note against the implementation using **verification commands** (grep,
+   glob, file existence checks). For each AC:
+   - **Read** the relevant source files
+   - **Run a verification command** that objectively confirms the AC is met
+   - **Cite** both the file:line reference AND the verification command output
+   Output a Requirements Checklist table with columns: AC | Status | Evidence | Verification.
+   Mark items as UNVERIFIED (not PASS) if no verification command can be run.
+   Any ❌ or UNVERIFIED items are automatically CHANGES_REQUESTED.
+   A code review CANNOT be APPROVED if any AC has status FAIL or UNVERIFIED.
 
 2. **Framework & Language Best Practices (Step 1)**: Evaluate the changeset against
    best practices for the detected stack (React, Next.js, TypeScript, etc.).
@@ -813,15 +820,16 @@ After completing the code review, add the following structured comment to the Li
 ### Review Status: [APPROVED/CHANGES_REQUESTED/BLOCKED]
 
 ### 📋 Requirements Checklist
-| AC / Requirement | Status | Evidence |
-|-----------------|--------|----------|
-| [Acceptance criterion 1] | ✅ Implemented | file.tsx:line |
-| [Acceptance criterion 2] | ❌ MISSING | Not found in [expected location] |
-| [Technical note requirement] | ⚠️ Partial | Implemented in path A but not path B |
-| [Deferred item] | ❌ SCOPE_GAP | Deferred by adaptation, AC not updated |
+| AC / Requirement | Status | Evidence | Verification |
+|-----------------|--------|----------|--------------|
+| [Acceptance criterion 1] | ✅ Implemented | file.tsx:line | `grep "pattern" dir/` found N matches |
+| [Acceptance criterion 2] | ❌ MISSING | Not found in [expected location] | `grep "pattern" dir/` returned 0 matches |
+| [Technical note requirement] | ⚠️ Partial | Implemented in path A but not path B | `grep` found in path A, missing in path B |
+| [Deferred item] | ❌ SCOPE_GAP | Deferred by adaptation, AC not updated | N/A |
+| [Behavioral AC] | ⚠️ UNVERIFIED | file.tsx:line | No automated check — requires manual trace |
 
 **Requirements Summary**: X/Y acceptance criteria implemented, Z technical notes verified
-**Blocking**: [Yes/No - any ❌ items automatically block approval]
+**Blocking**: [Yes/No - any ❌ or UNVERIFIED items automatically block approval]
 
 ### 🏗️ Best Practices Assessment
 | Category | Finding | Severity | Location |
@@ -897,7 +905,7 @@ After completing the code review, add the following structured comment to the Li
 ## Success Criteria
 
 Code review is successful when:
-- **All acceptance criteria verified against implementation** (Requirements Checklist complete with no ❌ items)
+- **All acceptance criteria verified against implementation** (Requirements Checklist complete with no ❌ or UNVERIFIED items — each AC must have verification command evidence)
 - **All technical notes from ticket verified** (prose requirements like thresholds, limits, behaviors)
 - **Framework/language best practices assessed** (no ERROR-level findings remaining)
 - **SOLID/DRY principles evaluated** (no MUST_FIX items remaining)

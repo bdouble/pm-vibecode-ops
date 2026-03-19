@@ -295,6 +295,80 @@ If ANY required field is missing or empty:
 
 **IMPORTANT:** Auto-retry happens automatically before pausing. This preserves full automation in most cases.
 
+#### 3.4.2 Verify Acceptance Criteria Completion (Implementation Phase Only)
+
+After the implementation agent reports COMPLETE, verify key acceptance criteria with automated checks **before** posting the report to Linear or advancing to the next phase.
+
+**Step 1: Parse AC into verification targets**
+
+Extract each acceptance criterion from the ticket and classify it:
+- **STRUCTURAL AC** (imports, exports, file creation, pattern removal) → can verify with grep/glob
+- **BEHAVIORAL AC** (data flows, error handling, parameter forwarding) → verify by tracing source code
+- **REMOVAL AC** (no legacy code, no banned patterns) → verify with grep expecting zero matches
+
+**Step 2: Generate and run verification commands**
+
+For each STRUCTURAL and REMOVAL AC, generate a verification command:
+
+```
+Example verification commands:
+
+AC: "All renderers import from schema files"
+  → grep -rn "import.*from.*schema" [renderer-dir] | wc -l
+  → expect: count >= [number of renderers]
+
+AC: "Zero legacy fallback keys remain"
+  → grep -rn "rec\.legacyKey\|rec\.oldName" [renderer-dir]
+  → expect: zero matches
+
+AC: "QuotaIndicator extracted to shared location"
+  → test -f [expected-shared-file-path] && echo "EXISTS" || echo "MISSING"
+  → expect: EXISTS
+
+AC: "checkpointDecision has a typed schema"
+  → grep "z\.enum\|z\.literal\|z\.number" [schema-file]
+  → expect: non-trivial type constraints (not all z.string().optional())
+```
+
+For each BEHAVIORAL AC, trace the data flow:
+```
+AC: "documentIds forwarded to pipeline trigger"
+  → Read the route handler, find where documentIds is accepted
+  → Trace to the function call that should receive it
+  → Confirm the parameter appears in the function's arguments
+```
+
+**Step 3: Compare results against agent claims**
+
+```
+IF any AC fails verification:
+  - DO NOT post the report to Linear
+  - DO NOT advance to the next phase
+  - Report to user with specific evidence:
+
+    ⚠️ AC VERIFICATION FAILED
+
+    The implementation agent reported COMPLETE, but the following
+    acceptance criteria could not be verified:
+
+    | AC | Agent Claim | Verification Result |
+    |----|-------------|---------------------|
+    | [AC text] | [what agent reported] | [actual grep/check output] |
+
+    Options:
+    1. Send verification failures back to implementation agent for correction
+    2. Review manually and override
+    3. Abort execution
+
+  - Wait for user decision before continuing
+
+IF all AC pass verification:
+  - Proceed to posting report and next phase
+  - Include verification results in the Linear comment (append to agent report)
+```
+
+**Note:** This step applies to the implementation phase only. Code review has its own AC verification via Step 0 with verification commands. Security review focuses on vulnerability assessment rather than AC completion.
+
 #### 3.5 Check for Blocking Conditions
 
 | Phase | Blocking Condition | Action |
@@ -377,6 +451,39 @@ After implementation agent returns, before posting report:
    ```
 
 3. **If changes exist:** Proceed to posting report and PR creation
+
+#### 3.6.1a Validate No AC Deferrals (All Phases)
+
+Before advancing to the next phase, scan the agent's Deferred Items table for any items that match acceptance criteria:
+
+1. **Extract** all items from the agent's Deferred Items table
+2. **For each item**, check if it matches an acceptance criterion:
+   - Fuzzy match on key terms: file names, function names, component names, patterns mentioned in AC
+   - Check if the deferred item's description overlaps with any AC text
+3. **If a match is found:**
+   - Reclassify the item as `AC-DEFERRED` (see Deferred Items Handling section)
+   - DO NOT advance to the next phase
+   - Report to user:
+     ```
+     ⚠️ ACCEPTANCE CRITERION DEFERRED
+
+     The agent deferred an item that matches an acceptance criterion:
+
+     AC: "[acceptance criterion text]"
+     Deferred Item: "[item description]"
+     Agent Reason: "[agent's stated reason for deferral]"
+     Severity: [agent-assigned severity]
+
+     Options:
+     1. Accept deferral and continue (AC will not be fulfilled)
+     2. Send back to agent for implementation
+     3. Modify AC to reflect reduced scope
+     ```
+   - Wait for user decision
+
+4. **If no matches found:** Proceed to next step normally
+
+**This validation runs for ALL phases**, not just implementation. Code review and testing agents can also improperly defer items that match AC.
 
 #### 3.6.1 Commit and Create Draft PR (Implementation Phase Only)
 
@@ -678,16 +785,35 @@ The threshold is 500K because security review — the final phase — receives 5
 
 When agents bypass issues (correct behavior for low-priority items), they MUST document them in a Deferred Items table for user traceability:
 
-| Severity | Location | Issue | Reason |
-|----------|----------|-------|--------|
-| [CRITICAL/HIGH/MEDIUM/LOW/INFO] | [file:line] | [Brief description] | [Why deferred] |
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| [AC-DEFERRED/DISCOVERED/OUT-OF-SCOPE] | [CRITICAL/HIGH/MEDIUM/LOW/INFO] | [file:line] | [Brief description] | [Why deferred] |
+
+### Deferred Item Classifications
+
+| Classification | Description | Requires User Approval? |
+|---------------|-------------|------------------------|
+| AC-DEFERRED | An explicit acceptance criterion the agent chose not to implement | **YES — ALWAYS** |
+| DISCOVERED | A new issue found during the phase, not in the original AC | NO — agent discretion |
+| OUT-OF-SCOPE | Work that belongs to a different ticket | NO — agent discretion |
+
+### Orchestrator Validation Rule
+
+Before posting a COMPLETE report, the orchestrator MUST:
+1. Extract all acceptance criteria from the ticket
+2. Check each deferred item against the AC list (fuzzy match on key terms)
+3. If ANY deferred item matches an AC → reclassify as `AC-DEFERRED`
+4. If ANY `AC-DEFERRED` items exist → **PAUSE for user decision** (see Step 3.6.1a)
+
+**Agents MUST NOT unilaterally defer acceptance criteria.** Deferring discovered issues is expected and encouraged. Deferring AC requires explicit user approval.
 
 **Rules for Deferred Items:**
 1. ANY issue found but not addressed MUST appear in this table
-2. Location must include file:line for traceability
-3. Reason must explain the bypass decision (e.g., "Defense-in-depth, not exploitable")
-4. Table is always included in full when passing context to downstream phases
-5. Orchestrator posts full table to Linear (not summarized)
+2. Classification must be set (agents should classify; orchestrator validates and reclassifies if needed)
+3. Location must include file:line for traceability
+4. Reason must explain the bypass decision (e.g., "Defense-in-depth, not exploitable")
+5. Table is always included in full when passing context to downstream phases
+6. Orchestrator posts full table to Linear (not summarized)
 
 **When to defer (examples by phase):**
 - **Security**: LOW severity findings, confidence <7/10, defense-in-depth measures
@@ -700,11 +826,18 @@ When agents bypass issues (correct behavior for low-priority items), they MUST d
 **Example Deferred Items table:**
 ```markdown
 ### Deferred Items
-| Severity | Location | Issue | Reason |
-|----------|----------|-------|--------|
-| LOW | auth.ts:45 | Missing rate limit on admin login | Defense-in-depth, admin-only endpoint |
-| INFO | user.service.ts:120 | Could add input sanitization | Low risk, trusted internal call |
-| LOW | api.controller.ts:88 | Consider adding request logging | Enhancement, not security critical |
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| DISCOVERED | LOW | auth.ts:45 | Missing rate limit on admin login | Defense-in-depth, admin-only endpoint |
+| DISCOVERED | INFO | user.service.ts:120 | Could add input sanitization | Low risk, trusted internal call |
+| OUT-OF-SCOPE | LOW | api.controller.ts:88 | Consider adding request logging | Enhancement, not security critical |
+```
+
+**Example of orchestrator catching an AC deferral:**
+```
+Agent deferred: "QuotaIndicator extraction to shared location" as DISCOVERED/LOW
+Orchestrator matches against AC: "QuotaIndicator, SelectedFileList extracted to shared locations"
+→ Reclassified as AC-DEFERRED → PAUSE for user decision
 ```
 
 ---

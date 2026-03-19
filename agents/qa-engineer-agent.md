@@ -865,9 +865,11 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 [Any problems encountered, or "None"]
 
 ### Deferred Items
-| Severity | Location | Issue | Reason |
-|----------|----------|-------|--------|
-| [INFO] | [file/module] | [Coverage gap or issue] | [Why not tested] |
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| [DISCOVERED/OUT-OF-SCOPE] | [INFO] | [file/module] | [Coverage gap or issue] | [Why not tested] |
+
+**Classification guide:** Use DISCOVERED for issues found during testing, OUT-OF-SCOPE for findings belonging to another ticket. Never classify acceptance criteria deferrals yourself — the orchestrator validates this.
 
 **Include in Deferred Items:**
 - Coverage gaps in low-priority areas (per testing philosophy)

@@ -5,6 +5,24 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.0] - 2026-03-19
+
+### Added
+- **AC Verification Step (Step 3.4.2)** — After implementation agent reports COMPLETE, orchestrator now runs automated verification commands (grep, glob, file existence checks) against each acceptance criterion before advancing. Catches agents that claim completion while AC remain unfulfilled. Applies to implementation phase only; code review has its own verification via Step 0.
+- **Deferred Item Classification** — Deferred Items tables now include a Classification column (AC-DEFERRED, DISCOVERED, OUT-OF-SCOPE). Orchestrator validates deferred items against AC and pauses for user approval if any acceptance criteria were deferred. Agents cannot unilaterally defer AC.
+- **AC Deferral Validation (Step 3.6.1a)** — New orchestrator gate runs for all phases, scanning deferred items for matches against acceptance criteria. Fuzzy-matches on key terms to catch improperly classified deferrals.
+- **Verification Commands in Code Review** — Step 0 (Requirements Verification) now requires running actual verification commands (grep, glob, file existence) for each AC, not just reading code and citing line numbers. Unverifiable items must be marked UNVERIFIED (not PASS). Reviews cannot be APPROVED with FAIL or UNVERIFIED items.
+- **Schema Quality Standards** — `production-code-standards` skill now blocks permissive schema patterns: `z.record(z.unknown())` for known fields, `z.string()` where enums exist, all-optional fields in known structures, and duplicated schema definitions. Requires derivation from canonical source schemas.
+- **Data Flow Tracing** — Implementation phase now requires end-to-end data flow verification for new/changed API routes. Parameters accepted at the API boundary must be traced to their final consumer. Silent data loss (accepting but not forwarding parameters) is flagged as a production bug.
+- **Component Rewrite Guidance** — Implementation phase now distinguishes destructive changes (code removal) from constructive changes (adding imports, decomposing components). Agents must complete and verify each type separately; reporting COMPLETE after only destructive work is blocked.
+- **Agent Self-Assessment Triggers** — `verify-implementation` skill now activates when agents set Status: COMPLETE, Review Status: APPROVED, or Status: PASS. Includes evidence requirements by phase (git diff, grep, test output).
+
+### Changed
+- **Deferred Items table format** — All 7 agent report templates updated from 4-column format (Severity | Location | Issue | Reason) to 5-column format (Classification | Severity | Location | Issue | Reason). Classification guide added to each agent.
+- **Legacy context budget** — `context-budget-legacy.md` updated to reflect the Classification column in Deferred Items tables (preserved as essential context, never truncated).
+
+---
+
 ## [2.20.0] - 2026-03-19
 
 ### Added
@@ -1291,6 +1309,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.21.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.21.0
 [2.20.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.20.0
 [2.19.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.19.0
 [2.18.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.18.0

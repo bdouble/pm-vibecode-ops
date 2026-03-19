@@ -31,7 +31,7 @@ Even under strict budget pressure, always preserve these items — they are load
 |--------|-----------|
 | Acceptance Criteria headers | Every phase needs to understand what "done" looks like |
 | Files Changed lists (paths only) | Needed for scope in every downstream phase |
-| Deferred Items tables | Needed for traceability — items deferred in one phase may need attention in the next |
+| Deferred Items tables (including Classification column) | Needed for traceability and orchestrator validation gates — the Classification column (AC-DEFERRED, DISCOVERED, OUT-OF-SCOPE) determines whether the orchestrator pauses for user approval before advancing |
 
 **Note:** On a 250K window, "full verbatim AC" and "full Technical Notes" may not fit. Include AC headers and Technical Notes bullet points. If the ticket has unusually long AC or Technical Notes, truncate the body of each item but preserve every header/bullet so the agent knows the full scope exists.
 
@@ -82,9 +82,9 @@ Prior Phase Summary:
 - Code Review: APPROVED, flagged auth token expiry concern + unbounded payload
 
 Deferred Items:
-| Severity | Location | Issue | Reason |
-|----------|----------|-------|--------|
-| LOW | auth.ts:45 | Missing rate limit on admin login | Defense-in-depth |
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| DISCOVERED | LOW | auth.ts:45 | Missing rate limit on admin login | Defense-in-depth |
 ```
 
 ## Tradeoffs

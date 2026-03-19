@@ -42,6 +42,28 @@ All production code must be permanent, complete, and production-grade.
 | Error propagation | Let errors bubble to handlers |
 | Repository pattern | Data access abstraction |
 
+## Schema Quality Standards
+
+### Banned Schema Patterns
+
+| Pattern | Why Blocked |
+|---------|-------------|
+| `z.record(z.string(), z.unknown())` for known fields | Use a typed schema with actual field definitions |
+| `z.string()` where valid values are known | Use `z.enum([...])` with known values |
+| `.optional()` on every field in a known structure | Required fields should not be optional |
+| Duplicated schema field definitions | Import and extend from canonical source schema |
+
+### Required Schema Patterns
+
+| Pattern | Purpose |
+|---------|---------|
+| Derive inter-module schemas from canonical source | Single source of truth for contracts |
+| `z.enum()` or `z.literal()` for known value sets | Type-safe value constraints |
+| Comment on `.passthrough()` | Explain why unknown fields are expected |
+| Schema tests for valid, edge, and malformed payloads | Verify schema rejects bad data |
+
+**When to apply:** Schemas for stage inputs/outputs, API request/response bodies, and inter-module contracts. Simple internal utility schemas are exempt.
+
 ## When Blocked
 
 If proper implementation is blocked:

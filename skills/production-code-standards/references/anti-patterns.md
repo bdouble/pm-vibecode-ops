@@ -57,6 +57,43 @@ setTimeout(() => retryBecauseOfRaceCondition(), 100);
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 ```
 
+## Permissive Schema Patterns
+
+```typescript
+// BLOCK - z.unknown() for structures with known fields
+const configSchema = z.record(z.string(), z.unknown()); // VIOLATION
+// REQUIRE - typed schema
+const configSchema = z.object({
+  apiKey: z.string().min(1),
+  region: z.enum(['us-east', 'eu-west', 'ap-south']),
+  retries: z.number().int().min(0).max(5),
+});
+
+// BLOCK - z.string() where valid values are known
+const statusSchema = z.string(); // VIOLATION when statuses are a known set
+// REQUIRE - z.enum()
+const statusSchema = z.enum(['pending', 'running', 'complete', 'failed']);
+
+// BLOCK - everything optional in a known structure
+const decisionSchema = z.object({
+  action: z.string().optional(),
+  reason: z.string().optional(),
+  confidence: z.string().optional(), // VIOLATION: should be z.number()
+}); // VIOLATION: at least action and reason are required
+// REQUIRE - required fields required, proper types
+const decisionSchema = z.object({
+  action: z.enum(['approve', 'reject', 'escalate']),
+  reason: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+});
+
+// BLOCK - duplicating schema definitions
+const stageInputSchema = z.object({ name: z.string(), type: z.string() }); // copy-paste
+// REQUIRE - import from canonical source
+import { baseDocumentSchema } from '@/schemas/documents';
+const stageInputSchema = baseDocumentSchema.pick({ name: true, type: true });
+```
+
 ## Required Patterns
 
 ### Fail-Fast Validation

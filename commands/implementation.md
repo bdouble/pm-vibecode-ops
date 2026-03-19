@@ -375,6 +375,45 @@ If any violations are detected:
 11. **PR Comment**: Add implementation summary as comment on the PR
 12. **Linear Update**: Use `mcp__linear-server__create_comment` to add implementation completion report (do NOT change ticket status)
 
+## Post-Implementation Data Flow Verification
+
+For any changed or created API routes, trace the complete data flow before reporting COMPLETE:
+
+1. **Input**: What parameters does the route accept? (from request body/params/query)
+2. **Processing**: What service functions are called with those parameters?
+3. **Output**: Where does each input parameter end up? (DB write, event payload, response body)
+
+**Red flag**: If a parameter is accepted at the API boundary but never forwarded to its consumer, this is a **data loss bug**. Fix before reporting COMPLETE.
+
+**Verification template** (include in implementation report for each new/changed route):
+```
+Route: POST /api/[path]
+Input: { paramA, paramB, paramC? }
+  → paramA: stored in Model.fieldA ✓
+  → paramB: passed to serviceFunction() ✓
+  → paramC: passed to triggerFunction() ✓ (or MISSING ✗)
+```
+
+If any parameter shows MISSING, trace why and fix the gap. Silent data loss (accepting a parameter and ignoring it) is a production bug.
+
+## Component Rewrite Guidance
+
+When rewriting components that involve both removing old code and adding new structure (e.g., renderer rewrites, legacy migrations, component decomposition):
+
+**Step 1 — Destructive changes** (remove dead code, legacy paths, fallback keys):
+- Complete all removals first
+- Run tests to verify nothing broke
+- Commit separately
+
+**Step 2 — Constructive changes** (add schema imports, decompose into sub-components, add new sections, extract shared utilities):
+- Complete all additions/restructuring second
+- These are SEPARATE work items from step 1 and must be verified independently
+- Run verification commands to confirm constructive AC are met (e.g., `grep` for new imports)
+
+**Do NOT report the phase as COMPLETE after only completing Step 1.** Removing dead code is necessary but does not fulfill constructive AC like "all renderers import from schema files" or "QuotaIndicator extracted to shared location."
+
+**If removing a lint suppression causes a lint error**, the component MUST be decomposed or restructured — not just cleaned up. The suppression existed for a reason; removing it requires addressing the underlying complexity.
+
 ## Scope Control Guidelines
 
 ### MUST Implement:

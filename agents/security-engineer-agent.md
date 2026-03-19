@@ -618,10 +618,12 @@ const rateLimiter = new RateLimiter({
 - [ ] OWASP Top 10 compliance
 
 ### Deferred Items
-| Severity | Location | Issue | Reason |
-|----------|----------|-------|--------|
-| LOW | [file:line] | [Finding] | [Why not blocking] |
-| INFO | [file:line] | [Observation] | [Defense-in-depth note] |
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| DISCOVERED | LOW | [file:line] | [Finding] | [Why not blocking] |
+| DISCOVERED | INFO | [file:line] | [Observation] | [Defense-in-depth note] |
+
+**Classification guide:** Use DISCOVERED for issues found during review, OUT-OF-SCOPE for findings belonging to another ticket. Never classify acceptance criteria deferrals yourself — the orchestrator validates this.
 
 **Include in Deferred Items:**
 - LOW severity findings (CVSS 0.1-3.9)
