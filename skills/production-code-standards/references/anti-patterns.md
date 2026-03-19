@@ -145,3 +145,171 @@ class UserService {
 // BLOCK - Direct ORM access in services
 return prisma.user.findUnique({ where: { id } }); // VIOLATION
 ```
+
+## TypeScript-Specific Anti-Patterns
+
+### Type Safety Violations
+
+#### `any` Type Usage
+
+```typescript
+// BLOCK - Disables type checking entirely
+function processData(input: any): any {
+  return input.someProperty.nested.value;
+}
+
+// REQUIRE - Use unknown with type narrowing
+function processData(input: unknown): string {
+  if (typeof input === 'object' && input !== null && 'someProperty' in input) {
+    const data = input as { someProperty: { nested: { value: string } } };
+    return data.someProperty.nested.value;
+  }
+  throw new ValidationError('Invalid input structure');
+}
+```
+
+#### Excessive `as` Assertions
+
+```typescript
+// BLOCK - Casting without validation bypasses type safety
+const user = JSON.parse(rawData) as User;
+const config = response.data as AppConfig;
+
+// REQUIRE - Use type guards or schema validation
+import { z } from 'zod';
+
+const userSchema = z.object({
+  id: z.string(),
+  email: z.string().email(),
+  role: z.enum(['admin', 'user']),
+});
+
+function isUser(data: unknown): data is User {
+  return userSchema.safeParse(data).success;
+}
+
+const parsed = JSON.parse(rawData);
+if (!isUser(parsed)) throw new ValidationError('Invalid user data');
+```
+
+#### Unvalidated `JSON.parse()`
+
+```typescript
+// BLOCK - No validation after parsing
+const settings = JSON.parse(rawJson);
+applySettings(settings.theme, settings.locale);
+
+// REQUIRE - Parse then validate with schema
+import { z } from 'zod';
+
+const settingsSchema = z.object({
+  theme: z.enum(['light', 'dark']),
+  locale: z.string().min(2).max(5),
+});
+
+const settings = settingsSchema.parse(JSON.parse(rawJson));
+applySettings(settings.theme, settings.locale);
+```
+
+### Async Anti-Patterns
+
+#### Floating Promises
+
+```typescript
+// BLOCK - Promise result ignored, errors silently swallowed
+function handleRequest(req: Request) {
+  auditLog.recordAccess(req.userId); // async but not awaited
+  return { status: 'ok' };
+}
+
+// REQUIRE - Await or explicitly mark as fire-and-forget
+async function handleRequest(req: Request) {
+  await auditLog.recordAccess(req.userId);
+  return { status: 'ok' };
+}
+
+// If intentionally fire-and-forget, use void operator
+function handleRequest(req: Request) {
+  void auditLog.recordAccess(req.userId).catch(err =>
+    logger.error('Audit log failed', { error: err })
+  );
+  return { status: 'ok' };
+}
+```
+
+#### `async void` Functions
+
+```typescript
+// BLOCK - Errors cannot be caught by caller
+button.addEventListener('click', async () => {
+  await saveData(); // If this throws, no one catches it
+});
+
+// REQUIRE - Wrap in error boundary
+button.addEventListener('click', () => {
+  saveData().catch(err => {
+    logger.error('Save failed', { error: err });
+    showErrorToast('Failed to save data');
+  });
+});
+```
+
+#### Unhandled Promise Rejections
+
+```typescript
+// BLOCK - No error handling on promise chain
+fetchUserProfile(userId)
+  .then(profile => updateUI(profile));
+
+// REQUIRE - Handle errors explicitly
+fetchUserProfile(userId)
+  .then(profile => updateUI(profile))
+  .catch(err => {
+    logger.error('Failed to fetch profile', { userId, error: err });
+    showErrorState();
+  });
+```
+
+### Production Hygiene
+
+#### `console.log` in Production Code
+
+```typescript
+// BLOCK in src/, lib/, app/
+console.log('Processing order:', orderId);
+console.error('Payment failed', error);
+
+// REQUIRE - Use structured logger
+import { logger } from '@/infrastructure/logger';
+
+logger.info('Processing order', { orderId });
+logger.error('Payment failed', { orderId, error: err.message, stack: err.stack });
+```
+
+#### Magic Numbers and Strings
+
+```typescript
+// BLOCK - Unexplained literal values
+if (retryCount > 3) throw new Error('Too many retries');
+await sleep(5000);
+if (user.role === 'admin') grantAccess();
+
+// REQUIRE - Named constants with clear intent
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 5_000;
+const ADMIN_ROLE = 'admin' as const;
+
+if (retryCount > MAX_RETRY_ATTEMPTS) throw new RetryExhaustedError(MAX_RETRY_ATTEMPTS);
+await sleep(RETRY_DELAY_MS);
+if (user.role === ADMIN_ROLE) grantAccess();
+```
+
+### ESLint Rule Reference
+
+| Anti-Pattern | ESLint Rule |
+|-------------|-------------|
+| `any` type | `@typescript-eslint/no-explicit-any` |
+| Floating promises | `@typescript-eslint/no-floating-promises` |
+| console.log | `no-console` |
+| Unused vars | `@typescript-eslint/no-unused-vars` |
+| Non-null assertions | `@typescript-eslint/no-non-null-assertion` |

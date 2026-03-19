@@ -226,3 +226,146 @@ Every claim requires this chain:
 4. **Claim matches output** - Honest interpretation
 
 A verified failure is more valuable than an unverified success claim.
+
+---
+
+## For UI/Frontend Changes
+
+### Accessibility Checklist
+
+Before claiming any UI change is complete, verify:
+
+- [ ] **Keyboard navigation**: All interactive elements reachable via Tab, activatable via Enter/Space
+- [ ] **Screen reader tested**: Content announced correctly (use VoiceOver on Mac, NVDA on Windows)
+- [ ] **Color contrast**: Text meets WCAG 2.2 AA minimum (4.5:1 for normal text, 3:1 for large text)
+- [ ] **Focus indicators**: Visible focus ring on all interactive elements (no `outline: none` without replacement)
+- [ ] **Alt text**: All meaningful images have descriptive `alt` attributes; decorative images use `alt=""`
+- [ ] **Form labels**: Every form input has an associated `<label>` element or `aria-label`
+- [ ] **Heading hierarchy**: Headings follow logical order (h1 > h2 > h3), no skipped levels
+- [ ] **ARIA landmarks**: Page has appropriate `main`, `nav`, `banner`, `contentinfo` regions
+
+### Visual Regression
+
+- [ ] Compare before/after screenshots of affected components
+- [ ] Verify no unintended layout shifts in surrounding elements
+- [ ] Check both light and dark mode if applicable
+
+### Responsive Verification
+
+Test at these minimum breakpoints:
+- [ ] **Desktop**: 1440px width
+- [ ] **Tablet**: 768px width
+- [ ] **Mobile**: 375px width
+
+```bash
+# Quick accessibility audit with axe-core (if configured)
+npx axe-cli http://localhost:3000/affected-page
+
+# Lighthouse accessibility score
+npx lighthouse http://localhost:3000/affected-page --only-categories=accessibility --output=json
+```
+
+---
+
+## Performance Verification
+
+For any change that affects load times, rendering, or data processing:
+
+### Before/After Benchmarking
+
+- [ ] Capture baseline metrics before the change
+- [ ] Measure the same metrics after the change
+- [ ] Document the comparison with actual numbers
+
+### Core Web Vitals
+
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| LCP (Largest Contentful Paint) | < 2.0s | Lighthouse, Web Vitals library |
+| INP (Interaction to Next Paint) | < 200ms | Chrome DevTools, Web Vitals library |
+| CLS (Cumulative Layout Shift) | < 0.1 | Lighthouse, Web Vitals library |
+
+### Bundle Size
+
+- [ ] Check for unexpected bundle size increases
+- [ ] Verify no large dependencies added unnecessarily
+
+```bash
+# Check bundle size impact (if size-limit configured)
+npx size-limit
+
+# Analyze bundle composition
+npx webpack-bundle-analyzer dist/stats.json
+# or for Vite projects
+npx vite-bundle-visualizer
+```
+
+### Database Query Performance
+
+- [ ] Check for N+1 query patterns (use query logging in development)
+- [ ] Verify indexes exist for new query patterns
+- [ ] Confirm query execution time is acceptable under expected load
+
+```bash
+# Check for missing indexes (PostgreSQL)
+# Run in development database
+psql -c "SELECT schemaname, tablename, indexname FROM pg_indexes WHERE tablename = 'affected_table';"
+
+# Enable query logging to detect N+1 patterns
+# Add to development config: logging: true (TypeORM) or log: ['query'] (Prisma)
+```
+
+---
+
+## Pre-PR Security Scan
+
+Before opening a pull request, run these checks:
+
+### Dependency Vulnerabilities
+
+```bash
+# Check for known vulnerabilities in dependencies
+npm audit
+
+# Address critical and high findings before merging
+npm audit --audit-level=high
+```
+
+- [ ] No critical or high severity vulnerabilities in production dependencies
+- [ ] Any accepted risks documented with justification
+
+### Hardcoded Secrets
+
+```bash
+# Search for potential hardcoded secrets in staged changes
+git diff --cached | grep -iE "(api[_-]?key|secret|token|password|credential).*=.*['\"]"
+
+# Check for common secret patterns
+git diff --cached | grep -iE "(sk_live|pk_live|ghp_|gho_|AKIA[A-Z0-9])"
+```
+
+- [ ] No API keys, tokens, or passwords in source code
+- [ ] Secrets stored in environment variables or secret manager
+- [ ] No `.env` files in staged changes
+
+### Staged File Review
+
+```bash
+# Verify no sensitive files are staged
+git diff --cached --name-only | grep -iE "(\.env|credentials|secret|\.pem|\.key)"
+
+# Should return empty - if not, unstage those files
+```
+
+### Static Analysis
+
+- [ ] Run SAST scanner if configured (Semgrep, ESLint security plugin, or CodeQL)
+- [ ] Address any high-severity findings before PR
+
+```bash
+# Semgrep (if configured)
+semgrep --config=auto src/
+
+# ESLint security plugin (if configured)
+npx eslint --rule '{"no-eval": "error", "no-implied-eval": "error"}' src/
+```

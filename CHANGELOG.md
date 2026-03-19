@@ -5,6 +5,28 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.23.0] - 2026-03-19
+
+### Added
+- **OWASP Top 10:2025 alignment** — Updated all security references (skills, agents) from OWASP 2021 to OWASP Top 10:2025. Added two new categories: A03 Software Supply Chain Failures (SBOM, dependency pinning, lockfile integrity) and A10 Mishandling of Exceptional Conditions (fail-safe defaults, centralized error handling). Merged SSRF into A01.
+- **OWASP Top 10 for Agentic Applications 2026** — New reference file (`agents/references/security-agentic-owasp-reference.md`) covering all 10 agentic security categories (ASI01-ASI10) with assessment checklists. Security engineer agent and security review command updated to assess agentic patterns when detected.
+- **Critical CVE updates** — Added React2Shell (CVE-2025-55182, CVSS 10.0), Next.js CVE-2025-66478 (RCE), NestJS CVE-2025-54782 (RCE), Supabase view RLS bypass, and Prisma operator injection to SaaS security patterns. Added quarterly review cadence header.
+- **TypeScript anti-patterns** — Added type safety violations (`any`, `as` assertions, unvalidated `JSON.parse`), async anti-patterns (floating promises, `async void`), production hygiene (`console.log`, magic numbers), and ESLint rule reference table to production-code-standards.
+- **Property-based and parameterized testing** — Added fast-check property-based testing templates and Vitest `test.each` parameterized testing patterns to test templates.
+- **API contract and accessibility testing gates** — Added Gate #5 (API Contract Verification with supertest/Pact) and Gate #6 (Accessibility Testing with axe-core/jest-axe) plus flaky test detection to QA testing gates reference.
+- **UI/frontend verification checklist** — Added accessibility, responsive, and visual regression checklists. Added performance verification (Core Web Vitals, bundle size, N+1 queries) and pre-PR security scan steps.
+- **Service lifecycle management** — Added `lifecycle`, `owner`, `api_schema`, `health_check`, `slack_channel` fields to service inventory template with deprecation/sunset guidance.
+- **Weighted scoring matrix** — Added weighted evaluation methodology and Architecture Decision Canvas reference to exploration patterns.
+
+### Changed
+- **Enriched 6 thin skills** — Expanded security-patterns (350→1,169 words), divergent-exploration (350→1,042), model-aware-behavior (500→1,232), using-pm-workflow (500→1,196), epic-closure-validation (450→1,049), production-code-standards (500→1,095). All now closer to the 1,200-word target with core procedural knowledge in the body.
+- **Added /execute-ticket to workflow skill** — The recommended agentic workflow path was missing from using-pm-workflow. Now prominently featured as the RECOMMENDED approach.
+- **Expanded root-cause-tracing reference** — Added concrete TypeScript debugging example, 5 Whys technique, git bisect workflow, and diagnostic instrumentation patterns (500→1,297 words).
+- **Aligned ADR template with MADR 4.0** — Added YAML front matter, Decision Drivers section, and Confirmation section per the community standard.
+- **Documented custom command frontmatter** — Added note in CLAUDE.md that workflow-phase, closes-ticket, workflow-sequence are documentation-only fields ignored by Claude Code.
+
+---
+
 ## [2.22.0] - 2026-03-19
 
 ### Added
@@ -1327,6 +1349,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.23.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.23.0
 [2.22.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.22.0
 [2.21.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.21.0
 [2.20.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.20.0

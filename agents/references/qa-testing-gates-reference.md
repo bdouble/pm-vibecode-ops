@@ -501,3 +501,231 @@ describe('Performance Requirements', () => {
   });
 });
 ```
+
+---
+
+## Gate #5: API Contract Verification
+
+**When to apply:** Any change that modifies API request or response shapes, adds or removes endpoints, or changes status codes.
+
+### Purpose
+
+Contract tests verify that the API implementation matches the documented schema and that changes do not break existing consumers. This gate prevents integration failures that unit tests cannot catch.
+
+### Process
+
+1. **Schema compliance**: Verify the implementation matches the OpenAPI or GraphQL schema
+2. **Backward compatibility**: Confirm that existing response fields are not removed or renamed
+3. **Consumer impact**: Check that no downstream consumers are broken by the change
+
+### Contract Test Example (supertest)
+
+```typescript
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import request from 'supertest';
+import { app } from '../app';
+
+describe('User API Contract', () => {
+  let server: any;
+
+  beforeAll(() => {
+    server = app.listen(0);
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  it('GET /api/users/:id should return the documented response shape', async () => {
+    const response = await request(server)
+      .get('/api/users/user_123')
+      .set('Authorization', 'Bearer test-token')
+      .expect(200);
+
+    // Verify required fields are present and correctly typed
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: expect.any(String),
+        email: expect.any(String),
+        name: expect.any(String),
+        createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      })
+    );
+
+    // Verify sensitive fields are NOT exposed
+    expect(response.body).not.toHaveProperty('passwordHash');
+    expect(response.body).not.toHaveProperty('resetToken');
+  });
+
+  it('POST /api/users should reject requests missing required fields', async () => {
+    const response = await request(server)
+      .post('/api/users')
+      .set('Authorization', 'Bearer test-token')
+      .send({ name: 'Test User' }) // Missing required 'email' field
+      .expect(400);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.any(String),
+        details: expect.arrayContaining([
+          expect.objectContaining({ field: 'email' }),
+        ]),
+      })
+    );
+  });
+
+  it('should maintain backward compatibility with v1 response format', async () => {
+    const response = await request(server)
+      .get('/api/v1/users/user_123')
+      .expect(200);
+
+    // v1 consumers expect these exact field names
+    expect(response.body).toHaveProperty('user_id'); // v1 uses snake_case
+    expect(response.body).toHaveProperty('email_address');
+  });
+});
+```
+
+### Consumer-Driven Contract Testing (Pact)
+
+For services with multiple consumers, consider Pact for consumer-driven contracts:
+- Each consumer defines expected interactions (request/response pairs)
+- The provider verifies all consumer contracts during CI
+- Breaking changes are caught before deployment
+- See [Pact documentation](https://docs.pact.io/) for setup
+
+### Gate #5 Criteria:
+- API responses match documented schema (OpenAPI/GraphQL)
+- No required fields removed from existing responses
+- New required request fields have migration plan for existing consumers
+- Error response shapes are consistent across endpoints
+
+---
+
+## Gate #6: Accessibility Testing
+
+**When to apply:** Any change that adds or modifies UI components, page layouts, or interactive elements.
+
+### Purpose
+
+Accessibility testing ensures the application is usable by people with disabilities and meets WCAG 2.2 AA compliance requirements. Automated tools catch approximately 30-50% of accessibility issues; manual verification covers the rest.
+
+### Automated Testing with axe-core
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'jest-axe';
+import { UserProfileForm } from './UserProfileForm';
+
+expect.extend(toHaveNoViolations);
+
+describe('UserProfileForm - Accessibility', () => {
+  it('should have no accessibility violations', async () => {
+    const { container } = render(<UserProfileForm user={mockUser} />);
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('should have no violations in error state', async () => {
+    const { container } = render(
+      <UserProfileForm user={mockUser} errors={{ email: 'Invalid email' }} />
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+});
+```
+
+### Playwright Accessibility Testing
+
+```typescript
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+test.describe('Dashboard Page - Accessibility', () => {
+  test('should pass axe accessibility scan', async ({ page }) => {
+    await page.goto('/dashboard');
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
+      .analyze();
+
+    expect(results.violations).toEqual([]);
+  });
+
+  test('should be navigable by keyboard only', async ({ page }) => {
+    await page.goto('/dashboard');
+
+    // Tab through interactive elements and verify focus is visible
+    await page.keyboard.press('Tab');
+    const firstFocused = await page.evaluate(() => document.activeElement?.tagName);
+    expect(firstFocused).toBeTruthy();
+
+    // Verify skip-to-content link exists and works
+    await page.keyboard.press('Tab');
+    const skipLink = page.locator('a[href="#main-content"]');
+    await expect(skipLink).toBeFocused();
+  });
+});
+```
+
+### WCAG 2.2 AA Compliance Checklist
+
+| Criterion | Requirement | How to Verify |
+|-----------|-------------|---------------|
+| Color contrast | 4.5:1 for normal text, 3:1 for large text | axe-core, Chrome DevTools |
+| Form labels | Every input has an associated label | axe-core, manual inspection |
+| Focus visible | All interactive elements show focus indicator | Keyboard navigation test |
+| Landmarks | Page uses semantic regions (main, nav, etc.) | axe-core, screen reader |
+| Alt text | Meaningful images have descriptive alt text | axe-core, manual review |
+| Error identification | Form errors identified and described in text | Manual test with invalid input |
+| Resize text | Content readable at 200% zoom without horizontal scroll | Browser zoom test |
+| Target size | Interactive targets are at least 24x24 CSS pixels | Manual measurement |
+
+### Gate #6 Criteria:
+- Zero axe-core violations at WCAG 2.2 AA level
+- Keyboard navigation reaches all interactive elements
+- Screen reader announces content in logical order
+- Color is not the sole means of conveying information
+- Form validation errors are programmatically associated with inputs
+
+---
+
+## Flaky Test Detection
+
+Flaky tests undermine confidence in the test suite. A test is flaky if it passes and fails inconsistently without any code changes.
+
+### How to Identify Flaky Tests
+
+```bash
+# Run the test suite multiple times to surface inconsistencies
+npx vitest run --reporter=verbose 2>&1 | tee run1.log
+npx vitest run --reporter=verbose 2>&1 | tee run2.log
+npx vitest run --reporter=verbose 2>&1 | tee run3.log
+
+# Compare results across runs
+diff <(grep -E "PASS|FAIL" run1.log) <(grep -E "PASS|FAIL" run2.log)
+
+# Use Vitest retry flag to surface flaky tests
+npx vitest run --retry=3 --reporter=verbose
+# Tests that pass on retry but failed initially are flaky
+```
+
+### Common Causes and Fixes
+
+| Cause | Symptom | Fix |
+|-------|---------|-----|
+| Timing dependencies | Test passes locally, fails in CI | Mock timers with `vi.useFakeTimers()`, avoid `setTimeout` in assertions |
+| Shared mutable state | Test fails when run after another specific test | Reset state in `beforeEach`, use unique test data per test |
+| External service calls | Test fails intermittently with timeout errors | Mock external services, use `nock` or `msw` for HTTP |
+| Date/time sensitivity | Test fails at certain times of day or month | Mock `Date.now()`, use fixed timestamps in test data |
+| Random data without seed | Test produces different results each run | Use seeded random generators, or use deterministic test data |
+| Port conflicts | Test fails with "address in use" errors | Use dynamic port allocation (`server.listen(0)`) |
+
+### Prevention
+
+- Run the full test suite 3-5 times in CI before merging changes that modify test infrastructure
+- Flag any test that required a retry as needing investigation
+- Treat a flaky test as a bug: file a ticket and fix the root cause
+- Never use `retry` as a permanent solution for flaky tests

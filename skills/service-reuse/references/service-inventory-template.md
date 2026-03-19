@@ -23,6 +23,11 @@ services:
       - revokeToken
     mandate: ALL authentication MUST use this service
     dependencies: [jwt, redis]
+    lifecycle: active        # active | deprecated | sunset
+    owner: platform-team
+    api_schema: docs/openapi/auth.yaml
+    health_check: /api/health/auth
+    slack_channel: '#platform-auth'
 
   user_management:
     location: src/modules/users/
@@ -35,6 +40,11 @@ services:
       - searchUsers
     mandate: ALL user operations MUST use this service
     related: [authentication, email]
+    lifecycle: active        # active | deprecated | sunset
+    owner: platform-team
+    api_schema: docs/openapi/users.yaml
+    health_check: /api/health/users
+    slack_channel: '#platform-users'
 
 utilities:
   validation:
@@ -212,3 +222,65 @@ Update: Add to service-inventory.yaml after creation
 - Use existing event bus instead of direct service calls
 - Check existing event handlers before creating new ones
 - Document new events in service inventory
+
+## Service Lifecycle Management
+
+Each service in the inventory carries a `lifecycle` field indicating its operational status:
+
+### Lifecycle Values
+
+- **`active`** -- The service is in production use, actively maintained, and recommended for new consumers. All new integrations should target active services.
+- **`deprecated`** -- A replacement service is available. Existing consumers may continue using this service, but no new consumers should integrate with it. The inventory entry should include a `replacement` field pointing to the successor.
+- **`sunset`** -- The service is scheduled for removal. A migration deadline has been set, and all consumers must migrate before that date. The inventory entry should include `sunset_date` and `migration_guide` fields.
+
+### When to Deprecate a Service
+
+Mark a service as `deprecated` when:
+- A replacement service has been built and is production-ready
+- The replacement covers all capabilities of the original
+- No new consumers should integrate with the original
+- Existing consumers have a clear migration path
+
+Example entry for a deprecated service:
+```yaml
+legacy_notifications:
+  location: src/modules/notifications-v1/
+  primary_file: notification.service.ts
+  lifecycle: deprecated
+  replacement: notification_service_v2
+  owner: platform-team
+  slack_channel: '#platform-notifications'
+  capabilities:
+    - sendEmail
+    - sendSMS
+  mandate: DO NOT use for new integrations — use notification_service_v2
+```
+
+### When to Sunset a Service
+
+Mark a service as `sunset` when:
+- All consumers have been notified of the migration deadline
+- A migration guide is available and documented
+- The removal date has been agreed upon with all stakeholders
+- No new features will be added to the service
+
+Example entry for a sunset service:
+```yaml
+legacy_auth_v1:
+  location: src/modules/auth-v1/
+  primary_file: auth-legacy.service.ts
+  lifecycle: sunset
+  sunset_date: 2025-06-30
+  migration_guide: docs/migrations/auth-v1-to-v2.md
+  replacement: authentication
+  owner: platform-team
+  slack_channel: '#platform-auth'
+  mandate: MIGRATING — must be removed by 2025-06-30
+```
+
+### Handling Deprecated Services in Inventory Searches
+
+When searching the inventory for existing capabilities:
+1. **Active services** -- Recommend directly for reuse
+2. **Deprecated services** -- Flag the match but recommend the replacement instead. Include a note: "This service is deprecated. Use [replacement] for new integrations."
+3. **Sunset services** -- Do not recommend. Note that the service exists but is scheduled for removal. Direct the consumer to the replacement service.

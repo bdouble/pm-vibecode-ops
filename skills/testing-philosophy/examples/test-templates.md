@@ -291,3 +291,141 @@ it('should send welcome email', async () => {
 | Fresh state | Reset mocks in beforeEach |
 | Edge cases | Boundaries, nulls, errors |
 | Skip trivial | Getters, pass-throughs, config |
+
+---
+
+## Property-Based Testing with fast-check
+
+Property-based testing verifies that properties hold for ALL possible inputs, not just hand-picked examples. Instead of testing `calculateDiscount(100) === 10`, you assert invariants like "discount should never exceed the original price" and let the framework generate thousands of random inputs to find counterexamples.
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { fc } from '@fast-check/vitest';
+import { calculateDiscount, applyDiscount } from './discount.service';
+
+describe('DiscountService - Property-Based Tests', () => {
+  it('should never produce a negative discount', () => {
+    fc.assert(
+      fc.property(
+        fc.float({ min: 0.01, max: 100_000, noNaN: true }),
+        fc.integer({ min: 0, max: 100 }),
+        (price, discountPercent) => {
+          const discount = calculateDiscount(price, discountPercent);
+          expect(discount).toBeGreaterThanOrEqual(0);
+        }
+      )
+    );
+  });
+
+  it('should never produce a discount exceeding the original price', () => {
+    fc.assert(
+      fc.property(
+        fc.float({ min: 0.01, max: 100_000, noNaN: true }),
+        fc.integer({ min: 0, max: 100 }),
+        (price, discountPercent) => {
+          const discount = calculateDiscount(price, discountPercent);
+          expect(discount).toBeLessThanOrEqual(price);
+        }
+      )
+    );
+  });
+
+  it('should be idempotent when applying the same discount twice', () => {
+    fc.assert(
+      fc.property(
+        fc.float({ min: 0.01, max: 100_000, noNaN: true }),
+        fc.integer({ min: 0, max: 100 }),
+        (price, discountPercent) => {
+          const once = applyDiscount(price, discountPercent);
+          const twice = applyDiscount(once, 0); // No additional discount
+          expect(twice).toBe(once);
+        }
+      )
+    );
+  });
+
+  it('should maintain ordering: higher discount percent means lower final price', () => {
+    fc.assert(
+      fc.property(
+        fc.float({ min: 1, max: 100_000, noNaN: true }),
+        fc.integer({ min: 0, max: 49 }),
+        (price, lowerPercent) => {
+          const higherPercent = lowerPercent + 1;
+          const priceWithLower = applyDiscount(price, lowerPercent);
+          const priceWithHigher = applyDiscount(price, higherPercent);
+          expect(priceWithHigher).toBeLessThanOrEqual(priceWithLower);
+        }
+      )
+    );
+  });
+});
+```
+
+**When to use property-based tests:**
+- Financial calculations (amounts, percentages, rounding)
+- Data transformations (encode/decode roundtrips)
+- Sorting and filtering (output should maintain invariants)
+- Validation logic (valid inputs accepted, invalid rejected)
+
+---
+
+## Parameterized Testing with test.each
+
+Use `test.each` to run the same test logic against multiple inputs. This eliminates copy-paste test duplication and makes boundary values explicit.
+
+### Array Format
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { validateEmail } from './validators/email.validator';
+
+describe('validateEmail', () => {
+  it.each([
+    ['user@example.com', true],
+    ['admin@company.co.uk', true],
+    ['name+tag@domain.org', true],
+    ['user.name@sub.domain.com', true],
+    ['', false],
+    ['not-an-email', false],
+    ['@missing-local.com', false],
+    ['missing-domain@', false],
+    ['spaces in@email.com', false],
+    ['double@@at.com', false],
+  ])('validateEmail("%s") should return %s', (email, expected) => {
+    expect(validateEmail(email)).toBe(expected);
+  });
+});
+```
+
+### Tagged Template Literal Format
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { classifyAge } from './age-classifier';
+
+describe('classifyAge', () => {
+  it.each`
+    age    | expected
+    ${-1}  | ${'invalid'}
+    ${0}   | ${'infant'}
+    ${1}   | ${'infant'}
+    ${2}   | ${'toddler'}
+    ${5}   | ${'child'}
+    ${12}  | ${'child'}
+    ${13}  | ${'teenager'}
+    ${17}  | ${'teenager'}
+    ${18}  | ${'adult'}
+    ${64}  | ${'adult'}
+    ${65}  | ${'senior'}
+    ${150} | ${'invalid'}
+  `('classifyAge($age) should return "$expected"', ({ age, expected }) => {
+    expect(classifyAge(age)).toBe(expected);
+  });
+});
+```
+
+**When to use parameterized tests:**
+- Boundary value analysis (off-by-one, min/max, thresholds)
+- Input validation (valid and invalid cases)
+- Status or category classification
+- Format conversion (currency, dates, units)

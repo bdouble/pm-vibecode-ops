@@ -2,29 +2,43 @@
 
 ADRs capture the WHY behind significant architectural decisions. Use them when the decision will affect the codebase long-term and future developers need context.
 
+This template follows [MADR 4.0](https://adr.github.io/madr/) (Markdown Any Decision Records), the community standard for lightweight ADRs. MADR 4.0 adds structured front matter, decision drivers, and a confirmation section to ensure decisions are traceable and verifiable.
+
 ## ADR Template
 
 ```markdown
 # ADR-[NUMBER]: [TITLE]
 
-## Status
-[Proposed | Accepted | Deprecated | Superseded by ADR-XXX]
-
-## Date
-[YYYY-MM-DD]
+---
+status: [Proposed | Accepted | Deprecated | Superseded by ADR-XXX]
+date: [YYYY-MM-DD]
+decision-makers: [list of people involved in the decision]
+consulted: [list of people whose opinions were sought (SMEs, architects)]
+informed: [list of people who are kept up-to-date (stakeholders, dependent teams)]
+---
 
 ## Context
+
 [What is the issue we're facing? What forces are at play?]
 - Business pressure: [deadlines, stakeholder requirements]
 - Technical constraints: [existing architecture, performance needs]
 - Team considerations: [expertise, maintenance capacity]
 
+## Decision Drivers
+
+- [Primary driver — the most important factor influencing this decision]
+- [Secondary driver — significant constraint or requirement]
+- [Tertiary driver — supporting factor]
+- [Optional: additional drivers as needed]
+
 ## Decision
+
 We will [decision statement].
 
 ## Rationale
+
 We chose this approach because:
-1. [Primary reason]
+1. [Primary reason — maps to primary decision driver]
 2. [Secondary reason]
 3. [Supporting evidence/data]
 
@@ -44,6 +58,13 @@ We chose this approach because:
 
 ### Risks
 - [Risk with mitigation strategy]
+
+## Confirmation
+
+[How to verify this decision was implemented correctly. Include specific checks:]
+- [Automated test or CI check that validates the decision]
+- [Code review criteria specific to this decision]
+- [Metric or observable behavior that confirms correct implementation]
 ```
 
 ## Real ADR Example
@@ -51,23 +72,35 @@ We chose this approach because:
 ```markdown
 # ADR-007: PostgreSQL for Primary Database
 
-## Status
-Accepted
-
-## Date
-2024-01-10
+---
+status: Accepted
+date: 2024-01-10
+decision-makers: [Tech Lead, Backend Lead]
+consulted: [DBA, Platform Team, Security Team]
+informed: [Product Manager, Frontend Lead, DevOps]
+---
 
 ## Context
+
 Our application requires a primary database. We're building a SaaS platform with:
 - Complex relational data (users, organizations, subscriptions)
 - Transaction requirements (payment processing)
 - Full-text search needs (content discovery)
 - Team has mixed SQL experience (2 senior, 3 junior devs)
 
+## Decision Drivers
+
+- ACID compliance is non-negotiable for payment processing
+- Team must be productive within 2 weeks (no steep learning curve)
+- Minimize operational dependencies (fewer moving parts preferred)
+- Full-text search needed but Elasticsearch operational burden is too high for current team size
+
 ## Decision
+
 We will use PostgreSQL 15+ as our primary database.
 
 ## Rationale
+
 We chose PostgreSQL because:
 1. ACID compliance required for payment transactions
 2. Built-in full-text search avoids separate Elasticsearch dependency
@@ -93,6 +126,13 @@ We chose PostgreSQL because:
 ### Risks
 - If we outgrow single-node, will need read replicas or sharding
   - Mitigation: Design with partitioning in mind from start
+
+## Confirmation
+
+- [ ] Database connection uses PostgreSQL 15+ (`SELECT version()` returns 15.x or higher)
+- [ ] All payment-related operations wrapped in transactions (grep for `BEGIN/COMMIT` or ORM transaction blocks)
+- [ ] Full-text search uses `tsvector`/`tsquery` (no Elasticsearch dependency in `package.json`)
+- [ ] CI pipeline includes PostgreSQL integration tests
 ```
 
 ## When to Write an ADR vs Inline Comment

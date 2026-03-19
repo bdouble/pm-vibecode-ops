@@ -16,32 +16,53 @@ description: |
 
 This skill enforces disciplined development practices that ensure code quality and efficiency across all Claude models.
 
-## Code Exploration (Before Any Changes)
+## Pre-Change Verification
 
-**MANDATORY before proposing any code changes:**
+Complete this numbered procedure before proposing or making any code changes. No step is optional.
 
-1. Read all relevant files before proposing changes
-2. Never speculate about code not yet inspected
-3. If user references a file path, read it before responding
-4. Search for existing implementations before creating new ones
-5. Understand existing patterns before implementing features
+### 1. Read All Target Files
 
-**Verification checklist:**
-- Verify all files to be modified have been read
-- Confirm understanding of existing codebase patterns
-- Check for similar existing implementations before creating new ones
+Use the **Read** tool to load every file that will be modified. Never edit a file that has not been read in the current session.
 
-**Example - Correct approach:**
 ```
-User: "Add email validation to the signup form"
-
-WRONG: Immediately write validation code
-RIGHT:
-1. Read signup form: src/components/SignupForm.tsx
-2. Search for existing validation: grep -r "validation\|validate" src/
-3. Find existing pattern: src/utils/validators.ts
-4. Use existing validateEmail() from validators.ts
+For each file to modify:
+  Read(file_path) → confirm contents loaded
+  Note: existing patterns, naming conventions, import style
 ```
+
+### 2. Search for Existing Implementations
+
+Use **Grep** to find whether the functionality already exists elsewhere in the codebase:
+
+```
+Grep(pattern: "functionName|className|featureName", path: "src/")
+```
+
+If a match is found, use the existing implementation rather than creating a duplicate.
+
+### 3. Discover Related Files
+
+Use **Glob** to identify files that follow the same pattern or might be affected by the change:
+
+```
+Glob(pattern: "src/**/*.service.ts")  → find all services
+Glob(pattern: "src/**/*.test.ts")     → find related tests
+Glob(pattern: "**/*user*")            → find related modules
+```
+
+### 4. Understand Existing Patterns
+
+Before implementing, identify:
+- How similar features are structured in the codebase
+- What naming conventions are in use (camelCase, kebab-case, etc.)
+- What import patterns are followed (relative vs absolute, barrel exports)
+- What error handling patterns exist (custom errors, Result types, try/catch)
+
+### 5. Confirm Readiness
+
+Verify all files to be modified have been read. Confirm understanding of existing patterns. Only then propose changes.
+
+**Verification statement** (mental check, not output): "I have read every file I plan to modify. I have searched for existing implementations. I understand the patterns in use."
 
 ## Scope Control
 
@@ -60,32 +81,115 @@ RIGHT:
 - "For future extensibility..."
 - Adding abstractions for single-use code
 
+## Scope Decision Framework
+
+When tempted to expand scope, use this quick decision framework. If thinking X, check Y:
+
+| If Thinking... | Check This | Decision |
+|----------------|------------|----------|
+| "This function should also handle edge case Z" | Was edge case Z mentioned in the request? | If no, do not add it. |
+| "I should refactor this while I'm here" | Did the user ask for a refactor? | If no, make the requested change only. Note the refactor opportunity in your response if significant. |
+| "This needs better error handling" | Does the existing code handle errors this way? Is the error handling broken? | If the current pattern works and is consistent with the codebase, leave it. Only fix if the request specifically involves error handling. |
+| "I'll add a utility function for reuse" | Will this utility be used more than once right now? | If it serves only the current change, inline the logic. Do not create abstractions for single-use code. |
+| "The tests should be updated too" | Did the user ask for test changes? Did the change break existing tests? | If tests still pass and the user did not ask, do not modify them. If tests break, fix only the broken assertions. |
+| "This file needs formatting cleanup" | Is formatting the requested task? | If no, leave formatting as-is. Style changes pollute diffs and obscure real changes. |
+
+### The Three-Question Gate
+
+Before making ANY change beyond the explicit request, answer these three questions:
+
+1. **Was this specific change requested?** — If no, stop.
+2. **Is this required to complete the request?** — If no, stop.
+3. **Is this the smallest change that works?** — If no, reduce scope.
+
+If any answer is "no," do not make the change. Mention it in the response only if it represents a significant issue (security vulnerability, data loss risk).
+
+See `references/scope-creep-patterns.md` for the full catalog of scope creep anti-patterns with before/after examples.
+
 **Example - Scope discipline:**
 ```
 User: "Fix the typo in the button label"
 
 WRONG:
-- Fix typo ✓
+- Fix typo
 - Refactor button component (not requested)
 - Add aria-label (not requested)
 - Update tests (not requested)
 
 RIGHT:
-- Fix typo ✓
+- Fix typo
 - Done
 ```
 
-## Tool Efficiency
+## Tool Parallelization Patterns
 
 **Parallelize when possible:**
 
 Call independent tools in parallel (single message). Serialize only when one call depends on another's result.
 
-**Examples:**
-- Reading multiple unrelated files → parallel
-- Searching with Grep AND Glob → parallel
-- Reading file THEN editing it → sequential (Edit depends on Read)
-- Creating directory THEN writing file inside → sequential
+### Parallel Operations (No Dependencies)
+
+These operations have no data dependency between them — issue all calls in a single message:
+
+```
+Reading multiple unrelated files:
+  Read("src/auth/login.ts") + Read("src/auth/register.ts") + Read("src/auth/types.ts")
+
+Searching with different strategies simultaneously:
+  Grep("validateEmail", path: "src/") + Glob("src/**/*.validator.ts")
+
+Checking git state and file state:
+  Bash("git status") + Bash("git log --oneline -5") + Read("package.json")
+
+Reading source and its test file:
+  Read("src/services/user.service.ts") + Read("src/services/__tests__/user.service.test.ts")
+```
+
+### Sequential Operations (Data Dependencies)
+
+These require results from one operation before the next can proceed:
+
+```
+Reading then editing (Edit depends on Read output):
+  Read("src/config.ts") → then → Edit("src/config.ts", old_string, new_string)
+
+Creating directory then writing file:
+  Bash("mkdir -p src/utils") → then → Write("src/utils/helpers.ts", content)
+
+Searching then reading results:
+  Grep("TODO", path: "src/") → then → Read(each matching file)
+
+Checking branch then committing:
+  Bash("git branch --show-current") → then → Bash("git commit ...")
+```
+
+### Mixed Operations (Partial Dependencies)
+
+When some calls are independent and others depend on results, issue the independent calls first:
+
+```
+Step 1 (parallel): Read("src/a.ts") + Read("src/b.ts") + Grep("pattern", path: "src/")
+Step 2 (sequential): Edit("src/a.ts", ...) based on what was read
+Step 3 (sequential): Edit("src/b.ts", ...) based on what was read
+```
+
+Note: Steps 2 and 3 can also run in parallel if the edits are in different files and neither depends on the other's result.
+
+### Decision Rule
+
+When uncertain whether to parallelize or serialize, ask: "Does call B need the output of call A to determine its parameters?" If yes, serialize. If no, parallelize. When in doubt, parallelize — the worst case is a wasted call that can be re-issued with corrected parameters.
+
+## Common Mistakes
+
+These patterns indicate the skill is not being applied correctly:
+
+| Mistake | Correction |
+|---------|------------|
+| Proposing changes to a file never read in this session | Read the file first, then propose |
+| Creating a new utility when an existing one was not searched for | Grep for existing implementations before creating |
+| Making three separate Bash calls that could run in parallel | Combine independent calls into a single message |
+| Editing a file, then reading it to check the result | Read first, edit second — Edit tool shows the result |
+| Adding "improvements" the user did not request | Apply the three-question gate above |
 
 ## Additional Resources
 

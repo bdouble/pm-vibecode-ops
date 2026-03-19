@@ -97,3 +97,28 @@ This skill activates during:
 - `/discovery` — When analyzing patterns with multiple valid interpretations
 
 The output feeds into decision documentation, ensuring future readers understand why alternatives were rejected.
+
+## Weighted Scoring Matrix
+
+When options have multiple evaluation dimensions with different importance levels, use a weighted scoring matrix to make trade-offs explicit and comparable.
+
+**Steps:**
+1. List evaluation dimensions (from the table above or domain-specific criteria)
+2. Assign a weight to each dimension reflecting its relative importance (weights should sum to 1.0 or 100%)
+3. Score each option on each dimension using a consistent scale (e.g., 1-5)
+4. Multiply each score by its weight and sum across dimensions for a weighted total
+
+| Dimension | Weight | Option A | Option B | Option C |
+|-----------|--------|----------|----------|----------|
+| User Impact | 0.30 | 4 (1.20) | 3 (0.90) | 5 (1.50) |
+| Technical Complexity | 0.20 | 3 (0.60) | 5 (1.00) | 2 (0.40) |
+| Time to Value | 0.25 | 5 (1.25) | 2 (0.50) | 3 (0.75) |
+| Reversibility | 0.15 | 4 (0.60) | 4 (0.60) | 2 (0.30) |
+| Risk Profile | 0.10 | 3 (0.30) | 4 (0.40) | 3 (0.30) |
+| **Weighted Total** | **1.00** | **3.95** | **3.40** | **3.25** |
+
+**When to use**: Apply the weighted matrix when stakeholders disagree on priorities, when dimensions have clearly unequal importance, or when you need an auditable rationale for the chosen option. The matrix does not replace judgment — use it to surface trade-offs, not to mechanically pick the highest score.
+
+## Architecture Decision Canvas
+
+The Architecture Decision Canvas is a complementary visual tool for structured decision-making. It captures the decision context (drivers, constraints, quality attributes), the options considered, and the rationale on a single page. Use it alongside the weighted scoring matrix when the decision is architecturally significant and the rationale needs to be communicated to stakeholders who were not part of the exploration.

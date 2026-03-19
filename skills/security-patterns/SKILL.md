@@ -10,6 +10,10 @@ description: |
 
   Enforces auth on every protected endpoint, parameterized queries only, secrets from env only,
   input validation, no sensitive data in error responses, security event logging (no PII).
+
+  Also activate for agentic security patterns when user mentions or code contains:
+  - "agent", "MCP server", "tool calling", "multi-agent", "LLM orchestration"
+  - Imports: @anthropic-ai/sdk, openai, langchain, @modelcontextprotocol, autogen, crewai
 ---
 
 # Security Patterns
@@ -28,20 +32,166 @@ When writing security-relevant code:
 6. **ERRORS**: No sensitive data in responses
 7. **LOGGING**: Security events logged, PII excluded
 
-## Quick Reference
+## Quick Reference (OWASP Top 10:2025)
 
-| Vulnerability | Prevention |
-|--------------|------------|
-| Broken Access Control | Auth + authz on every endpoint |
-| Cryptographic Failures | argon2id/bcrypt, randomBytes for tokens |
-| Injection | Parameterized queries only |
-| Insecure Design | Rate limiting, account lockout |
-| Security Misconfiguration | Helmet headers, secure cookies |
-| Vulnerable Components | npm audit, fail CI on critical |
-| Authentication Failures | timingSafeEqual for comparisons |
-| Data Integrity | Verify webhook signatures |
-| Logging Failures | Log events, never log PII/secrets |
-| SSRF | URL allowlist, block internal IPs |
+| # | Vulnerability | Prevention |
+|---|--------------|------------|
+| A01 | Broken Access Control | Auth + authz on every endpoint, URL allowlist for SSRF |
+| A02 | Security Misconfiguration | Helmet headers, secure cookies, generic errors |
+| A03 | Software Supply Chain Failures | npm ci, lockfile integrity, SBOM, typosquatting checks |
+| A04 | Cryptographic Failures | argon2id/bcrypt, randomBytes for tokens |
+| A05 | Injection | Parameterized queries only |
+| A06 | Insecure Design | Rate limiting, account lockout, threat modeling |
+| A07 | Authentication Failures | timingSafeEqual for comparisons |
+| A08 | Software/Data Integrity Failures | Verify webhook signatures, SRI for CDN |
+| A09 | Logging and Alerting Failures | Log events, alert on anomalies, never log PII |
+| A10 | Mishandling of Exceptional Conditions | Fail-safe defaults, centralized error handling, resource cleanup |
+
+## Security-First Development Workflow
+
+Follow this procedure when writing any code that handles authentication, authorization, user data, or external input:
+
+### Step 1: Identify Trust Boundaries
+
+Before writing code, map where data crosses trust boundaries:
+- External input entry points (HTTP requests, webhooks, file uploads, CLI arguments)
+- Internal service boundaries (service-to-service calls, message queues)
+- Data storage boundaries (database reads/writes, cache access, file system)
+- Third-party integration points (API calls, OAuth flows, CDN resources)
+
+### Step 2: Classify Data Sensitivity
+
+For each data element the code handles:
+- **PII** (names, emails, addresses) — encrypt at rest, mask in logs, restrict access
+- **Credentials** (passwords, tokens, API keys) — never store plaintext, rotate regularly
+- **Financial** (payment info, balances) — additional audit logging, strict access control
+- **Public** (product descriptions, documentation) — standard handling sufficient
+
+### Step 3: Apply Defense at Every Layer
+
+Write security controls at each trust boundary, not just at the perimeter:
+1. Validate and sanitize input at the entry point
+2. Check authorization before every data access operation
+3. Use parameterized queries for all database operations
+4. Sanitize output before rendering (HTML encoding, JSON escaping)
+5. Log the security-relevant event with context but without PII
+
+### Step 4: Verify Before Committing
+
+Run through the enforcement checklist above. Grep the changed files for security review triggers (see below). Confirm no secrets, no raw queries, no missing auth checks.
+
+## Common Vulnerability Patterns
+
+These inline examples cover the three most critical vulnerability categories. See `references/owasp-patterns.md` for the complete catalog.
+
+### Broken Access Control (A01)
+
+The most common vulnerability. Always verify the requesting user owns the resource:
+
+```typescript
+// WRONG: No ownership check — any authenticated user can access any record
+app.get('/api/records/:id', authenticate, async (req, res) => {
+  const record = await db.records.findById(req.params.id);
+  res.json(record);
+});
+
+// RIGHT: Verify resource belongs to requesting user
+app.get('/api/records/:id', authenticate, async (req, res) => {
+  const record = await db.records.findOne({
+    id: req.params.id,
+    userId: req.user.id,  // ownership check
+  });
+  if (!record) throw new NotFoundError();
+  res.json(record);
+});
+```
+
+### Injection (A05)
+
+Never interpolate user input into queries. Use parameterized queries exclusively:
+
+```typescript
+// WRONG: SQL injection via string interpolation
+const users = await db.query(
+  `SELECT * FROM users WHERE name = '${req.query.name}'`
+);
+
+// RIGHT: Parameterized query
+const users = await db.query(
+  'SELECT * FROM users WHERE name = $1',
+  [req.query.name]
+);
+```
+
+### Supply Chain (A03)
+
+Verify integrity of external resources and dependencies:
+
+```typescript
+// WRONG: Trusting CDN content without integrity check
+<script src="https://cdn.example.com/lib.js"></script>
+
+// RIGHT: Subresource integrity verification
+<script src="https://cdn.example.com/lib.js"
+  integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxAh..."
+  crossorigin="anonymous"></script>
+```
+
+### Webhook Signature Verification (A08)
+
+Always verify webhook payloads come from the expected sender:
+
+```typescript
+// WRONG: Trusting webhook payload without verification
+app.post('/webhook', (req, res) => {
+  processEvent(req.body);  // unverified source
+});
+
+// RIGHT: Verify signature before processing
+app.post('/webhook', (req, res) => {
+  const signature = req.headers['x-signature'];
+  const expected = crypto
+    .createHmac('sha256', process.env.WEBHOOK_SECRET)
+    .update(JSON.stringify(req.body))
+    .digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    throw new UnauthorizedError('Invalid webhook signature');
+  }
+  processEvent(req.body);
+});
+```
+
+## Security Review Triggers
+
+The following code patterns indicate elevated security risk. When any appear in changed files, activate deeper security review — read surrounding context, check for missing controls, and verify the enforcement checklist:
+
+### Immediate Red Flags
+
+| Pattern | Risk | Required Action |
+|---------|------|-----------------|
+| `.raw(` or `.rawQuery(` | SQL injection | Confirm parameterization, no string interpolation |
+| `eval(`, `Function(`, `new Function` | Code injection | Reject unless exceptional justification documented |
+| `req.params` or `req.query` in template literals | Injection | Replace with parameterized query or validated input |
+| `dangerouslySetInnerHTML` | XSS | Confirm input is sanitized with DOMPurify or equivalent |
+| `child_process.exec` with user input | Command injection | Use `execFile` with argument array instead |
+
+### Secrets and Credentials
+
+| Pattern | Risk | Required Action |
+|---------|------|-----------------|
+| Hardcoded strings resembling keys/tokens | Credential exposure | Move to environment variables |
+| `password`, `secret`, `apiKey` in source | Credential exposure | Verify loaded from env, never logged |
+| `.env` file committed | Credential exposure | Add to `.gitignore`, rotate exposed secrets |
+| `console.log` with auth-related variables | PII/credential leak | Remove or replace with structured logger excluding sensitive fields |
+
+### Authorization Gaps
+
+| Pattern | Risk | Required Action |
+|---------|------|-----------------|
+| Route handler without auth middleware | Broken access control | Add authentication unless intentionally public |
+| Data query without user/tenant scoping | IDOR vulnerability | Add ownership or tenant filter to query |
+| Admin endpoint without role check | Privilege escalation | Add role-based authorization middleware |
+| File upload without type/size validation | Resource exhaustion, malware | Add MIME type allowlist and size limit |
 
 ## Core Principles
 
@@ -50,9 +200,22 @@ When writing security-relevant code:
 - **Least privilege**: Minimal permissions required
 - **Secure defaults**: Safe configuration out of the box
 
-See `references/owasp-patterns.md` for detailed code examples for each OWASP Top 10 vulnerability.
+See `references/owasp-patterns.md` for detailed code examples for each OWASP Top 10:2025 vulnerability.
+
+## Agentic Security Awareness
+
+When writing or reviewing code that involves AI agents, LLM orchestration, MCP servers, or tool-calling patterns, apply these additional security checks:
+
+- **Agent tool permissions**: Enforce least privilege for each tool — scope permissions to the current task, prefer read-only defaults, and require explicit grants for write/delete operations
+- **Agent context input validation**: Validate and sanitize all data flowing into agent context, including RAG retrieval results, memory store content, external tool outputs, and user-provided documents
+- **Human-in-the-loop for high-impact actions**: Require explicit human confirmation before agent actions that mutate production data, deploy code, escalate privileges, or access sensitive resources
+- **Sandbox isolation for code execution**: Execute agent-generated code in sandboxed environments with strict resource limits (CPU, memory, network egress) and no access to production credentials
+- **Audit logging of agent activity**: Log all agent tool invocations, decisions, and delegation events with enough context for forensic analysis and behavioral drift detection
+
+For the complete agentic security assessment framework, see `agents/references/security-agentic-owasp-reference.md`.
 
 ## Additional Resources
 
 - **`references/owasp-patterns.md`** — Comprehensive OWASP Top 10 vulnerability patterns with prevention strategies
 - **`examples/owasp-code-examples.md`** — Before/after code examples for common OWASP vulnerabilities
+- **`agents/references/security-agentic-owasp-reference.md`** — OWASP Top 10 for Agentic Applications 2026 assessment framework

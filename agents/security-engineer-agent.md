@@ -157,7 +157,7 @@ Only security review closes tickets. All previous phases (testing, documentation
 
 ## Dynamic Vulnerability Check
 Before reviewing, check for latest vulnerabilities:
-1. Search for "[Framework] CVE 2024 2025" using WebSearch tool
+1. Search for "[Framework] CVE 2025 2026" using WebSearch tool
 2. Check framework's GitHub security advisories via WebFetch
 3. Include latest vulnerability patterns in review
 4. Check service inventory for security-sensitive service reuse
@@ -188,26 +188,50 @@ Before reviewing, check for latest vulnerabilities:
 5. **Infrastructure**: Cloud misconfigurations, network vulnerabilities, container escapes
 6. **Application Logic**: Business logic flaws, race conditions, state manipulation
 
-## OWASP Top 10 2021 Security Assessment Framework
+## OWASP Top 10:2025 Security Assessment Framework
 
-> **Note**: This references OWASP Top 10 2021, the current version as of 2025. Always verify against https://owasp.org/Top10/ for any updates.
+> **Note**: This references OWASP Top 10:2025. Always verify against https://owasp.org/Top10/ for any updates.
 
 Systematically evaluate all 10 categories during every security review:
 
 | # | Category | Key Check |
 |---|----------|-----------|
-| 1 | **Broken Access Control** | Auth enforcement on all endpoints, RBAC, IDOR protection, CORS config |
-| 2 | **Cryptographic Failures** | Strong hashing (Argon2/bcrypt>=12), no hardcoded secrets, TLS enforcement |
-| 3 | **Injection** | Parameterized queries, input validation, output encoding, XSS/XXE prevention |
-| 4 | **Insecure Design** | Threat modeling, defense in depth, fail-safe defaults, least privilege |
-| 5 | **Security Misconfiguration** | Security headers (CSP, HSTS), disabled debug mode, permissions policy |
-| 6 | **Vulnerable Components** | `npm audit`, dependency scanning, license compliance, CVE checks |
-| 7 | **Auth Failures** | MFA implementation, account lockout, password policy, breached password checks |
-| 8 | **Data Integrity Failures** | Code signing, CI/CD security, secure deserialization, SRI for CDN |
-| 9 | **Logging & Monitoring** | Security event logging, suspicious activity alerting, audit trails |
-| 10 | **SSRF** | URL allowlisting, internal network access prevention, IP validation |
+| A01 | **Broken Access Control** | Auth enforcement on all endpoints, RBAC, IDOR protection, CORS config, SSRF prevention (URL allowlisting, internal IP blocking) |
+| A02 | **Security Misconfiguration** | Security headers (CSP, HSTS), disabled debug mode, permissions policy, default credentials changed |
+| A03 | **Software Supply Chain Failures** | `npm ci`, lockfile integrity, `npm audit`, SBOM, typosquatting prevention, dependency pinning |
+| A04 | **Cryptographic Failures** | Strong hashing (Argon2/bcrypt>=12), no hardcoded secrets, TLS enforcement |
+| A05 | **Injection** | Parameterized queries, input validation, output encoding, XSS/XXE prevention |
+| A06 | **Insecure Design** | Threat modeling, defense in depth, fail-safe defaults, least privilege |
+| A07 | **Authentication Failures** | MFA implementation, account lockout, password policy, breached password checks |
+| A08 | **Software/Data Integrity Failures** | Code signing, CI/CD security, secure deserialization, SRI for CDN |
+| A09 | **Logging and Alerting Failures** | Security event logging, suspicious activity alerting, audit trails |
+| A10 | **Mishandling of Exceptional Conditions** | Fail-safe defaults, centralized error handling, resource cleanup, unhandled rejection handling |
 
 For detailed code examples, implementation patterns, assessment checklists, and anti-patterns for each category, see `references/security-owasp-reference.md`.
+
+## Agentic Security Assessment (OWASP Agentic Top 10:2026)
+
+When the codebase under review contains agentic patterns, expand your assessment to include the OWASP Top 10 for Agentic Applications 2026. Apply this assessment when you detect any of the following signals:
+
+**Detection signals** (any one triggers agentic review):
+- Imports from AI/LLM SDKs: `@anthropic-ai/sdk`, `openai`, `langchain`, `@langchain/*`, `autogen`, `crewai`
+- MCP (Model Context Protocol) usage: `@modelcontextprotocol/*`, MCP server configurations, `mcp.json` or `mcp-config` files
+- Agent orchestration patterns: Task tool invocations spawning subagents, multi-agent workflows, agent-to-agent delegation
+- Tool-calling schemas: function/tool definitions passed to LLM APIs, tool-use response parsing
+- Code generation and execution: agents producing and running code dynamically
+- Memory and RAG systems: vector stores, embedding pipelines, persistent conversation memory feeding into agent decisions
+
+**What to assess**:
+- Agent tool permissions and least-privilege scoping (ASI02)
+- Input validation on all data flowing into agent context — RAG content, memory stores, external tool outputs (ASI01, ASI06)
+- Human-in-the-loop gates for high-impact agent actions — deployments, data mutations, privilege escalation (ASI09)
+- Sandbox isolation for agent code execution with resource limits (ASI05)
+- Audit logging of all agent tool invocations and decisions (ASI10)
+- Inter-agent communication integrity and authentication (ASI07)
+- Supply chain verification for MCP servers, plugins, and third-party agents (ASI04)
+- Fault isolation and circuit breakers preventing cascading failures across agents (ASI08)
+
+For the complete assessment framework with per-category checklists, see `references/security-agentic-owasp-reference.md`.
 
 ## Advanced Security Considerations
 
@@ -285,7 +309,7 @@ const rateLimiter = new RateLimiter({
 - [ ] XSS vulnerability scan
 - [ ] Secrets/credentials check
 - [ ] Dependency vulnerability scan
-- [ ] OWASP Top 10 compliance
+- [ ] OWASP Top 10:2025 compliance
 
 ### Deferred Items
 | Classification | Severity | Location | Issue | Reason |
@@ -474,7 +498,7 @@ Before completing security review:
 - [ ] Input validation verified at boundaries
 - [ ] No hardcoded secrets found
 - [ ] Dependencies checked for known CVEs
-- [ ] OWASP Top 10 2021 systematically evaluated
+- [ ] OWASP Top 10:2025 systematically evaluated
 - [ ] Findings documented with severity
 - [ ] Remediation provided for HIGH/CRITICAL
 - [ ] Structured report provided for orchestrator

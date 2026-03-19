@@ -238,6 +238,9 @@ CRITICAL INSTRUCTIONS:
 
 SECURITY CATEGORIES TO EXAMINE:
 
+**Agentic Security (when applicable):**
+When the codebase contains agentic patterns — AI/LLM SDK imports (`@anthropic-ai/sdk`, `openai`, `langchain`, `@modelcontextprotocol`), MCP server configurations, agent orchestration code, tool-calling implementations, or code generation workflows — the security-engineer-agent must also assess against the OWASP Top 10 for Agentic Applications 2026 (ASI01-ASI10). Key areas: agent tool permission scoping, input validation on all data entering agent context (RAG, memory, tool outputs), human-in-the-loop gates for high-impact actions, sandbox isolation for agent code execution, inter-agent communication integrity, MCP server supply chain verification, and audit logging of agent decisions. See `agents/references/security-agentic-owasp-reference.md` for the full assessment framework.
+
 **Input Validation Vulnerabilities:**
 - SQL injection via unsanitized user input
 - Command injection in system calls or subprocesses
