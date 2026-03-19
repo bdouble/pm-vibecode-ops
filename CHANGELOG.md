@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.20.0] - 2026-03-19
 
+### Added
+- **Context window auto-detection** — Orchestrator assesses available context window at startup. Models with 500K+ tokens use full verbatim context (default); models under 500K fall back to legacy budget rules via `commands/references/context-budget-legacy.md`.
+- **Context mode reporting** — Startup output now includes a `Context mode:` line so users can see whether agents are receiving full or condensed context, aiding diagnosis of incomplete implementations.
+- **Legacy context budget reference file** — `commands/references/context-budget-legacy.md` preserves the ~15,000 token budget system for use with smaller context windows.
+
 ### Changed
 - **Removed context budget from execute-ticket** — Eliminated the ~15,000 token context budget system (per-source token caps, extraction algorithm, truncation rules) from `/execute-ticket`. Orchestrator now includes complete, verbatim prior phase reports in every agent prompt instead of condensed extracts. Typical ticket workflows use ~25% of the 1M context window, so budget management was causing agents to miss details and produce incomplete implementations with no upside.
 - **Full Context Inclusion Policy** — New policy replaces the old budget system: "There is no context budget. Include everything." Agent prompts now receive full ticket description, all acceptance criteria, all Technical Notes, and complete prior phase reports without summarization.
