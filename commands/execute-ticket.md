@@ -179,7 +179,7 @@ For each phase that needs to run:
 - Any warnings, concerns, or risks raised
 - Deferred Items tables (full)
 
-**Note:** With 1M context windows, including full prior phase context is cheap. Losing context that causes an agent to make wrong decisions or miss requirements is expensive. When in doubt, include more context rather than less.
+**RULE: Always include full, verbatim prior phase reports.** Do NOT summarize, condense, or extract. Agents perform better with complete context than with curated excerpts — curation risks dropping details that downstream phases need.
 
 #### 3.2 Select Agent
 
@@ -231,8 +231,8 @@ Task tool parameters:
 - subagent_type: [agent-name from selection above]
 - description: "[Phase] for [ticket-id]"
 - prompt: Include ALL of the following:
-  1. Ticket details (title, description, acceptance criteria)
-  2. Condensed context from prior phases
+  1. Ticket details (title, full description, all acceptance criteria, all Technical Notes — verbatim)
+  2. Complete prior phase reports (full text, not summarized)
   3. Specific phase instructions
   4. Expected output format (structured report)
 ```
@@ -574,22 +574,23 @@ If user needs to re-run a phase that shows as complete:
 
 ## Context Management Principles
 
-**Provide agents with rich, relevant context:**
-- Each phase agent gets a fresh context window — use it generously
-- With 1M token context windows, the cost of over-providing context is near zero
-- The cost of under-providing context is high: wrong decisions, missed requirements, rework
-- Full details also stay in Linear comments for human reference
+**Include ALL context — never summarize or truncate:**
+- Each phase agent gets a fresh 1M token context window — use it fully
+- Include the **complete, verbatim** prior phase reports in every agent prompt
+- The cost of under-providing context is high: wrong decisions, missed requirements, incomplete implementations, rework
+- The cost of over-providing context is near zero — typical ticket workflows use ~25% of the 1M token context window
 - Orchestrator tracks: ticket ID, current phase, blocking status, branch/PR info
 
-**Default to inclusion, not exclusion:**
-- When unsure whether context is relevant to the next phase, include it
+**CRITICAL: Do NOT summarize, condense, or extract from prior reports:**
+- Pass each prior phase report **in full** — do not cherry-pick sections
 - Prior phase reasoning (the "why") is as important as outcomes (the "what")
-- Edge cases, concerns, and risks noted by earlier agents should propagate forward
-- Deferred Items tables should always propagate — they represent known gaps
+- Edge cases, concerns, and risks noted by earlier agents must propagate forward verbatim
+- Deferred Items tables must always propagate in full
+- When in doubt, include more — the agent will filter what it needs
 
-**Context extraction from prior reports:**
+**What each phase needs from prior reports (included via full report, not extraction):**
 
-Every phase receives the **full ticket description, acceptance criteria, and Technical Notes**. In addition, each phase receives substantive context from prior reports:
+Every phase receives the **full ticket description, acceptance criteria, and Technical Notes**, plus **complete prior phase reports**. The list below highlights what each phase relies on most — this is NOT an extraction guide; include the full reports and the agent will use what it needs:
 
 ```
 From Adaptation Report → Implementation:
@@ -634,120 +635,25 @@ From All Prior Reports → Security Review:
 - Code review findings (especially error handling, validation gaps)
 ```
 
-## Context Budget Guidelines
+## Full Context Inclusion Policy
 
-With 1M token context windows, the primary risk is **losing context that causes agents to make wrong decisions**, not context overflow. Budgets are generous defaults — include more when available, truncate only when a source is genuinely large.
+**There is no context budget. Include everything.**
 
-**Maximum context from prior phases: ~15,000 tokens total**
+With 1M token context windows, typical ticket workflows use ~25% of available context. The primary risk is **under-providing context** — which leads to wrong decisions, missed requirements, and incomplete implementations. There is no meaningful risk of over-providing context.
 
-This is a soft cap. If total context reaches ~15,000 tokens, begin applying the extraction priorities below. Most tickets will stay well under this limit.
+**For each phase agent prompt, include:**
 
-**Default token budgets per source:**
+1. **Full ticket description, acceptance criteria, and Technical Notes** — verbatim, never summarized
+2. **Complete prior phase reports** — copy each report in full from Linear comments, do not extract or condense
+3. **Git context** — branch, PR number, files changed
 
-| Source | Budget | Include |
-|--------|--------|---------|
-| Ticket description | 2,000 | Full description, all AC (verbatim), all Technical Notes (verbatim) |
-| Adaptation report | 3,000 | Full approach with trade-off reasoning, target files, integration points, constraints, deferred items with rationale |
-| Implementation report | 3,000 | Files changed with descriptions, patterns used, edge cases noted, concerns, integration points |
-| Testing report | 2,000 | Gate results with failure details, coverage %, skipped areas, risk notes |
-| Documentation report | 500 | Docs created, API changes documented, any gaps noted |
-| Code Review report | 2,000 | Status, requirements checklist results, best practices findings, SOLID/DRY findings, security concerns flagged |
+**Do NOT:**
+- Summarize or condense prior phase reports
+- Extract "key points" from reports — include the full report
+- Apply token budgets or caps to any context source
+- Truncate any section for length
 
-**Essential context (NEVER truncate regardless of budget pressure):**
-
-These items are protected across ALL phases, not just code review:
-
-| Source | Rationale |
-|--------|-----------|
-| Full Acceptance Criteria (from ticket) | Every phase needs to understand what "done" looks like |
-| Full Technical Notes (from ticket) | Contains explicit implementation requirements that are frequently missed |
-| Files Changed lists | Needed for scope in every downstream phase |
-| Deferred Items tables | Needed for traceability — items deferred in one phase may need attention in the next |
-| Adaptation scope decisions | Needed to detect SCOPE_GAPs and understand why certain approaches were chosen |
-
-**Phase-specific expanded context:**
-
-| Phase | Additional Essential Context | Rationale |
-|-------|------------------------------|-----------|
-| implementation | Full adaptation trade-off reasoning, service reuse mandates with specifics | Implementer needs to understand architectural decisions, not just file targets |
-| testing | Full implementation report (what was built, edge cases, concerns) | QA needs to understand what was built to test it properly, not rediscover from scratch |
-| codereview | Full AC, Technical Notes, adaptation scope decisions, implementation details | Requirements Verification (Step 0) checks every AC individually |
-| security-review | Full ticket context, adaptation architecture decisions, implementation details, code review security flags | Security needs to understand data flow, trust boundaries, and attack surface |
-
-**Extraction algorithm (when context exceeds budget):**
-```
-For each prior phase report:
-  1. Extract Status line (required)
-  2. Extract Summary (full, not just first sentence)
-  3. Extract file lists with descriptions
-  4. Extract key decisions and trade-off reasoning
-  5. Extract blocking issues, concerns, or security flags
-  6. Extract Deferred Items table (FULL — never truncate)
-  7. Extract edge cases, risks, and warnings
-
-If total context approaches ~15,000 tokens:
-  1. Reduce older phase reports first (adaptation before implementation)
-  2. Trim detailed explanations, keep decisions and outcomes
-  3. Trim code snippets (keep file:line references)
-  4. Append note: "[condensed - see Linear for full report]"
-  5. NEVER truncate: AC, Technical Notes, Adaptation Scope Decisions,
-     Files Changed, Deferred Items
-
-Priority order (last to cut → first to cut):
-  Essential context (protected) > Decisions/reasoning > Files with descriptions >
-  Concerns/risks > Summary > Detailed explanations > Code snippets
-```
-
-**Truncation rules:**
-- Always preserve essential context (listed above) regardless of phase count
-- If total context exceeds budget, condense the **oldest** phase reports first
-- Never drop a phase entirely — keep at minimum: Status + Summary + Files Changed + Deferred Items
-- Prefer condensing 3 phases lightly over dropping 1 phase completely
-
-**Example context for security-review phase (~2,500 tokens):**
-```
-## Ticket Context
-[Full ticket description, AC, Technical Notes - verbatim]
-
-## Prior Phase Summary
-
-### Adaptation
-- Approach: Event-driven architecture using existing NotificationService
-  and UserRepository. Chose async processing over sync to handle scale.
-- Target files: user.service.ts, auth.guard.ts, notification.handler.ts,
-  user.routes.ts, user.schema.ts
-- Integration: Connects to existing auth middleware, uses Inngest for
-  async event processing
-- Deferred: Rate limiting on admin endpoints (defense-in-depth, not critical path)
-- Scope decisions: Deferred batch import UI (AC #4) to follow-up ticket
-
-### Implementation
-- 6 files changed: user.service.ts (new CRUD + validation), auth.guard.ts
-  (role-based access), notification.handler.ts (event consumer),
-  user.routes.ts (REST endpoints), user.schema.ts (Zod schemas),
-  user.test.ts (integration tests)
-- Branch: feature/PRJ-123-user-profile, PR #45
-- Auth pattern: JWT validation via existing auth middleware, role enum check
-- Edge cases noted: email uniqueness handled via DB constraint + friendly error
-- Concerns: Large payload handling on profile update not explicitly bounded
-
-### Testing
-- All gates PASS, 87% coverage
-- Skipped: Visual regression (no UI), E2E for notification delivery (async)
-- Tested: All CRUD operations, auth scenarios, validation edge cases
-- Risk note: Async notification delivery tested via event spy, not full E2E
-
-### Documentation
-- API docs updated: user-endpoints.md, auth-patterns.md, event-catalog.md
-
-### Code Review
-- Status: APPROVED
-- Requirements: 6/7 AC verified (batch import deferred per adaptation)
-- Security concerns flagged: auth token expiry check uses > not >=,
-  profile update accepts unbounded payload size
-- SOLID/DRY: No MUST_FIX items. 1 SHOULD_FIX (validation logic
-  duplicated between route handler and service layer)
-```
+**Why this matters:** Agents that receive condensed summaries miss details that lead to incomplete implementations, skipped acceptance criteria, and wrong architectural decisions. Agents that receive full reports self-filter to what they need and produce more complete work.
 
 ---
 
@@ -763,7 +669,7 @@ When agents bypass issues (correct behavior for low-priority items), they MUST d
 1. ANY issue found but not addressed MUST appear in this table
 2. Location must include file:line for traceability
 3. Reason must explain the bypass decision (e.g., "Defense-in-depth, not exploitable")
-4. Table is preserved during context truncation (treated like Files Changed)
+4. Table is always included in full when passing context to downstream phases
 5. Orchestrator posts full table to Linear (not summarized)
 
 **When to defer (examples by phase):**

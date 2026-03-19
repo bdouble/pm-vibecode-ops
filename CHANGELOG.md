@@ -5,6 +5,15 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.0] - 2026-03-19
+
+### Changed
+- **Removed context budget from execute-ticket** — Eliminated the ~15,000 token context budget system (per-source token caps, extraction algorithm, truncation rules) from `/execute-ticket`. Orchestrator now includes complete, verbatim prior phase reports in every agent prompt instead of condensed extracts. Typical ticket workflows use ~25% of the 1M context window, so budget management was causing agents to miss details and produce incomplete implementations with no upside.
+- **Full Context Inclusion Policy** — New policy replaces the old budget system: "There is no context budget. Include everything." Agent prompts now receive full ticket description, all acceptance criteria, all Technical Notes, and complete prior phase reports without summarization.
+- **Agent invocation template updated** — Task tool prompt template now specifies "Complete prior phase reports (full text, not summarized)" instead of "Condensed context from prior phases."
+
+---
+
 ## [2.19.0] - 2026-03-17
 
 ### Added
@@ -1277,6 +1286,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.20.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.20.0
 [2.19.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.19.0
 [2.18.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.18.0
 [2.17.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.17.3
