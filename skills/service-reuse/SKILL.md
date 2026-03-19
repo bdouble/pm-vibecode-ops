@@ -141,6 +141,11 @@ Even then:
 
 **When the service inventory cannot be found, ask the user for its location. Never assume creation is needed.**
 
+## Additional Resources
+
+- **`references/service-inventory-template.md`** — Complete service inventory YAML template with categories, capabilities, and mandate fields
+- **`examples/inventory-search-session.md`** — Walkthrough of a real inventory search and reuse decision
+
 ## Related Skills
 - **production-code-standards**: Quality standards for any new services created
 - **divergent-exploration**: Explore alternatives before deciding to create new services

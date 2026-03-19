@@ -331,14 +331,21 @@ Complete discovery with comprehensive report:
 ## Success Criteria
 
 Discovery is successful when:
-- **Linear ticket created** in project (not external file)
-- **Complete service inventory** documented
-- **All patterns identified** and documented
-- **PRD requirements mapped** to existing services
-- **Reuse opportunities** clearly identified (target >70%)
-- **Technical debt** cataloged with risks
-- **Clear recommendations** for implementation
-- **No external artifacts** - everything in Linear
+
+### Required Outputs (all must be present in Linear)
+- [ ] **Linear ticket created** in project with "discovery" label
+- [ ] **Codebase Structure** section: framework, language, architecture, database identified
+- [ ] **Service Inventory** section: all services, utilities, middleware cataloged with reuse potential ratings
+- [ ] **Pattern Analysis** section: design patterns, conventions, error handling, testing patterns documented
+- [ ] **PRD Alignment** section: every PRD requirement mapped to existing service or flagged as new development
+- [ ] **Technical Debt** section: workarounds, TODOs, deprecated code, security concerns cataloged
+- [ ] **Recommendations** section: reuse mandates, creation justifications, implementation order
+
+### Quality Gates
+- **Reuse mapping**: at least 50% of PRD requirements mapped to existing services (if codebase is mature)
+- **No external artifacts**: everything in Linear ticket comments, not external markdown files
+- **Actionable recommendations**: each recommendation specifies concrete services/files, not generic advice
+- **Technical debt prioritized**: each issue has severity (CRITICAL/HIGH/MEDIUM/LOW) and risk assessment
 
 ## Handoff to Adaptation Phase
 

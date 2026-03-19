@@ -86,3 +86,7 @@ Call independent tools in parallel (single message). Serialize only when one cal
 - Searching with Grep AND Glob → parallel
 - Reading file THEN editing it → sequential (Edit depends on Read)
 - Creating directory THEN writing file inside → sequential
+
+## Additional Resources
+
+- **`references/scope-creep-patterns.md`** — Detailed catalog of scope creep anti-patterns with examples and detection strategies

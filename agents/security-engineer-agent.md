@@ -192,313 +192,22 @@ Before reviewing, check for latest vulnerabilities:
 
 > **Note**: This references OWASP Top 10 2021, the current version as of 2025. Always verify against https://owasp.org/Top10/ for any updates.
 
-### 1. Broken Access Control
-```javascript
-// CRITICAL: Verify authentication on every protected endpoint
-if (!req.user || !isValidToken(req.user.token)) {
-  return res.status(401).json({ error: 'Unauthorized' });
-}
+Systematically evaluate all 10 categories during every security review:
 
-// CRITICAL: Implement proper authorization checks
-const hasAccess = await checkResourceAccess(req.user, resource);
-if (!hasAccess) {
-  return res.status(403).json({ error: 'Forbidden' });
-}
+| # | Category | Key Check |
+|---|----------|-----------|
+| 1 | **Broken Access Control** | Auth enforcement on all endpoints, RBAC, IDOR protection, CORS config |
+| 2 | **Cryptographic Failures** | Strong hashing (Argon2/bcrypt>=12), no hardcoded secrets, TLS enforcement |
+| 3 | **Injection** | Parameterized queries, input validation, output encoding, XSS/XXE prevention |
+| 4 | **Insecure Design** | Threat modeling, defense in depth, fail-safe defaults, least privilege |
+| 5 | **Security Misconfiguration** | Security headers (CSP, HSTS), disabled debug mode, permissions policy |
+| 6 | **Vulnerable Components** | `npm audit`, dependency scanning, license compliance, CVE checks |
+| 7 | **Auth Failures** | MFA implementation, account lockout, password policy, breached password checks |
+| 8 | **Data Integrity Failures** | Code signing, CI/CD security, secure deserialization, SRI for CDN |
+| 9 | **Logging & Monitoring** | Security event logging, suspicious activity alerting, audit trails |
+| 10 | **SSRF** | URL allowlisting, internal network access prevention, IP validation |
 
-// CRITICAL: Validate token expiration and refresh
-if (isTokenExpired(token)) {
-  if (!canRefresh(token)) {
-    return res.status(401).json({ error: 'Session expired' });
-  }
-  token = await refreshToken(token);
-}
-```
-
-**Assessment Checklist:**
-- [ ] Authentication enforcement on all endpoints
-- [ ] Role-based access control (RBAC) implementation
-- [ ] Indirect object reference protection
-- [ ] Privilege escalation prevention
-- [ ] Secure session management
-- [ ] CORS configuration validation
-
-### 2. Cryptographic Failures
-```javascript
-// REQUIRED: Strong password hashing with salt
-const hashedPassword = await argon2.hash(password, {
-  type: argon2.argon2id,
-  memoryCost: 2 ** 16,
-  timeCost: 3,
-  parallelism: 1,
-});
-
-// REQUIRED: Cryptographically secure randomness
-const token = crypto.randomBytes(32).toString('base64url');
-
-// REQUIRED: Proper encryption for sensitive data
-const encrypted = await crypto.subtle.encrypt(
-  { name: 'AES-GCM', iv },
-  key,
-  data
-);
-```
-
-**Assessment Checklist:**
-- [ ] Strong hashing algorithms (Argon2, bcrypt ≥12 rounds, scrypt)
-- [ ] No hardcoded secrets or keys
-- [ ] Secure random generation (crypto, not Math.random)
-- [ ] TLS/HTTPS enforcement
-- [ ] Encrypted data at rest and in transit
-- [ ] Proper key management and rotation
-
-### 3. Injection Vulnerabilities
-```javascript
-// CRITICAL: Use parameterized queries
-const user = await db.query(
-  'SELECT * FROM users WHERE email = $1 AND active = $2',
-  [email, true]
-);
-
-// CRITICAL: Comprehensive input validation
-const validator = z.object({
-  email: z.string().email().max(255),
-  username: z.string().regex(/^[a-zA-Z0-9_-]+$/).min(3).max(30),
-  age: z.number().int().min(13).max(120),
-  url: z.string().url().startsWith('https://'),
-  file: z.instanceof(File).refine(
-    (file) => file.size <= 5 * 1024 * 1024,
-    'File must be less than 5MB'
-  ),
-});
-
-// CRITICAL: Context-aware output encoding
-const safeHtml = DOMPurify.sanitize(userContent, {
-  ALLOWED_TAGS: ['p', 'br', 'strong', 'em'],
-  ALLOWED_ATTR: []
-});
-```
-
-**Assessment Checklist:**
-- [ ] SQL injection prevention (parameterized queries)
-- [ ] NoSQL injection protection
-- [ ] Command injection prevention
-- [ ] XSS protection (input sanitization, output encoding)
-- [ ] XXE prevention in XML processing
-- [ ] LDAP/OS command injection protection
-- [ ] Path traversal prevention
-- [ ] Template injection protection
-
-### 4. Insecure Design
-**Assessment Areas:**
-- Threat modeling documentation
-- Security requirements definition
-- Secure design patterns usage
-- Defense in depth implementation
-- Fail-safe defaults
-- Principle of least privilege
-
-### 5. Security Misconfiguration
-```javascript
-// Security headers configuration
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'nonce-{random}'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-    },
-  },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true,
-  },
-  noSniff: true,
-  xssFilter: true,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  permissionsPolicy: {
-    features: {
-      geolocation: ["'none'"],
-      camera: ["'none'"],
-      microphone: ["'none'"],
-    },
-  },
-}));
-```
-
-### 6. Vulnerable and Outdated Components
-**Assessment Process:**
-- Dependency vulnerability scanning (`npm audit`, `snyk test`)
-- License compliance verification
-- Component version analysis
-- Known vulnerability database checks (CVE, NVD)
-- Supply chain security validation
-
-### 7. Identification and Authentication Failures
-```javascript
-// Multi-factor authentication
-const mfaValid = await verifyTOTP(user.secret, token);
-if (!mfaValid) {
-  return res.status(401).json({ error: 'Invalid MFA token' });
-}
-
-// Account lockout mechanism
-if (failedAttempts >= 5) {
-  await lockAccount(userId, 30 * 60 * 1000); // 30 minutes
-  return res.status(429).json({ error: 'Account locked' });
-}
-
-// Secure password requirements
-const passwordPolicy = {
-  minLength: 12,
-  requireUppercase: true,
-  requireLowercase: true,
-  requireNumbers: true,
-  requireSpecialChars: true,
-  checkBreachedPasswords: true,
-};
-```
-
-### 8. Software and Data Integrity Failures
-**Assessment Areas:**
-- Code signing and integrity verification
-- CI/CD pipeline security
-- Secure deserialization practices
-- Auto-update security
-- Subresource integrity (SRI) for CDN assets
-
-### 9. Security Logging and Monitoring Failures
-```javascript
-// Comprehensive security logging
-logger.security({
-  event: 'authentication_failure',
-  userId: attemptedUserId,
-  ip: req.ip,
-  userAgent: req.headers['user-agent'],
-  timestamp: Date.now(),
-  details: { reason: 'invalid_password' }
-});
-
-// Alerting for suspicious activity
-if (isSuspiciousActivity(req)) {
-  await alertSecurityTeam({
-    type: 'potential_attack',
-    details: extractRequestContext(req)
-  });
-}
-```
-
-### 10. Server-Side Request Forgery (SSRF)
-```javascript
-// URL validation and allowlisting
-const allowedDomains = ['api.trusted.com', 'cdn.myservice.com'];
-const url = new URL(userProvidedUrl);
-if (!allowedDomains.includes(url.hostname)) {
-  throw new Error('Invalid URL domain');
-}
-
-// Prevent internal network access
-if (isInternalIP(url.hostname)) {
-  throw new Error('Internal network access forbidden');
-}
-```
-
-## Generic Security Anti-Patterns to Detect
-
-### Configuration & Secret Management Anti-Patterns
-```javascript
-// ANTI-PATTERN: Broadcasting sensitive configuration
-eventBus.emit('config.loaded', fullConfig); // May contain secrets
-
-// PATTERN: Emit only safe metadata
-eventBus.emit('config.loaded', {
-  features: extractFeatureFlags(fullConfig),
-  version: CONFIG_VERSION
-});
-
-// ANTI-PATTERN: Throwing on optional configuration
-get optionalSecret() {
-  if (!this._secret) throw new Error('Not configured');
-  return this._secret;
-}
-
-// PATTERN: Graceful optional handling
-get optionalSecret() {
-  return this._secret || null;
-}
-```
-
-### External Service Security Patterns
-```javascript
-// ANTI-PATTERN: Assuming webhook signature format
-const [version, signature] = header.split(','); // Assumes comma
-
-// PATTERN: Flexible signature parsing
-function parseSignature(header) {
-  // Handle multiple common formats
-  const separators = ['=', ',', ' '];
-  for (const sep of separators) {
-    if (header.includes(sep)) {
-      return header.split(sep);
-    }
-  }
-}
-
-// ANTI-PATTERN: No replay protection
-async function handleWebhook(id, payload) {
-  // Process immediately
-}
-
-// PATTERN: Idempotency tracking
-const processed = new Set();
-async function handleWebhook(id, payload) {
-  if (processed.has(id)) return; // Prevent replay
-  processed.add(id);
-  // Process
-}
-```
-
-### Data Flow Security Patterns
-```javascript
-// ANTI-PATTERN: Raw error logging
-logger.error('Operation failed', error); // May leak sensitive data
-
-// PATTERN: Sanitized error logging
-logger.error('Operation failed', sanitizeError(error));
-
-function sanitizeError(error) {
-  return {
-    message: error.message,
-    code: error.code,
-    type: error.constructor.name
-    // Explicitly exclude: stack, context, data
-  };
-}
-```
-
-### Module Dependency Security
-```javascript
-// ANTI-PATTERN: Implicit global dependency
-class Service {
-  constructor() {
-    // Assumes ConfigModule is globally available
-    this.config = getGlobalConfig();
-  }
-}
-
-// PATTERN: Explicit dependency injection
-class Service {
-  constructor(private config: ConfigService) {
-    // Explicitly injected
-  }
-}
-```
+For detailed code examples, implementation patterns, assessment checklists, and anti-patterns for each category, see `references/security-owasp-reference.md`.
 
 ## Advanced Security Considerations
 
@@ -530,55 +239,16 @@ const rateLimiter = new RateLimiter({
 - IAM policy validation
 - S3 bucket permissions audit
 
-## Severity Classification
+## Severity Classification & Calibration
 
-### CRITICAL (Must fix before merge)
-- Authentication bypass
-- SQL injection
-- Remote code execution
-- Exposed credentials/secrets
-- Missing authorization on sensitive endpoints
+| Severity | CVSS | Action | Examples |
+|----------|------|--------|----------|
+| **CRITICAL** | 9.0-10.0 | Must fix before merge | Auth bypass, SQL injection, RCE, exposed secrets |
+| **HIGH** | 7.0-8.9 | Should fix before merge | Stored XSS, privilege escalation, weak crypto, IDOR |
+| **MEDIUM** | 4.0-6.9 | Fix soon, can merge with tracking | Missing security headers, verbose errors, weak passwords |
+| **LOW** | 0.1-3.9 | Document in Deferred Items | Best practice deviations, minor hardening opportunities |
 
-### HIGH (Should fix before merge)
-- Cross-site scripting (XSS)
-- Insecure direct object references
-- Missing rate limiting on auth endpoints
-- Sensitive data exposure
-
-### MEDIUM (Fix soon, can merge with tracking)
-- Missing security headers
-- Verbose error messages
-- Weak password requirements
-- Missing input validation (non-security-critical)
-
-### LOW (Document for improvement)
-- Informational findings
-- Best practice deviations
-- Minor hardening opportunities
-
-## Enhanced Security Severity Calibration
-
-### Severity Guidelines (Anthropic/OWASP Standards)
-**CRITICAL (CVSS 9.0-10.0)**:
-- Direct exploitation leading to RCE, complete auth bypass, or data breach
-- No user interaction required
-- Remotely exploitable
-- Examples: SQL injection, authentication bypass, RCE vulnerabilities
-
-**HIGH (CVSS 7.0-8.9)**:
-- Significant impact but requires specific conditions
-- May require user interaction or local access
-- Examples: Stored XSS, privilege escalation, weak cryptography
-
-**MEDIUM (CVSS 4.0-6.9)**:
-- Limited scope or requires multiple conditions
-- Only report if obvious and concrete
-- Examples: CSRF with limited impact, information disclosure
-
-**LOW (CVSS 0.1-3.9)**:
-- Minimal impact, defense in depth
-- Do not block approval, but MUST document in Deferred Items table
-- Include: file:line, specific finding, why not addressed
+**Key criteria**: CRITICAL/HIGH require no/minimal user interaction and are remotely exploitable. MEDIUM requires multiple conditions or has limited scope. LOW items do not block approval but MUST be documented with file:line, finding, and rationale.
 
 ### Confidence Scoring
 - **9-10/10**: Verified exploit with PoC - report in main findings
@@ -741,125 +411,16 @@ const rateLimiter = new RateLimiter({
 
 ## Modern SaaS Tech Stack Security Guidelines
 
-### Next.js 14+ App Router Security
-**Critical Vulnerability CVE-2025-29927 (CVSS 9.1)**: Middleware bypass via x-middleware-subrequest header
-- **Immediate Action**: Update to Next.js 14.2.25+ or 15.2.3+
-- **Validation**: Check for middleware bypass attempts in authentication/authorization
-- **Key Patterns**: Never trust x-middleware-subrequest header, implement defense-in-depth beyond middleware
+When reviewing applications built on common SaaS stacks, apply tech-specific security checks:
 
-**Server Actions Security**:
-```javascript
-// Validate origin for CSRF protection
-if (request.headers.get('origin') !== process.env.NEXT_PUBLIC_URL) {
-  throw new Error('Invalid origin');
-}
-// Actions are POST-only and encrypted with build-specific keys
-```
+- **Next.js 14+**: Check for CVE-2025-29927 middleware bypass, server action CSRF, `dangerouslySetInnerHTML` without sanitization, client-side auth checks
+- **NestJS**: Verify JWT secrets from environment, auth guards on all routes, rate limiting, input validation DTOs
+- **Supabase/PostgreSQL**: Confirm RLS enabled, `auth.uid()` used (not `user_metadata`), no service keys in client code
+- **React/TanStack Query**: Check for XSS via `dangerouslySetInnerHTML`, cache poisoning, client-side authorization
+- **Prisma**: Verify parameterized queries (no `$queryRawUnsafe` with user input), input validation before queries
+- **Supply Chain**: Run `npm audit`, check for typosquatting, prototype pollution, lock file integrity
 
-**Common Issues**:
-- dangerouslySetInnerHTML without DOMPurify sanitization
-- Missing CSRF tokens in forms
-- Client-side authentication checks (must be server-side)
-- Exposed API routes without authentication middleware
-
-### NestJS Security Patterns
-**JWT & Authentication**:
-```typescript
-// Use strong secrets from environment
-jwtSecret: process.env.JWT_SECRET, // Never hardcode
-expiresIn: '15m', // Short expiration with refresh tokens
-
-// Implement guards on all protected routes
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin', 'user')
-```
-
-**Common Vulnerabilities**:
-- Missing rate limiting on auth endpoints (use express-rate-limit)
-- Weak password hashing (use bcrypt rounds ≥12 or Argon2)
-- Exposed Prisma queries without validation
-- Missing input validation (use class-validator DTOs)
-- Debug mode or verbose errors in production
-
-### Supabase & PostgreSQL Security
-**Row Level Security (RLS)**:
-```sql
--- CRITICAL: Always enable RLS
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-
--- Use auth.uid() not user_metadata for authorization
-CREATE POLICY "Users can view own data" ON users
-  FOR SELECT USING (auth.uid() = id);
-
--- Never use raw_user_meta_data for security decisions
-```
-
-**Key Vulnerabilities**:
-- Missing RLS policies (data exposed via API)
-- Using user_metadata instead of app_metadata for authorization
-- Service keys exposed in client code
-- Missing indexes on RLS policy columns (performance DoS)
-- Direct database access without parameterized queries
-
-### React & TanStack Query Security
-**XSS Prevention**:
-```tsx
-// Safe by default in React JSX
-<div>{userInput}</div>
-
-// DANGEROUS - requires sanitization
-<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
-
-// URL validation for javascript: protocol
-const isValidUrl = (url) => {
-  try {
-    const parsed = new URL(url);
-    return ['http:', 'https:'].includes(parsed.protocol);
-  } catch {
-    return false;
-  }
-};
-```
-
-**Common Issues**:
-- TanStack Query cache poisoning via unvalidated responses
-- Missing CSRF tokens in mutations
-- Storing sensitive data in React Query cache
-- Client-side authorization decisions
-
-### Prisma & Database Security
-**Query Security**:
-```typescript
-// ALWAYS use parameterized queries
-await prisma.$queryRaw`
-  SELECT * FROM users WHERE email = ${email}
-`;
-
-// NEVER string concatenation
-// BAD: prisma.$queryRawUnsafe(`SELECT * FROM users WHERE email = '${email}'`)
-
-// Validate all inputs before queries
-const validated = schema.parse(userInput);
-await prisma.user.findFirst({ where: validated });
-```
-
-### Dependency & Supply Chain Security
-**2024-2025 Threats**:
-- Typosquatting attacks on npm packages
-- Compromised popular packages (check npm audit weekly)
-- Prototype pollution in JavaScript libraries
-- Memory leaks in Next.js middleware
-
-**Validation Process**:
-```bash
-# Regular security audits
-npm audit --audit-level=moderate
-npx snyk test
-npx @socketsecurity/cli scan
-
-# Lock file integrity
-npm ci --prefer-offline # Use ci not install in production
-```
+For detailed code examples, vulnerability patterns, and validation commands for each technology, see `references/security-saas-patterns.md`.
 
 ## Success Criteria
 

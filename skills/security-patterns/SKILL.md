@@ -51,3 +51,8 @@ When writing security-relevant code:
 - **Secure defaults**: Safe configuration out of the box
 
 See `references/owasp-patterns.md` for detailed code examples for each OWASP Top 10 vulnerability.
+
+## Additional Resources
+
+- **`references/owasp-patterns.md`** — Comprehensive OWASP Top 10 vulnerability patterns with prevention strategies
+- **`examples/owasp-code-examples.md`** — Before/after code examples for common OWASP vulnerabilities

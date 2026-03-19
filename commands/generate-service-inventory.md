@@ -826,14 +826,30 @@ When conflicts arise during updates:
 
 ## Success Criteria
 
-Inventory generation is successful when:
-- All services, utilities, and patterns are cataloged
-- File locations are accurate and current
-- Method signatures are documented
-- Dependencies are tracked
-- Custom documentation is preserved (update mode)
-- Deprecated services are properly marked
-- Both frontend and backend inventories exist
-- Files are in valid YAML format
+### Required Outputs
+- [ ] **Inventory files created**: `service-inventory.yaml` for each target (frontend/backend)
+- [ ] **All service files found**: every `*.service.ts` in src/ has an entry
+- [ ] **File locations accurate**: every `location:` path points to an existing file
+- [ ] **Methods documented**: public methods listed for each service
+- [ ] **Dependencies tracked**: each service lists its dependencies
+- [ ] **Valid YAML format**: files parse without errors
+
+### Quality Gates
+- [ ] **Zero stale entries**: no `location:` paths pointing to deleted files (verify with `test -f`)
+- [ ] **Reuse potential rated**: every service has a reuse potential rating (HIGH/MEDIUM/LOW)
+- [ ] **Test infrastructure included**: test utilities, mock factories, and patterns documented
+- [ ] **Backup created** (update mode): `service-inventory.yaml.backup` exists before modifications
+- [ ] **Custom docs preserved** (update mode): manual `description:` and `custom_notes:` fields retained
+
+### Post-Generation Validation
+```bash
+# Verify YAML is valid
+python3 -c "import yaml; yaml.safe_load(open('service-inventory.yaml'))" 2>&1
+
+# Verify all file paths exist
+grep "location:" service-inventory.yaml | awk '{print $2}' | while read path; do
+  test -f "$path" || echo "STALE: $path"
+done
+```
 
 This command ensures that all reusable components are documented and discoverable, preventing code duplication while preserving valuable documentation and customizations.

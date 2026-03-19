@@ -16,13 +16,12 @@ description: |
 
 This skill establishes the foundational behavior for all PM workflow sessions.
 
-<EXTREMELY_IMPORTANT>
-BEFORE responding to ANY request—including asking clarifying questions:
+**CRITICAL — BEFORE responding to ANY request (including clarifying questions):**
+
 1. Review the applicable skills
 2. Identify which skills apply to the current context
 3. Load and follow those skills' guidance
 4. THEN proceed with the response
-</EXTREMELY_IMPORTANT>
 
 ## Workflow Overview
 

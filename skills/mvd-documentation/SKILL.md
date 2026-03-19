@@ -142,3 +142,8 @@ async createUser(@Body() data: CreateUserDto)
 
 For significant architectural decisions affecting multiple files, use an ADR.
 See `references/adr-template.md` for template and examples.
+
+## Additional Resources
+
+- **`references/adr-template.md`** — Architecture Decision Record template
+- **`examples/adr-example.md`** — Complete ADR example showing the decision record format in practice

@@ -120,6 +120,11 @@ Non-engineers can't tell from the outside whether the AI is making progress or t
 
 This skill forces the AI to **escalate before burning more resources**, giving PMs the information they need to make decisions.
 
+## Additional Resources
+
+- **`references/root-cause-tracing.md`** — Backward tracing technique for identifying root causes
+- **`examples/debugging-walkthrough.md`** — Complete walkthrough of debugging a silent data loss bug using the 4-phase process
+
 ## Related Skills
 - **verify-implementation**: Evidence requirements for Phase 4 completion claims
 - **production-code-standards**: No workarounds or temporary fixes in production code

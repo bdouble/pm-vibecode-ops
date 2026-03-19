@@ -139,8 +139,11 @@ await expect(service.failingOp()).rejects.toThrow(ValidationError);
 
 **Remember: 50% coverage with correct tests > 90% with broken tests.**
 
+## Additional Resources
+
+- **`references/test-priority-guidelines.md`** — Detailed test priority matrix for deciding what to test and what to skip
+- **`examples/test-templates.md`** — Well-structured test file templates and examples for common patterns
+
 ## Related Skills
 - **production-code-standards**: Production code quality standards (test code has different rules)
 - **verify-implementation**: Run and show test output before claiming "tests pass"
-
-See `examples/test-templates.md` for well-structured test file templates and examples.

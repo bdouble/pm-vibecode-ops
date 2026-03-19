@@ -60,3 +60,8 @@ If epic closure is blocked:
 | Mix of Done + Cancelled | Yes | If business value delivered |
 | Some tickets In Progress | NO | Must complete first |
 | All tickets Cancelled | Maybe | Only if epic descoped entirely |
+
+## Additional Resources
+
+- **`references/closure-decision-tree.md`** — Detailed decision matrix for closure scenarios, business value assessment, workaround detection, and retrofit triggers
+- **`examples/mixed-closure-scenario.md`** — Walkthrough of a real mixed Done/Cancelled epic closure decision
