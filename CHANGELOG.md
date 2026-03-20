@@ -5,6 +5,21 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.0] - 2026-03-19
+
+### Added
+- **Deferred Work Recovery phase** — New Phase 2 in the epic closure workflow (now seven phases) that aggregates, groups, and surfaces all deferred items from sub-ticket phase reports. Agents record deferred work during ticket execution; this phase recovers that data at epic closure so the user can decide what becomes a new ticket vs. what stays deferred. Includes raw audit trail, consolidated grouping by theme, opinionated recommendations (CREATE TICKET / ACCEPT DEFERRAL / MERGE WITH RETROFIT), and overlap detection with retrofit candidates.
+- **`--skip-deferred-review` flag** — Skips full deferred work analysis in `/close-epic`, but AC-DEFERRED items (user-approved scope cuts) are always surfaced in the closure report for traceability.
+- **`[Deferred]` ticket type** — New ticket prefix and `deferred-recovery` label for Linear tickets created from deferred work recovery, distinct from `[Retrofit]` tickets. Classification sublabels (`ac-deferred`, `discovered`, `out-of-scope`) enable filtering by deferral type.
+- **Tiered context budget for epic closure** — Close-epic now auto-detects context window size. 500K+ tokens: full verbatim context, no caps. Under 500K: budget mode with extraction rules in `commands/references/close-epic-budget-legacy.md`. Replaces the fixed ~4,500 token budget.
+- **Close-epic budget legacy reference** — New `commands/references/close-epic-budget-legacy.md` with extraction algorithm, truncation priority matrix, and tiered gathering strategy for constrained context windows. Follows the same pattern as `context-budget-legacy.md` for execute-ticket.
+
+### Changed
+- **Epic closure workflow expanded to seven phases** — All phase references updated across close-epic command, epic-closure-agent, TECHNICAL_REFERENCE.md, and codex agents. Phase numbering: Late Findings (1) → Deferred Work Recovery (2) → Retrofit (3) → Downstream (4) → Documentation (5) → CLAUDE.md (6) → Closure Summary (7).
+- **Epic closure agent output format** — Report now includes Phase 2 deferred recovery section with raw table, consolidated recommendations, overlap check, and summary metrics. Validation requirements updated to enforce deferred recovery completeness.
+
+---
+
 ## [2.23.0] - 2026-03-19
 
 ### Added
@@ -1349,6 +1364,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.24.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.0
 [2.23.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.23.0
 [2.22.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.22.0
 [2.21.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.21.0

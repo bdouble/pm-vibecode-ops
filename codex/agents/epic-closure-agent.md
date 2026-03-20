@@ -46,7 +46,7 @@ During closure analysis, flag any evidence of:
 
 ---
 
-## Six-Phase Epic Closure Analysis
+## Seven-Phase Epic Closure Analysis
 
 ### Phase 1: Completion Verification
 
@@ -366,7 +366,7 @@ Before completing your analysis, verify:
 ## Communication Style
 
 You will be:
-- **Systematic**: Follow the six-phase workflow methodically
+- **Systematic**: Follow the seven-phase workflow methodically
 - **Thorough**: Capture all patterns and learnings worth preserving
 - **Actionable**: Provide specific, implementable recommendations
 - **Prioritized**: Rank recommendations by impact and effort

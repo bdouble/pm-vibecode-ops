@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.23.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.24.0-blue.svg)
 
 ## What This Is
 
@@ -129,7 +129,7 @@ Use individual phases when you need to:
 - Manually intervene between phases
 
 ### Epic-Level Completion
-11. `/close-epic` - Close completed epic with retrofit analysis → **closes epic when all tickets done**
+11. `/close-epic` - Close completed epic with deferred work recovery, retrofit analysis, and downstream propagation → **closes epic when all tickets done**
 
 Each phase includes quality gates. Security review is the final gate that marks tickets as complete. Epic closure is the final gate that marks epics as complete after all sub-tickets pass.
 

@@ -440,15 +440,16 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 - **Small Epics (≤6 tickets)**: Direct context gathering via Linear MCP
 - **Large Epics (7+ tickets)**: Parallel `ticket-context-agent` instances process batches of 5-6 tickets each, returning summarized context to prevent context overflow
 
-**Six-Phase Workflow**:
+**Seven-Phase Workflow**:
 1. Completion Verification - Validate all sub-tickets complete (blocking)
-2. Retrofit Analysis - Find patterns to propagate backward (skippable)
-3. Downstream Impact - Add guidance to dependent epics (skippable)
-4. Documentation Audit - Check CLAUDE.md coverage
-5. CLAUDE.md Updates - Apply documentation changes
-6. Closure Summary - Create final epic closure report
+2. Deferred Work Recovery - Surface and triage deferred items across tickets (skippable with `--skip-deferred-review`)
+3. Retrofit Analysis - Find patterns to propagate backward (skippable)
+4. Downstream Impact - Add guidance to dependent epics (skippable)
+5. Documentation Audit - Check CLAUDE.md coverage
+6. CLAUDE.md Updates - Apply documentation changes
+7. Closure Summary - Create final epic closure report
 
-**Output**: Epic marked as Done, closure report added as comment, retrofit tickets created in Linear, CLAUDE.md updated.
+**Output**: Epic marked as Done, closure report added as comment, deferred recovery tickets and retrofit tickets created in Linear, CLAUDE.md updated.
 
 **Time**: 10-20 minutes depending on epic size and options selected
 

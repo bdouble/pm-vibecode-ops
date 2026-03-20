@@ -1,7 +1,7 @@
 ---
 allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Read, Glob, Grep, LS, Task, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__list_issues, mcp__linear-server__list_projects
 description: Close completed epic with retrofit analysis, downstream impact propagation, retrofit ticket creation, and CLAUDE.md updates
-argument-hint: <epic-id> [--skip-retrofit] [--skip-downstream] (e.g., /close-epic EPIC-123)
+argument-hint: <epic-id> [--skip-deferred-review] [--skip-retrofit] [--skip-downstream] (e.g., /close-epic EPIC-123)
 workflow-phase: epic-closure
 closes-epic: true
 workflow-sequence: "/security-review (closes tickets) -> **/close-epic** (FINAL EPIC GATE)"
@@ -13,33 +13,27 @@ workflow-sequence: "/security-review (closes tickets) -> **/close-epic** (FINAL 
 
 ---
 
-## ⚠️ CONTEXT BUDGET ALLOCATION (CRITICAL)
+## ⚠️ CONTEXT BUDGET ALLOCATION (Tiered by Context Window)
 
-**Explicit token limits prevent context window overflow:**
+**Context window auto-detection determines budget mode:**
 
-| Component | Budget | Notes |
-|-----------|--------|-------|
-| Epic description | 200 tokens | First 2 paragraphs only |
-| Epic comments | 300 tokens | Key decisions only |
-| Per-ticket summaries | 100 tokens each | Max 3000 tokens for 30 tickets |
-| Retrofit recommendations | 400 tokens | Prioritized list |
-| Downstream guidance | 400 tokens | Actionable guidance only |
-| CLAUDE.md updates | 200 tokens | Specific edits only |
-| **TOTAL BUDGET** | ~4500 tokens | For epic-closure-agent input |
+| Context Window | Mode | Policy |
+|---------------|------|--------|
+| **500K+ tokens** (default) | Full context | Include all data verbatim — no budget caps |
+| **Under 500K tokens** | Budget mode | Apply extraction caps from `commands/references/close-epic-budget-legacy.md` |
 
-### Truncation Priority Matrix
+**Detection:** At the start of epic closure, assess your available context window and select context mode:
+```
+Context mode: [Full context (1M window) | Budget mode (Xk window — see close-epic-budget-legacy.md)]
+```
 
-**When combined context exceeds budget, truncate in this order (preserve → trim):**
+### Full Context Mode (500K+ tokens)
 
-| Priority | Component | Action |
-|----------|-----------|--------|
-| 1 (PRESERVE) | Ticket status indicators | Never truncate |
-| 2 (PRESERVE) | Blocking issues/Late Findings | Never truncate |
-| 3 (PRESERVE) | Key decisions (1 sentence each) | Truncate to 1 sentence |
-| 4 (TRIM) | Pattern explanations | Reduce to bullet points |
-| 5 (TRIM) | Testing details | Coverage % only |
-| 6 (TRIM) | Historical context | Remove entirely |
-| 7 (ALWAYS PRESERVE) | Retrofit recommendations with priority | Never truncate |
+No caps. Include complete epic description, all ticket summaries with full deferred items tables, all comments, and all phase reports verbatim. Typical epic closure workflows use a small fraction of a 1M window — over-providing context has near-zero cost.
+
+### Budget Mode (under 500K tokens)
+
+Read and apply the budget rules in `commands/references/close-epic-budget-legacy.md`. These rules cap total context using an extraction algorithm that preserves essential data (ticket status, late findings, deferred items, key decisions) while condensing verbose content first.
 
 ---
 
@@ -247,21 +241,23 @@ Use the Task tool to invoke the `epic-closure-agent` with ALL context embedded:
 - EPIC-789: [title] - related capability
 
 ## User Options
+--skip-deferred-review: [true/false based on user input]
 --skip-retrofit: [true/false based on user input]
 --skip-downstream: [true/false based on user input]
 
 ## Context Budget Note
-This prompt has been constructed within the 4500 token budget.
-Truncation applied per priority matrix if source data exceeded limits.
+Context mode: [Full context (1M window) | Budget mode (Xk window — see close-epic-budget-legacy.md)]
+If budget mode: truncation applied per legacy budget rules.
 
 ## Your Task
-Perform epic closure analysis following the six-phase workflow:
+Perform epic closure analysis following the seven-phase workflow:
 1. Late Findings scan (REQUIRED - check for workarounds, disabled tests, TODOs)
-2. Retrofit analysis (unless --skip-retrofit)
-3. Downstream impact (unless --skip-downstream)
-4. Documentation audit
-5. CLAUDE.md updates
-6. Closure summary
+2. Deferred work recovery (unless --skip-deferred-review)
+3. Retrofit analysis (unless --skip-retrofit)
+4. Downstream impact (unless --skip-downstream)
+5. Documentation audit
+6. CLAUDE.md updates
+7. Closure summary
 
 **CRITICAL**: Return Late Findings table even if empty.
 Return a structured epic closure report when complete.
@@ -282,6 +278,9 @@ After the agent returns its report:
 | **Status** | COMPLETE / COMPLETE_WITH_FINDINGS / BLOCKED | Must be one of three values |
 | **Retrofit Analysis** | At least 1 recommendation OR "None identified" | Cannot be empty |
 | **Per Retrofit Item** | Priority (P0-P3), Effort estimate, Acceptance criteria | All required for ticket creation |
+| **Deferred Recovery** | Raw table OR "No deferred items found" | Cannot be empty |
+| **Per Deferred Group** | Classification, Recommendation, Reasoning | All required if groups exist |
+| **If CREATE TICKET** | Priority, Effort, Acceptance Criteria | All required for ticket creation |
 | **Downstream Guidance** | Affected epics list, Propagation notes | Can be "None" if skipped |
 | **CLAUDE.md Updates** | Specific sections, Proposed content | Can be "No updates needed" |
 | **Late Findings** | Table with Severity, Location, Issue, Action | Can be empty |
@@ -364,22 +363,70 @@ IF still missing after retry:
      labels: ["retrofit", "P1", "tech-debt"]
    ```
 
-3. **Write the closure comment** - Use `mcp__linear-server__create_comment` with the structured closure report
-   - Include the list of created retrofit ticket IDs
-   - Reference the retrofit tickets so work is traceable
+3. **CREATE DEFERRED RECOVERY TICKETS** (After user approval):
+   - Present the agent's deferred recovery analysis to the user (see Phase 2 format above)
+   - Wait for user decision on which items become tickets
+   - For EACH approved item, create a new Linear ticket using `mcp__linear-server__create_issue`
+   - Deferred recovery tickets MUST include:
+     - **Title**: `[Deferred] [Theme Name] - [Brief Description]`
+     - **Description**: Full details from the agent's grouped recommendation:
+       - Original deferred items with source tickets
+       - Why this work was originally deferred
+       - Implementation guidance and acceptance criteria
+       - Estimated effort
+     - **Labels**: `deferred-recovery`, priority label (P0-P3), classification label (`ac-deferred`, `discovered`, or `out-of-scope`)
+   - Collect all created ticket IDs for the closure report
+   - Any items that overlap with retrofit: create single ticket under `[Deferred]`, note in retrofit section
 
-4. **Update related epics** (if downstream analysis was performed):
+   **Example deferred recovery ticket creation:**
+   ```
+   mcp__linear-server__create_issue:
+     title: "[Deferred] Rate Limiting Coverage — API Endpoints"
+     description: |
+       ## Context
+       During EPIC-123, multiple agents independently flagged missing rate
+       limiting but deferred it as low-risk per individual ticket scope.
+
+       ## Original Deferrals
+       | Source | Phase | Location | Issue | Reason |
+       |--------|-------|----------|-------|--------|
+       | PROJ-101 | Implementation | api.ts:45 | Missing rate limiting | Admin-only |
+       | PROJ-103 | Code Review | api.ts:45 | Missing rate limiting | Low-risk |
+
+       ## Implementation Guidance
+       [From agent's consolidated recommendation]
+
+       ## Acceptance Criteria
+       - [ ] Rate limiting applied to all API endpoints
+       - [ ] Tests verify rate limit behavior
+
+       ## Source
+       Originated from: EPIC-123 deferred work recovery
+       Original tickets: PROJ-101, PROJ-103
+       Classification: DISCOVERED
+       Priority: P2
+       Estimated Effort: 3h
+
+     labels: ["deferred-recovery", "P2", "discovered"]
+   ```
+
+4. **Write the closure comment** - Use `mcp__linear-server__create_comment` with the structured closure report
+   - Include the list of created retrofit ticket IDs
+   - Include the list of created deferred recovery ticket IDs
+   - Reference all tickets so work is traceable
+
+5. **Update related epics** (if downstream analysis was performed):
    - Use `mcp__linear-server__create_comment` to add guidance to dependent epics
 
-5. **Close the epic**:
+6. **Close the epic**:
    - Use `mcp__linear-server__update_issue` to mark epic as "Done"
    - Add appropriate labels (e.g., "epic-completed", "retrofit-complete")
 
-6. **Apply CLAUDE.md updates** - Use Edit tool to update project CLAUDE.md
+7. **Apply CLAUDE.md updates** - Use Edit tool to update project CLAUDE.md
 
-7. **Verify success** - Confirm the comment was added, retrofit tickets created, and epic is closed
+8. **Verify success** - Confirm the comment was added, retrofit tickets created, deferred recovery tickets created, and epic is closed
 
-8. **Report to user** - Summarize closure actions, retrofit tickets created, downstream propagation
+9. **Report to user** - Summarize closure actions, retrofit tickets created, deferred recovery tickets created, downstream propagation
 
 **YOU are responsible for the Linear comment, retrofit ticket creation, epic closure, and CLAUDE.md updates, not the agent.**
 
@@ -398,14 +445,20 @@ DO NOT attempt to perform epic closure analysis directly. The specialized epic-c
 # Basic epic closure
 /close-epic EPIC-123
 
+# Skip deferred work recovery (faster closure)
+/close-epic EPIC-123 --skip-deferred-review
+
 # Skip retrofit analysis (faster closure)
 /close-epic EPIC-123 --skip-retrofit
 
 # Skip downstream impact propagation
 /close-epic EPIC-123 --skip-downstream
 
-# Minimal closure (skip both optional phases)
-/close-epic EPIC-123 --skip-retrofit --skip-downstream
+# Skip both deferred review and retrofit
+/close-epic EPIC-123 --skip-deferred-review --skip-retrofit
+
+# Full minimal closure
+/close-epic EPIC-123 --skip-deferred-review --skip-retrofit --skip-downstream
 ```
 
 You are acting as an **Epic Closure Coordinator** responsible for formally closing completed epics, extracting lessons learned, and ensuring knowledge propagation across the project.
@@ -442,7 +495,7 @@ Before running:
 
 You are closing epic **$ARGUMENTS** (or **$1** if single argument provided).
 
-## Six-Phase Epic Closure Workflow
+## Seven-Phase Epic Closure Workflow
 
 ### Phase 1: Completion Verification (BLOCKING)
 
@@ -463,7 +516,82 @@ You are closing epic **$ARGUMENTS** (or **$1** if single argument provided).
 - List incomplete tickets
 - Provide guidance on next steps
 
-### Phase 2: Retrofit Analysis (Skippable with --skip-retrofit)
+### Phase 2: Deferred Work Recovery (Skippable with --skip-deferred-review)
+
+**Agent aggregates and analyzes ALL deferred items from sub-ticket phase reports.**
+
+During ticket execution, agents defer work items and record them in structured Deferred Items tables (Classification: AC-DEFERRED, DISCOVERED, OUT-OF-SCOPE). These tables are posted to Linear comments by the execute-ticket orchestrator. This phase recovers that data and surfaces it for user decision.
+
+**Orchestrator context gathering must include:**
+- Extract ALL Deferred Items tables from sub-ticket Linear comments/phase reports
+- Include them verbatim in the agent prompt (full context mode) or per budget rules (budget mode)
+
+**Agent performs three steps:**
+
+1. **Aggregate & Deduplicate**: Collect all deferred items into a single raw table. Remove exact duplicates (same file, same issue flagged across phases). Preserve source ticket ID for traceability.
+
+2. **Group by Pattern/Theme**: Cluster related deferrals into logical groups. Each group becomes a potential ticket candidate. Uses issue description, location, and reasoning to identify themes.
+
+3. **Flag Retrofit Overlaps**: Check whether any deferred recovery group overlaps with a Phase 3 (Retrofit) candidate. Flag overlaps so the orchestrator avoids duplicate tickets.
+
+**Agent output includes:**
+- Raw per-ticket deferred items table (audit trail)
+- Consolidated grouped recommendations (actionable)
+- Per-group recommendation: CREATE TICKET | ACCEPT DEFERRAL | MERGE WITH RETROFIT
+- Reasoning for each recommendation
+- Overlap table with retrofit candidates
+
+**Orchestrator presents results to user as interactive decision point:**
+
+```
+## Deferred Work Recovery — Your Decision Required
+
+### Recommended: Create Ticket
+| # | Group | Sources | Classification | Priority | Effort | Recommendation |
+|---|-------|---------|---------------|----------|--------|----------------|
+| 1 | Rate Limiting Coverage | PROJ-101, PROJ-103 | DISCOVERED | P2 | 3h | Create ticket |
+| 2 | Form Validation Migration | PROJ-102 | AC-DEFERRED | P1 | 6h | Create ticket |
+
+### Recommended: Accept Deferral (No Action)
+| # | Group | Sources | Classification | Recommendation |
+|---|-------|---------|---------------|----------------|
+| 3 | Login Audit Trail | PROJ-103 | OUT-OF-SCOPE | Belongs to security epic |
+
+### Overlaps with Retrofit
+| # | Deferred Group | Retrofit Item | Agent Suggestion |
+|---|---------------|---------------|-----------------|
+| 1 | Rate Limiting Coverage | API Hardening | Single ticket under [Deferred] |
+
+Which items should become tickets? (e.g., "1,2", "all", "none", "1 only")
+```
+
+**User response handling:**
+
+| User Says | Orchestrator Action |
+|-----------|-------------------|
+| `all` | Create tickets for all "Create Ticket" recommendations |
+| `none` | Skip ticket creation, note in closure report |
+| `1,2` | Create tickets for selected items only |
+| `1 at P3` | Create ticket 1 but override priority to P3 |
+| Reclassifies an "Accept Deferral" item | Create ticket for it too |
+
+**When `--skip-deferred-review` is used:**
+- Full analysis is skipped
+- But if AC-DEFERRED items exist, the orchestrator still includes a minimal reminder in the closure report:
+
+```
+### Deferred Work Recovery
+**Status**: SKIPPED (user request)
+
+**AC-DEFERRED items for awareness** (approved during execution):
+| Source | Issue | Original Decision |
+|--------|-------|-------------------|
+| PROJ-102 | Old form validation | Adaptation chose new path only |
+
+These were approved scope cuts. Consider reviewing in a future cycle.
+```
+
+### Phase 3: Retrofit Analysis (Skippable with --skip-retrofit)
 
 **Agent analyzes patterns that should propagate BACKWARD to existing code.**
 
@@ -479,7 +607,7 @@ The agent identifies:
 - Priority (P0-P3)
 - Estimated effort
 
-### Phase 3: Downstream Impact (Skippable with --skip-downstream)
+### Phase 4: Downstream Impact (Skippable with --skip-downstream)
 
 **Agent identifies impacts on FUTURE work (dependent epics).**
 
@@ -494,7 +622,7 @@ The agent analyzes:
 - Integration points and how to use them
 - Lessons learned that apply to their scope
 
-### Phase 4: Documentation Audit
+### Phase 5: Documentation Audit
 
 **Agent maps implemented features against documentation needs.**
 
@@ -506,7 +634,7 @@ The agent checks:
 
 **Output:** Documentation gaps requiring CLAUDE.md updates.
 
-### Phase 5: CLAUDE.md Updates
+### Phase 6: CLAUDE.md Updates
 
 **Agent proposes specific CLAUDE.md changes based on audit.**
 
@@ -518,7 +646,7 @@ Update categories:
 
 **Output:** Specific edit instructions for CLAUDE.md.
 
-### Phase 6: Epic Closure
+### Phase 7: Epic Closure
 
 **Orchestrator creates closure summary and marks epic Done.**
 
@@ -557,6 +685,26 @@ After completing the analysis, the orchestrator adds the following comment to th
 | LOW | types/user.ts:12 | TODO comment | Documented below |
 
 *(If no findings: "None identified during closure analysis.")*
+
+### Deferred Work Recovery
+**Items Surfaced**: X deferred items across Y tickets
+**Groups Formed**: Z consolidated groups
+**User Decisions**:
+| # | Group | Decision | Ticket Created |
+|---|-------|----------|---------------|
+| 1 | Rate Limiting Coverage | Approved | PROJ-XXX |
+| 2 | Form Validation Migration | Approved | PROJ-YYY |
+| 3 | Login Audit Trail | Accepted deferral | — |
+
+### Deferred Recovery Tickets Created
+| Ticket ID | Title | Priority | Sources | Est. Effort |
+|-----------|-------|----------|---------|-------------|
+| PROJ-XXX | [Deferred] Rate Limiting — API Endpoints | P2 | PROJ-101, PROJ-103 | 3h |
+| PROJ-YYY | [Deferred] Form Validation Migration | P1 | PROJ-102 | 6h |
+
+**Total Deferred Recovery Tickets**: X
+**Total Estimated Effort**: ~Y hours
+**Items accepted as deferred (no ticket)**: Z
 
 ### Retrofit Analysis
 **Patterns to Propagate Backward:**
@@ -708,7 +856,7 @@ If user skips downstream with `--skip-downstream`:
 ### No CLAUDE.md Updates Needed
 If documentation audit finds no gaps:
 - Note "Documentation Complete" in closure report
-- Skip Phase 5
+- Skip Phase 6
 
 ---
 
