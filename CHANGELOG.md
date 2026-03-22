@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.1] - 2026-03-21
+
+### Fixed
+- **Execute-ticket no longer switches branch to main after completion** — Added post-completion branch rule to keep the working directory on the feature branch. The PR is left ready-for-review for human merge decisions.
+
+---
+
 ## [2.24.0] - 2026-03-19
 
 ### Added
@@ -1364,6 +1371,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.24.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.1
 [2.24.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.0
 [2.23.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.23.0
 [2.22.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.22.0

@@ -649,6 +649,11 @@ After all phases complete (or on blocking halt), provide summary:
 [If blocked: Required actions to unblock]
 ```
 
+**CRITICAL — Post-Completion Branch Rule:**
+- **Do NOT switch branches after execution completes.** The working directory MUST remain on the feature branch so the user can review the completed work.
+- **Do NOT merge the feature branch to main.** The PR is marked ready-for-review for human merge decisions.
+- This workflow handles its own completion. Do not run any additional branch cleanup, merge, or finalization steps beyond what is specified above.
+
 ---
 
 ## Error Handling
