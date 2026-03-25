@@ -230,12 +230,12 @@ For each phase that needs to run:
    ```
    Wait for user response before continuing.
 
-#### 3.3 Invoke Agent via Task Tool
+#### 3.3 Invoke Agent via Agent Tool
 
-Use the Task tool to spawn the appropriate agent:
+Use the Agent tool to spawn the appropriate agent. **Do NOT use `isolation: "worktree"`** — agents must work on the current feature branch created in Step 1.3.
 
 ```
-Task tool parameters:
+Agent tool parameters:
 - subagent_type: [agent-name from selection above]
 - description: "[Phase] for [ticket-id]"
 - prompt: Include ALL of the following:
@@ -243,6 +243,7 @@ Task tool parameters:
   2. Complete prior phase reports (full text, not summarized)
   3. Specific phase instructions
   4. Expected output format (structured report)
+  5. Current branch name (so agent can verify it is on the correct branch)
 ```
 
 **Critical:** Agents do NOT have Linear access. Include ALL necessary context in the prompt.
@@ -666,7 +667,7 @@ After all phases complete (or on blocking halt), provide summary:
   - Options: (1) Retry now, (2) Continue without posting (not recommended), (3) Abort
 
 ### Agent Timeout
-- If Task tool doesn't return within 10 minutes, consider agent stuck
+- If Agent tool doesn't return within 10 minutes, consider agent stuck
 - Report to user: "Agent [name] appears unresponsive for phase [phase]"
 - Options: (1) Wait longer, (2) Retry phase with fresh agent, (3) Abort
 

@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.2] - 2026-03-25
+
+### Fixed
+- **Execute-ticket agents no longer create their own branches** — Corrected "Task tool" references to "Agent tool" in execute-ticket command, added explicit prohibition on `isolation: "worktree"` so agents work on the canonical feature branch, and added branch name as a required prompt parameter for agent verification.
+
+---
+
 ## [2.24.1] - 2026-03-21
 
 ### Fixed
@@ -1371,6 +1378,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.24.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.2
 [2.24.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.1
 [2.24.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.0
 [2.23.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.23.0
