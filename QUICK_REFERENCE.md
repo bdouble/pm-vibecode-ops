@@ -147,4 +147,4 @@ Your PRD must include:
 
 ---
 
-**Version 2.24.2** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 2.25.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

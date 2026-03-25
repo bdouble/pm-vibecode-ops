@@ -1,6 +1,6 @@
 ---
 description: Orchestrate all ticket workflow phases (adaptation → implementation → testing → documentation → codereview → security-review) automatically
-allowed-tools: Task, Read, Grep, Glob, Bash, Bash(gh:*), Bash(git:*), mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
+allowed-tools: Task, Read, Grep, Glob, Bash, Bash(gh:*), Bash(git:*), WebFetch, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
 argument-hint: <ticket-id>
 ---
 
@@ -189,6 +189,188 @@ For each phase that needs to run:
 
 **RULE: Always include full, verbatim prior phase reports.** Do NOT summarize, condense, or extract. Agents perform better with complete context than with curated excerpts — curation risks dropping details that downstream phases need.
 
+#### 3.1.1 Gather Referenced Resources
+
+Before dispatching the agent, scan the ticket description, acceptance criteria, and Technical Notes for **local file paths** and **URLs** that point to resources the agent needs. Tickets often reference requirements documents, research briefs, design specs, and other detailed context — this material represents significant upfront work and MUST be included in the agent prompt when present.
+
+This step has two tracks: **local files** (Step A1) and **external URLs** (Steps A2–E). Run both tracks, then combine results for the agent prompt.
+
+---
+
+**Step A1: Detect and read local file references**
+
+Scan the ticket body for local file paths. Common patterns:
+- Explicit paths: `docs/requirements/inbox-migration.md`, `./research/auth-analysis.md`, `context/brief.md`
+- Markdown links to local files: `[requirements doc](docs/requirements/inbox-migration.md)`
+- References like "see `filename.md`", "per the brief in `path/to/file`", "requirements in `docs/...`"
+- Relative paths from the project root (most common in tickets)
+
+**For each detected file path:**
+
+1. **Resolve the path** relative to the project root (working directory). If the path is ambiguous, use `Glob` to find likely matches.
+
+2. **Verify the file exists** using `Read`. If the file does not exist:
+   ```
+   ⚠️ REFERENCED FILE NOT FOUND
+
+   Path: [path as referenced in ticket]
+   Searched: [resolved absolute path]
+
+   This file was referenced in the ticket but does not exist.
+
+   Options:
+   1. Provide the correct path
+   2. Continue without this file
+   ```
+   Wait for user response.
+
+3. **If the file exists:** Read its full contents. Classify the file's role based on surrounding ticket text:
+
+   | Role | Ticket phrasing signals | How to present to agent |
+   |------|------------------------|------------------------|
+   | **Requirements/spec** | "requirements in", "spec at", "acceptance criteria from", "per the PRD" | `Requirements document — implementation must satisfy these requirements` |
+   | **Research/analysis** | "research brief", "analysis in", "findings from", "investigation at" | `Research brief — provides context, constraints, and recommendations that inform implementation` |
+   | **Design/architecture** | "design doc", "architecture in", "ADR at", "technical design" | `Design document — follow the architectural decisions described here` |
+   | **Example/template** | "template at", "example in", "use the pattern from" | `Template/example — use as a starting point or structural reference` |
+   | **Context/background** | "for background", "context in", "FYI see" | `Background context — informs approach but is not directly prescriptive` |
+
+   If role is unclear, default to `Requirements document` — it's better to over-weight a referenced document than under-weight it.
+
+4. **No file count limit** — include all referenced local files. These are authored project artifacts; they exist because they're relevant.
+
+---
+
+**Step A2: Detect URLs**
+
+- Match URLs in the ticket body (`https://...`)
+- Ignore Linear internal links (`linear.app/...`) and GitHub PR/issue links already handled by `gh` CLI (e.g., `github.com/org/repo/pull/...`, `github.com/org/repo/issues/...`)
+- Ignore image URLs (`.png`, `.jpg`, `.gif`, `.svg`, `.webp`)
+
+**Step B2: Classify and determine intent**
+
+For each detected URL, read the surrounding text in the ticket to determine how the resource is referenced. Classify each URL:
+
+| Intent | Ticket phrasing signals | How to present to agent |
+|--------|------------------------|------------------------|
+| **Copy/adapt code** | "copy from", "use as reference", "implement similar to", "port from", "based on" | `Reference code — copy and adapt as needed` |
+| **Follow approach** | "follow this pattern", "see how they handle", "approach described in", "tutorial at" | `Technical reference — follow the approach described here` |
+| **API/SDK docs** | "see docs at", "API reference", "documentation for", "refer to" | `API documentation — use for correct interface usage` |
+| **Configuration/prompt** | "use this prompt", "copy this config", "template at" | `Direct source material — use verbatim or near-verbatim` |
+| **General context** | No specific action language, or "for background", "FYI" | `Background context — informs approach but is not directly used` |
+
+If intent is unclear, default to `Technical reference`.
+
+**Step C2: Normalize GitHub URLs**
+
+GitHub blob pages return heavy HTML when fetched directly. Normalize before fetching:
+
+| GitHub URL pattern | Normalization |
+|-------------------|---------------|
+| `github.com/[owner]/[repo]/blob/[branch]/[path]` | Convert to `raw.githubusercontent.com/[owner]/[repo]/[branch]/[path]` |
+| `gist.github.com/[user]/[id]` | Append `/raw` → `gist.github.com/[user]/[id]/raw` |
+| `github.com/[owner]/[repo]/tree/[branch]/[path]` | Use `gh api repos/[owner]/[repo]/contents/[path]?ref=[branch]` to list files, then fetch each relevant file via raw URL |
+| `github.com/[owner]/[repo]` (repo root) | Use `gh api repos/[owner]/[repo]/git/trees/[default-branch]?recursive=1` to get file tree, report to user, and ask which files to fetch |
+
+For directory and repo-root URLs, after retrieving the file listing:
+```
+📂 GITHUB DIRECTORY REFERENCED
+
+URL: [url]
+Repository: [owner]/[repo]
+Path: [path or root]
+
+Files found:
+[file tree listing, filtered to code files]
+
+The ticket references this directory. Which files should I fetch for the agent?
+
+Options:
+1. Fetch all files (if ≤ 10 code files)
+2. Select specific files: [list files by number]
+3. Skip — agent doesn't need these files
+```
+Wait for user response before continuing.
+
+**Step D2: Fetch content**
+
+For each URL (normalized if GitHub):
+
+1. **Fetch using `WebFetch`** (or `gh api` for GitHub directory listings per Step C2).
+
+2. **Validate the response:**
+   - **Usable content** — contains code blocks, technical prose, API specs, or configuration. Proceed.
+   - **Login/paywall** — response contains login forms, "subscribe to read", or access denied messaging. Treat as fetch failure.
+   - **Mostly navigation/boilerplate** — response is dominated by site chrome with little substantive content. Report to user:
+     ```
+     ⚠️ LOW-QUALITY FETCH
+
+     URL: [url]
+     The fetched content appears to be mostly site navigation/boilerplate
+     with limited useful content.
+
+     Preview (first 500 chars of substantive content):
+     [preview]
+
+     Options:
+     1. Include anyway — agent may still find useful content
+     2. Provide the content manually (paste it)
+     3. Provide an alternative URL
+     4. Skip this URL
+     ```
+     Wait for user response.
+
+3. **If fetch fails** (403, timeout, DNS error, etc.):
+   ```
+   ⚠️ URL FETCH FAILED
+
+   URL: [url]
+   Error: [error message]
+
+   This URL was referenced in the ticket but could not be fetched.
+
+   Options:
+   1. Continue without this content (agent will not have it)
+   2. Provide the content manually (paste it)
+   3. Provide an alternative URL
+   ```
+   Wait for user response before continuing.
+
+**Step E: Include gathered resources in the agent prompt (Step 3.3)**
+
+Structure all gathered resources — local files and external content — with role/intent labels so the agent knows how to use each resource. **Local files come first** (they are authored project artifacts and typically carry more authority than external references).
+
+```markdown
+## Referenced Project Documents
+
+### [file path]
+**Role:** [role label from Step A1 — e.g., "Requirements document — implementation must satisfy these requirements"]
+**Ticket context:** "[surrounding sentence from ticket that references this file]"
+
+[full file contents]
+
+### [file path]
+**Role:** [role label]
+**Ticket context:** "[surrounding sentence]"
+
+[full file contents]
+
+## Referenced External Content
+
+### [URL]
+**Intent:** [intent label from Step B2 — e.g., "Reference code — copy and adapt as needed"]
+**Ticket context:** "[surrounding sentence from ticket that references this URL]"
+
+[fetched content]
+```
+
+Omit the `## Referenced Project Documents` section if no local files were detected. Omit `## Referenced External Content` if no URLs were detected.
+
+**Limits:**
+- **Local files:** No limit — include all referenced project documents in full.
+- **External URLs:** Fetch a maximum of 5 URLs per phase. If more are detected, report the list to user and ask which to prioritize.
+- Skip URLs already fetched in a prior phase — reuse the cached content and intent classification.
+- For GitHub directory fetches, count each individual file fetched toward the limit (not the directory URL itself).
+
 #### 3.2 Select Agent
 
 | Phase | Agent Selection |
@@ -244,6 +426,7 @@ Agent tool parameters:
   3. Specific phase instructions
   4. Expected output format (structured report)
   5. Current branch name (so agent can verify it is on the correct branch)
+  6. Referenced project documents and external content from Step 3.1.1 (formatted per Step E)
 ```
 
 **Critical:** Agents do NOT have Linear access. Include ALL necessary context in the prompt.

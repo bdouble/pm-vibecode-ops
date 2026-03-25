@@ -5,10 +5,16 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.24.2] - 2026-03-25
+## [2.25.0] - 2026-03-25
+
+### Added
+- **Resource gathering for execute-ticket agents** — New Step 3.1.1 automatically detects and fetches resources referenced in ticket descriptions before dispatching agents. Supports local file references (requirements docs, research briefs, design specs, ADRs) and external URLs (GitHub code, API docs, blog tutorials, configuration templates). Local files are read in full with role classification; external URLs are fetched via WebFetch with intent classification, content validation, and user fallback on failure. GitHub URLs are normalized (blob→raw, gist→raw, directory→file listing). All gathered resources are included in agent prompts with role/intent labels and ticket context so agents know how to use each resource.
+- **WebFetch added to execute-ticket allowed-tools** — Enables the orchestrator to fetch external URLs referenced in tickets before agent dispatch.
 
 ### Fixed
 - **Execute-ticket agents no longer create their own branches** — Corrected "Task tool" references to "Agent tool" in execute-ticket command, added explicit prohibition on `isolation: "worktree"` so agents work on the canonical feature branch, and added branch name as a required prompt parameter for agent verification.
+- **Stale "Task tool" reference in TECHNICAL_REFERENCE.md** — Platform comparison table now correctly references "Agent tool".
+- **Stale context budget description in TECHNICAL_REFERENCE.md** — Updated to reflect context window auto-detection rather than fixed token limit.
 
 ---
 
@@ -1378,7 +1384,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
-[2.24.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.2
+[2.25.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.25.0
 [2.24.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.1
 [2.24.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.0
 [2.23.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.23.0

@@ -188,16 +188,18 @@ These commands run for each individual ticket through the development lifecycle.
 **Key Features**:
 - **Agentic execution**: Runs adaptation, implementation, testing, documentation, code review, and security review automatically
 - **Git branch creation**: Uses Linear's `gitBranchName` field for consistent branch naming
+- **Resource gathering**: Automatically detects and fetches local file references (requirements docs, research briefs, design specs) and external URLs (GitHub code, API docs, blog tutorials) from ticket descriptions, classifies their intent, and includes them in agent prompts
 - **Status updates**: Sets ticket to "In Progress" at start, "Done" when security passes
 - **Resume capability**: Detects existing branches and PRs, resumes from interrupted phase
 - **Draft PR lifecycle**: Creates draft PR after implementation, converts to ready when security passes
 - **Phase comments**: Adds PR comments for each phase with progress indicators
 - **PR labels**: Adds `code-reviewed`, `security-approved`, `ready-for-merge` labels
-- **Context budget**: Enforces ~2000 token limit per agent invocation for optimal performance
+- **Context window auto-detection**: Full verbatim context for 500K+ token windows; budget mode for smaller windows
 - **Report validation**: Auto-retries if agent returns malformed report
 
 **Execution Flow**:
 1. **Pre-flight**: Fetch ticket, create/detect branch, set status to "In Progress"
+1a. **Resource gathering**: Detect and fetch local files and external URLs referenced in ticket
 2. **Adaptation**: Analyze reuse opportunities, create implementation guide
 3. **Implementation**: Write code, commit, create draft PR
 4. **Testing**: Build test suite, run and fix until passing
@@ -823,7 +825,7 @@ Commands track and report:
 | Feature | Claude Code | OpenAI Codex |
 |---------|-------------|--------------|
 | **Command Style** | Slash commands | Copy-paste prompts |
-| **Agents** | Specialized via Task tool | Platform-agnostic |
+| **Agents** | Specialized via Agent tool | Platform-agnostic |
 | **Installation** | Plugin: Install from marketplace | Clone repo, reference prompts |
 | **Git Strategy** | Feature branches | Feature branches |
 | **Skills** | Auto-activated (10 skills) | Not supported |
