@@ -9,10 +9,6 @@ A battle-tested workflow that enables Product Managers and other non-engineers t
 
 Write a PRD. Run 11 commands. Ship features with tests, documentation, and security review.
 
-**Time**: Significantly faster delivery for routine features (50-75% time savings typical)
-**Quality**: 90%+ test coverage, automated security review, comprehensive documentation
-**Output**: Production-ready code that integrates cleanly with existing codebases
-
 ---
 
 ## Why This Matters
