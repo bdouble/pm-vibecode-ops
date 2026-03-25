@@ -592,6 +592,25 @@ After completing the adaptation analysis, add the following structured comment t
 - **Build Requirements**: [Any new build steps or configuration changes]
 - **Environment Variables**: [Reusing existing env vars where possible]
 
+### 📄 Referenced Document Conformance Requirements (When Prescriptive Documents Exist)
+
+If the orchestrator provided referenced documents classified as **Requirements/spec** or **Research/analysis (prescriptive)**, list the specific verifiable items extracted from those documents:
+
+**From: [document path] ([role classification])**
+
+**[Category 1] ([count] required):**
+[list of specific items — IDs, field names, enum values, etc.]
+
+**[Category 2] (must match exactly):**
+[list of specific values, patterns, or structures]
+
+**[Category 3]:**
+[list of specific requirements, properties, or constraints]
+
+**These items will be verified by the orchestrator after implementation (Step 3.4.3).** The implementation agent should treat this section as a concrete checklist, not general guidance.
+
+*Omit this section if no prescriptive referenced documents were provided.*
+
 ### ✅ Implementation Readiness Checklist
 - [x] Requirements fully understood and documented
 - [x] ALL EXISTING SERVICES INVENTORIED FOR REUSE

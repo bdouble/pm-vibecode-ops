@@ -188,7 +188,8 @@ These commands run for each individual ticket through the development lifecycle.
 **Key Features**:
 - **Agentic execution**: Runs adaptation, implementation, testing, documentation, code review, and security review automatically
 - **Git branch creation**: Uses Linear's `gitBranchName` field for consistent branch naming
-- **Resource gathering**: Automatically detects and fetches local file references (requirements docs, research briefs, design specs) and external URLs (GitHub code, API docs, blog tutorials) from ticket descriptions, classifies their intent, and includes them in agent prompts
+- **Resource gathering**: Automatically detects and fetches local file references and external URLs from ticket descriptions, parent epic descriptions, and within referenced documents themselves (two-level chain). Classifies research briefs as prescriptive or contextual based on content structure, extracts conformance checklists from prescriptive documents, and includes a Reference Material Availability summary so agents know what context they have
+- **Post-implementation conformance check**: Verifies that specific items from prescriptive referenced documents (IDs, field names, enumerated requirements) were actually implemented before advancing to the next phase
 - **Status updates**: Sets ticket to "In Progress" at start, "Done" when security passes
 - **Resume capability**: Detects existing branches and PRs, resumes from interrupted phase
 - **Draft PR lifecycle**: Creates draft PR after implementation, converts to ready when security passes
@@ -199,7 +200,8 @@ These commands run for each individual ticket through the development lifecycle.
 
 **Execution Flow**:
 1. **Pre-flight**: Fetch ticket, create/detect branch, set status to "In Progress"
-1a. **Resource gathering**: Detect and fetch local files and external URLs referenced in ticket
+1a. **Parent epic context**: Fetch parent epic references, architectural decisions, and constraints
+1b. **Resource gathering**: Detect and fetch local files and external URLs from ticket, parent epic, and within referenced documents; classify prescriptive vs contextual; extract conformance checklists
 2. **Adaptation**: Analyze reuse opportunities, create implementation guide
 3. **Implementation**: Write code, commit, create draft PR
 4. **Testing**: Build test suite, run and fix until passing

@@ -5,6 +5,19 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.26.0] - 2026-03-25
+
+### Added
+- **Parent epic context gathering (Step 3.1.0)** — Execute-ticket now fetches the parent epic before dispatching agents, extracting referenced documents, architectural decisions, and constraints that apply to all sub-tickets. Ensures context authored at the epic level (research briefs, specs, design docs) reaches agents even when not repeated in individual ticket descriptions.
+- **Two-level URL discovery chain** — Step A2 now scans the ticket body, parent epic description, AND all local file contents read in Step A1 for URLs. URLs embedded inside referenced research briefs and specs are now detected and fetched, not just URLs in the ticket itself. URLs found in local files inherit the file's role classification as default intent.
+- **Prescriptive vs contextual research classification** — Research briefs containing structured content (tables with specific IDs, interface definitions, enumerated items, schema fields) are now classified as "Research/analysis (prescriptive)" with a stronger role label that communicates binding authority to agents. General research without concrete specifications is classified as "Research/analysis (contextual)".
+- **Conformance checklist extraction** — When a referenced document is classified as prescriptive, the orchestrator extracts verifiable specification items (named IDs, field definitions, enumerated requirements, specific values) and generates a conformance checklist appended to the agent prompt.
+- **Post-implementation conformance verification (Step 3.4.3)** — After implementation, the orchestrator verifies that specific items from prescriptive referenced documents were actually implemented. Uses targeted grep/inspection queries. Divergences and missing items pause execution for user decision.
+- **Reference Material Availability table** — Step E now includes a summary table showing which referenced sources were successfully included, which failed to fetch, and why. Agents can make informed decisions about missing context and flag critical gaps in their Deferred Items.
+- **Adaptation conformance requirements section** — Adaptation report template and architect-agent output now include a "Referenced Document Conformance Requirements" section that extracts specific verifiable items from prescriptive documents as a concrete implementation checklist.
+
+---
+
 ## [2.25.0] - 2026-03-25
 
 ### Added
@@ -1384,6 +1397,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[2.26.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.26.0
 [2.25.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.25.0
 [2.24.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.1
 [2.24.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.0

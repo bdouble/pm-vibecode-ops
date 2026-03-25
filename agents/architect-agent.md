@@ -540,6 +540,24 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 - `path/to/file.ts` - [brief description of change]
 - `path/to/another.ts` - [brief description]
 
+### Referenced Document Conformance Requirements
+*(Include this section when the orchestrator provided documents classified as Requirements/spec or Research/analysis (prescriptive). Omit if no prescriptive documents were provided.)*
+
+If prescriptive referenced documents were provided, extract specific verifiable items and present them as a concrete checklist for the implementation agent:
+
+**From: [document path] ([role classification])**
+
+**[Category] ([count] required):**
+[specific item names, IDs, values — e.g., field names, enum values, component IDs]
+
+**[Category] (must match exactly):**
+[specific values, patterns, or structures from the document]
+
+**[Category]:**
+[specific requirements, properties, or constraints]
+
+**These items will be verified by the orchestrator after implementation.** Treat this as a binding specification, not general guidance.
+
 ### Issues/Blockers
 [Any problems encountered, or "None"]
 

@@ -189,11 +189,50 @@ For each phase that needs to run:
 
 **RULE: Always include full, verbatim prior phase reports.** Do NOT summarize, condense, or extract. Agents perform better with complete context than with curated excerpts — curation risks dropping details that downstream phases need.
 
+#### 3.1.0 Gather Parent Epic Context
+
+If the ticket has a parent issue (epic), fetch it to capture context that applies to all sub-tickets:
+
+1. **Check for parent epic:** From the ticket fetched in Step 1, check for `parentId` or parent reference.
+
+2. **If parent exists, fetch the parent epic** using `mcp__linear-server__get_issue` with the parent ID.
+
+3. **Extract key sections** from the epic description:
+   - **Key References:** File paths (local docs, research briefs, specs) and URLs referenced in the epic
+   - **Architecture/design decisions** that apply broadly to all sub-tickets
+   - **Scope boundaries and constraints** that inform implementation approach
+
+4. **Include parent epic references in downstream steps:**
+   - Local file paths from the epic description are added to Step 3.1.1's scanning scope (read alongside ticket-referenced files)
+   - URLs from the epic description are included in Step A2's scanning scope
+   - Architectural decisions and constraints are passed to the agent prompt
+
+5. **Present parent epic context** to the agent with the label:
+   ```
+   ## Parent Epic Context
+   **Epic:** [epic-id] - [epic-title]
+   **Applies to:** All tickets in this epic
+
+   ### Referenced Documents (from epic)
+   [file paths and URLs extracted from epic description]
+
+   ### Architectural Decisions
+   [design decisions, constraints, scope boundaries from epic]
+   ```
+
+**Do NOT include** the full epic description verbatim (it may contain scope for other tickets). Extract only: referenced documents, architectural decisions, and constraints that apply broadly.
+
+**Skip this step** if the ticket has no parent issue.
+
+---
+
 #### 3.1.1 Gather Referenced Resources
 
 Before dispatching the agent, scan the ticket description, acceptance criteria, and Technical Notes for **local file paths** and **URLs** that point to resources the agent needs. Tickets often reference requirements documents, research briefs, design specs, and other detailed context — this material represents significant upfront work and MUST be included in the agent prompt when present.
 
 This step has two tracks: **local files** (Step A1) and **external URLs** (Steps A2–E). Run both tracks, then combine results for the agent prompt.
+
+**Important:** The scanning scope for both tracks includes content from Step 3.1.0 (parent epic) when available. File paths and URLs discovered in the parent epic description are included alongside those found in the ticket itself.
 
 ---
 
@@ -229,20 +268,50 @@ Scan the ticket body for local file paths. Common patterns:
    | Role | Ticket phrasing signals | How to present to agent |
    |------|------------------------|------------------------|
    | **Requirements/spec** | "requirements in", "spec at", "acceptance criteria from", "per the PRD" | `Requirements document — implementation must satisfy these requirements` |
-   | **Research/analysis** | "research brief", "analysis in", "findings from", "investigation at" | `Research brief — provides context, constraints, and recommendations that inform implementation` |
+   | **Research/analysis (prescriptive)** | "research brief", "analysis in" + file contains tables with specific IDs, interface definitions, enumerated items, schema fields, or concrete values | `Research brief (prescriptive) — contains specific technical specifications (template IDs, schema definitions, layout types, interface fields, etc.) that MUST be implemented as specified, not merely used as background. Cross-check your implementation against the specific items in this brief.` |
+   | **Research/analysis (contextual)** | "for context", "background research", "findings from", "investigation at" + file provides general analysis without concrete specification items | `Research context — provides background that informs approach but does not prescribe specific implementation details` |
    | **Design/architecture** | "design doc", "architecture in", "ADR at", "technical design" | `Design document — follow the architectural decisions described here` |
    | **Example/template** | "template at", "example in", "use the pattern from" | `Template/example — use as a starting point or structural reference` |
    | **Context/background** | "for background", "context in", "FYI see" | `Background context — informs approach but is not directly prescriptive` |
+
+   **Prescriptive vs Contextual research:** When a referenced research document contains structured content — tables with specific IDs, interface definitions, enumerated requirement lists, schema fields, or concrete values — classify it as **prescriptive**. The stronger role label ensures agents treat the brief's specific items as binding, not advisory.
 
    If role is unclear, default to `Requirements document` — it's better to over-weight a referenced document than under-weight it.
 
 4. **No file count limit** — include all referenced local files. These are authored project artifacts; they exist because they're relevant.
 
+5. **Extract conformance checklist from prescriptive documents:** When a document is classified as **Requirements/spec** or **Research/analysis (prescriptive)**, scan its content for verifiable specification items:
+   - Named items (template IDs, enum values, field names)
+   - Interface or schema definitions (field names, types, required vs optional)
+   - Enumerated lists of must-have features or required components
+   - Specific values (dimensions, sizes, patterns, CSS properties)
+
+   Generate a conformance checklist and include it after the document's content in the agent prompt:
+
+   ```markdown
+   ## Research Brief Conformance Checklist
+
+   The following specific items from [file path] MUST be verified in your implementation:
+
+   - [ ] [Category]: [item1, item2, item3, ...]
+   - [ ] [Category]: [item1, item2, item3, ...]
+   - [ ] [Category]: [specific requirement or value]
+   ```
+
+   This checklist will be used in Step 3.4.3 to verify implementation conformance.
+
 ---
 
 **Step A2: Detect URLs**
 
-- Match URLs in the ticket body (`https://...`)
+Scan the combined text of:
+1. The ticket body (title, description, acceptance criteria, Technical Notes)
+2. The parent epic description (if gathered in Step 3.1.0)
+3. ALL local file contents read in Step A1
+
+This ensures URLs embedded in referenced research briefs, specs, and requirements documents are also discovered and fetched — not just URLs in the ticket itself. URLs found in local files should inherit the local file's role classification as a default intent (e.g., a URL inside a "Research brief" file defaults to "Technical reference — follow the approach described here" unless surrounding text suggests otherwise).
+
+- Match URLs (`https://...`) across all sources listed above
 - Ignore Linear internal links (`linear.app/...`) and GitHub PR/issue links already handled by `gh` CLI (e.g., `github.com/org/repo/pull/...`, `github.com/org/repo/issues/...`)
 - Ignore image URLs (`.png`, `.jpg`, `.gif`, `.svg`, `.webp`)
 
@@ -364,6 +433,23 @@ Structure all gathered resources — local files and external content — with r
 ```
 
 Omit the `## Referenced Project Documents` section if no local files were detected. Omit `## Referenced External Content` if no URLs were detected.
+
+**After all resources are gathered, add a Reference Material Availability summary** so the agent (and the user reviewing the report) understands what context the agent actually has access to:
+
+```markdown
+## Reference Material Availability
+
+| Source | Type | Status |
+|--------|------|--------|
+| [local file path] | Local file ([role label]) | ✅ Included in full |
+| [URL] | URL ([intent label]) | ✅ Included |
+| [URL] | URL ([intent label]) | ❌ Fetch failed ([reason]) |
+| [URL] | URL ([intent label]) | ⚠️ Low-quality fetch (included with caveats) |
+
+**Note:** For references marked ❌, rely on training knowledge for this content. If a referenced URL was critical to the ticket's requirements, flag this in your Deferred Items table as `DISCOVERED: Referenced URL unavailable — [URL] — [what it was expected to provide]`.
+```
+
+This transparency lets the agent make informed decisions about what context it does and doesn't have, and surfaces gaps in the execution summary.
 
 **Limits:**
 - **Local files:** No limit — include all referenced project documents in full.
@@ -552,6 +638,67 @@ IF all AC pass verification:
 ```
 
 **Note:** This step applies to the implementation phase only. Code review has its own AC verification via Step 0 with verification commands. Security review focuses on vulnerability assessment rather than AC completion.
+
+#### 3.4.3 Verify Referenced Document Conformance (Implementation Phase, When Prescriptive Documents Exist)
+
+If Step 3.1.1 gathered any documents classified as **Requirements/spec** or **Research/analysis (prescriptive)** and a conformance checklist was generated, verify that the implementation matches the specific items from those documents.
+
+**Step 1: Extract verifiable specifications from the conformance checklist**
+
+For each checklist item, identify the specification type:
+- **Named items** (IDs, enum values, field names) → verify presence in target files
+- **Specific values** (dimensions, patterns, properties) → verify correct values
+- **Enumerated lists** (required features, fields, components) → verify completeness
+
+**Step 2: Generate and run verification queries**
+
+For each specification item, generate a targeted check:
+```
+Named item "[item-name]" expected in [target-file]
+  → grep -rn '"[item-name]"\|[item-name]' [target-file-or-directory]
+  → expect: at least one match
+
+Interface field "[field-name]" expected
+  → grep -rn '[field-name]' [target-file]
+  → expect: field defined with correct type
+
+Enumerated requirement "[requirement]"
+  → verify via grep, file existence check, or source code inspection
+  → expect: implemented as specified
+```
+
+**Step 3: Report results**
+
+```
+IF all specifications match:
+  - Proceed silently to next step
+  - Include brief confirmation in Linear comment:
+    "✅ Referenced document conformance: [X/X] specifications verified"
+
+IF divergences or missing items exist:
+  - DO NOT advance to next phase
+  - Report to user:
+
+    ⚠️ REFERENCED DOCUMENT CONFORMANCE CHECK
+
+    Document: [file path]
+    Role: [role classification]
+
+    | Specification | Expected | Found | Status |
+    |---------------|----------|-------|--------|
+    | [item] | [expected value] | [actual value] | ✅ / ⚠️ DIVERGED / ❌ MISSING |
+
+    [X] items match, [Y] items diverged, [Z] items missing
+
+    Options:
+    1. Send back to implementation agent for correction
+    2. Accept divergences (document reasons in Linear)
+    3. Review manually
+
+  - Wait for user decision before continuing
+```
+
+**Scope:** This step runs only when prescriptive referenced documents were provided in Step 3.1.1. It does NOT replace Step 3.4.2 (AC verification) — it supplements it by checking specifications that live in referenced documents rather than in the ticket's acceptance criteria.
 
 #### 3.5 Check for Blocking Conditions
 

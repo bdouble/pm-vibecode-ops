@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.25.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.26.0-blue.svg)
 
 ## What This Is
 
@@ -100,10 +100,13 @@ The workflow consists of three phases:
 
 One command orchestrates all six phases automatically:
 - Creates feature branch using Linear's branch naming
+- Gathers parent epic context, referenced documents, and external URLs (two-level chain)
+- Classifies research briefs as prescriptive or contextual; extracts conformance checklists
 - Runs adaptation, implementation, testing, documentation, code review, and security review
+- Verifies implementation against referenced document specifications before advancing
 - Creates draft PR after implementation, converts to ready when security passes
 - Adds PR labels and phase comments for full traceability
-- Pauses only for blocking issues (failing tests, security vulnerabilities)
+- Pauses only for blocking issues (failing tests, security vulnerabilities, conformance gaps)
 
 **Why use the agentic workflow:**
 - 8x faster than running phases manually
