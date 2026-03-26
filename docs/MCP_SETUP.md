@@ -543,7 +543,7 @@ Browser binaries are downloaded on first use if not already present.
 
 1. **Codex CLI** installed and authenticated:
    ```bash
-   brew install codex-cli
+   npm i -g @openai/codex
    codex login
    ```
 
@@ -571,8 +571,7 @@ Add to your `.claude/settings.json` (optional — defaults are sensible):
   "env": {
     "CODEX_REVIEW_MODEL": "gpt-5.3-codex",
     "CODEX_REVIEW_REASONING": "xhigh",
-    "CODEX_REVIEW_TIMEOUT": "1500",
-    "CODEX_REVIEW_AUTO_FIX": "false"
+    "CODEX_REVIEW_TIMEOUT": "1500"
   }
 }
 ```

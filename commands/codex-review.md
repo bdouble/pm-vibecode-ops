@@ -233,9 +233,8 @@ All configurable via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `CODEX_REVIEW_HOME` | `~/.codex` | Codex CLI home directory (config.toml + credentials) |
 | `CODEX_REVIEW_MODEL` | `gpt-5.3-codex` | OpenAI model ID (must start with `gpt-` or `o`) |
 | `CODEX_REVIEW_REASONING` | `xhigh` | Reasoning effort: none, low, medium, high, xhigh |
 | `CODEX_REVIEW_TIMEOUT` | `1500` | Timeout in seconds per call (25 min default — repo-aware reviews are thorough) |
-| `CODEX_REVIEW_AUTO_FIX` | `false` | Auto-approve all findings without user interaction |
-| `CODEX_REVIEW_MIN_SEVERITY` | `medium` | Minimum severity to include in findings |
 | `CODEX_REVIEW_FOCUS` | `all` | Focus area: bugs, security, performance, all |

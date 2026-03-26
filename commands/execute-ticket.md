@@ -961,14 +961,12 @@ Before running this phase, check if the Codex MCP server is available:
 
 Follow the `/codex-review` command workflow (see `commands/codex-review.md`):
 
-1. **Gather context:** Use the git diff and ticket context already collected by the orchestrator
-2. **Call `codex_review`:** Pass diff + ticket context + implementation summary
-3. **Present findings to user:** Display severity-sorted findings table
-4. **Process user decisions:** APPROVE / DISMISS / DEFER each finding
-   - If `CODEX_REVIEW_AUTO_FIX=true`: auto-approve all
-5. **Apply approved fixes:** Call `codex_fix` per finding, verify with tests, revert on failure
-6. **Commit fixes:** Single commit for all fixes. Push only when `WORKTREE_MODE=false`.
-7. **Post report to Linear:** Cross-Model Review Report as ticket comment
+1. **Gather context:** Collect ticket description, AC, and implementation summary from prior phases
+2. **Call `codex_review_and_fix`:** Pass project directory, base branch, and ticket context. Codex runs as a full agent with repo access — reviews changes, auto-fixes clear P0-P2 findings, reports ambiguous ones with questions, lists P3 for awareness.
+3. **Present results to user:** Show auto-fixed items, items needing decision, and P3 awareness items
+4. **Second pass (if needed):** For approved "needs decision" items, call `codex_fix` with user guidance
+5. **Commit fixes:** Single commit for all fixes. Push only when `WORKTREE_MODE=false`.
+6. **Post report to Linear:** Cross-Model Review Report as ticket comment
 
 ### Rate Limit Handling
 
