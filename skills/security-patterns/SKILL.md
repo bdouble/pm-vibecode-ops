@@ -1,6 +1,6 @@
 ---
 name: security-patterns
-description: Enforces OWASP Top 10 and agentic security patterns during code writing. Use when code handles authentication, authorization, user input, database queries, secrets, sessions, tokens, webhooks, file uploads, or when user mentions "login", "password", "JWT", "OAuth", "SQL", "XSS", "CSRF", "injection", "agent", "MCP server", or "tool calling".
+description: Enforces OWASP Top 10 and agentic security patterns during code writing and infrastructure configuration. Use when code handles authentication, authorization, user input, database queries, secrets, sessions, tokens, webhooks, file uploads, CI/CD pipelines, Docker configuration, or infrastructure-as-code, or when user mentions "login", "password", "JWT", "OAuth", "SQL", "XSS", "CSRF", "injection", "agent", "MCP server", "tool calling", "GitHub Actions", "Dockerfile", or "pipeline".
   - Imports: @anthropic-ai/sdk, openai, langchain, @modelcontextprotocol, autogen, crewai
 ---
 
@@ -187,6 +187,41 @@ The following code patterns indicate elevated security risk. When any appear in 
 - **Defense in depth**: Multiple layers of protection
 - **Least privilege**: Minimal permissions required
 - **Secure defaults**: Safe configuration out of the box
+
+## Infrastructure Security Patterns
+
+### Secrets Detection
+
+Known secret prefixes to scan for (in code AND git history):
+- `AKIA` — AWS access key IDs
+- `sk-` — OpenAI, Stripe secret keys
+- `ghp_`, `gho_`, `github_pat_` — GitHub tokens
+- `xoxb-`, `xoxp-`, `xapp-` — Slack tokens
+- `SG.` — SendGrid API keys
+- `sk_live_`, `pk_live_` — Stripe live keys
+
+### CI/CD Security
+
+When reviewing `.github/workflows/` or CI configuration:
+- All third-party actions MUST be pinned to SHA, not tag
+- `pull_request_target` trigger requires extra scrutiny (fork PRs get write access)
+- `${{ github.event.* }}` in `run:` steps is script injection — use environment variables instead
+- Secrets should be scoped to the steps that need them, not the entire job
+
+### Container Security
+
+When reviewing Dockerfiles:
+- MUST include a `USER` directive (don't run as root)
+- Secrets MUST NOT appear as `ARG` or `ENV` in build
+- `.env` files MUST NOT be `COPY`ed into images
+- Use multi-stage builds to exclude build-time dependencies from production images
+
+### Dependency Security
+
+When reviewing package manifests:
+- Lockfile MUST exist AND be tracked by git
+- Production dependencies with install scripts are a supply chain risk — verify they are necessary
+- Pin exact versions for production dependencies
 
 ## Rationalizations -- STOP
 
