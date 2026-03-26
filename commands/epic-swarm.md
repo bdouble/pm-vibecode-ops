@@ -1,6 +1,6 @@
 ---
 description: Orchestrate parallel execution of epic sub-tickets using dependency-aware wave scheduling with worktree isolation
-allowed-tools: Task, Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), Agent, mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
+allowed-tools: Task, Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
 argument-hint: <epic-id> [--max-parallel N] [--dry-run] [--wave N]
 workflow-phase: epic-swarm
 closes-ticket: false
@@ -68,7 +68,8 @@ If file overlap in same group: move the overlapping ticket to the next wave and 
 
 Exclude from the swarm:
 - Tickets already marked Done or Cancelled
-- Tickets marked as `codex-review-pending` (pick these up in their wave)
+
+Do NOT exclude tickets marked as `codex-review-pending` in swarm state. Re-queue them in their original wave (or next available wave) so Codex review can be retried.
 
 ### 1.5 Create Swarm State File
 
@@ -164,8 +165,12 @@ For each ticket in the current wave:
 # Verify .claude/worktrees/ is gitignored
 git check-ignore .claude/worktrees/ || echo ".claude/worktrees/" >> .gitignore
 
+# Detect default branch from origin/HEAD (fallback to main)
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+default_branch=${default_branch:-main}
+
 # Create worktree with ticket branch
-git worktree add .claude/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] origin/main
+git worktree add .claude/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "origin/$default_branch"
 ```
 
 **3.1.2 Install dependencies in worktree:**
@@ -248,14 +253,16 @@ Use mcp__linear-server__create_comment on the EPIC (not individual tickets):
 
 ### 4.1 Sequential Merge
 
-Merge tickets to main one at a time, in order (fewest dependencies first, then fewest files):
+Merge tickets to the default branch one at a time, in order (fewest dependencies first, then fewest files):
 
 For each completed ticket:
 
 ```bash
-# Update main
-git checkout main
-git pull origin main
+# Detect and update default branch (fallback to main)
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+default_branch=${default_branch:-main}
+git checkout "$default_branch"
+git pull origin "$default_branch"
 
 # Merge the ticket branch
 git merge feature/[ticket-id]-[slug] --no-ff -m "merge: [ticket-id] — [ticket title]"
@@ -278,7 +285,7 @@ npm test  # or appropriate test command
 
 **Push after all wave merges succeed:**
 ```bash
-git push origin main
+git push origin "$default_branch"
 ```
 
 ### 4.2 Update Swarm State

@@ -574,7 +574,7 @@ Before posting to Linear, validate the agent report contains required fields:
 | implementation | `Status:`, `Summary:`, `Files Changed:` |
 | testing | `Status:`, `Gate #0`, `Gate #1`, `Gate #2`, `Gate #3` results |
 | documentation | `Status:`, `Summary:`, `Documentation Updated` or `Docs Created` |
-| codereview | `Review Status:`, `Requirements Checklist`, `Best Practices Assessment`, `SOLID/DRY Assessment`, `Files Reviewed:` |
+| codereview | Always: `Review Status:`, `Requirements Checklist`, `Files Reviewed:`. If `Pass 1 Result: PASS`, also require `Best Practices Assessment` and `SOLID/DRY Assessment`. |
 | security-review | `Status:`, `Security Checklist` or findings list |
 
 **Validation algorithm:**
@@ -590,6 +590,10 @@ If ANY required field is missing or empty:
   - If retry also fails validation: PAUSE for user decision
     Options: [Retry] [Review Raw Output] [Skip Phase] [Abort]
 ```
+
+**Codereview conditional validation:**
+- If report contains `Pass 1 Result: FAIL`, treat "Pass 2 skipped" as valid and do NOT require Pass 2 sections.
+- If report contains `Pass 1 Result: PASS` (or does not specify Pass 1), require both `Best Practices Assessment` and `SOLID/DRY Assessment`.
 
 **IMPORTANT:** Auto-retry happens automatically before pausing. This preserves full automation in most cases.
 
@@ -848,6 +852,10 @@ Before advancing to the next phase, scan the agent's Deferred Items table for an
 
 After posting implementation report to Linear:
 
+**Worktree mode behavior:**
+- `WORKTREE_MODE=false` (normal run): execute all steps below
+- `WORKTREE_MODE=true` (spawned by `/epic-swarm`): execute steps 1-2 only (local commit), skip push/PR steps 3-5
+
 1. **Stage all changes:**
    ```bash
    git add -A
@@ -902,6 +910,8 @@ After posting implementation report to Linear:
 
 After posting phase report to Linear, add condensed summary to PR:
 
+**Skip when `WORKTREE_MODE=true` or no `pr_number` is available.**
+
 ```bash
 gh pr comment [pr-number] --body "## [emoji] [Phase Name] Complete
 
@@ -917,6 +927,8 @@ Full report: Linear ticket [ticket-id]"
 - Security Review: 🛡️
 
 #### 3.6.3 Add PR Labels (CodeReview and Security Phases)
+
+**Skip when `WORKTREE_MODE=true` or no `pr_number` is available.**
 
 After code review phase (if status is APPROVED):
 ```bash
@@ -955,7 +967,7 @@ Follow the `/codex-review` command workflow (see `commands/codex-review.md`):
 4. **Process user decisions:** APPROVE / DISMISS / DEFER each finding
    - If `CODEX_REVIEW_AUTO_FIX=true`: auto-approve all
 5. **Apply approved fixes:** Call `codex_fix` per finding, verify with tests, revert on failure
-6. **Commit and push:** Single commit for all fixes
+6. **Commit fixes:** Single commit for all fixes. Push only when `WORKTREE_MODE=false`.
 7. **Post report to Linear:** Cross-Model Review Report as ticket comment
 
 ### Rate Limit Handling
@@ -987,6 +999,8 @@ When security-review phase completes:
 
 2. **Finalize PR:**
 
+   **Skip PR finalization when `WORKTREE_MODE=true` or no `pr_number` is available.**
+
    a. Convert draft to ready for review:
    ```bash
    gh pr ready [pr-number]
@@ -1007,7 +1021,7 @@ When security-review phase completes:
 
 - Keep ticket status as "In Progress"
 - Do NOT convert PR to ready
-- Add label to PR:
+- Add label to PR (skip when `WORKTREE_MODE=true` or no `pr_number`):
   ```bash
   gh pr edit [pr-number] --add-label "security-blocked"
   ```
