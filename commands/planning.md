@@ -255,6 +255,19 @@ When creating tickets from the PRD, the planning phase MUST:
 - **NO PLACEHOLDER FEATURES**: Every ticket must deliver complete functionality
 - **PROPER DEPENDENCY CHAINS**: Identify and document all prerequisite work
 
+## No-Placeholders Rule
+
+Every plan step and ticket description must contain actual implementable content.
+
+**Banned patterns:**
+- "Add appropriate error handling" — specify WHAT error handling
+- "Implement standard validation" — specify WHICH validations
+- "Similar to Task N" — repeat the actual content
+- "Follow best practices for X" — specify the actual practices
+- "TBD", "TODO", "placeholder" — not allowed in plans
+
+Each ticket's implementation steps should be completable in one focused agent session. If a step requires more context than fits in one prompt, it needs to be decomposed further.
+
 ## Technical Planning Workflow
 
 ### 1. Epic Decomposition & Technical Analysis
@@ -435,7 +448,60 @@ State: backlog
 - Document timeline considerations in ticket descriptions
 - Update epic with implementation summary
 
-### 6. Service Inventory Check (If Available)
+### 6. Dependency Annotations for Parallel Execution
+
+Each ticket created by the planning phase MUST include a dependency annotation block in its Linear description. This metadata enables the `/epic-swarm` command to schedule parallel execution.
+
+#### Required Annotation Format
+
+Add this block at the end of each ticket description:
+
+```
+---
+### Parallelization Metadata
+- **Parallel Group**: [A|B|C|...] — tickets in the same group have no dependencies between them
+- **Files Touched**: [predicted file paths this ticket will create or modify]
+- **Depends On**: [ticket IDs this ticket depends on, or "None"]
+- **Blocks**: [ticket IDs that depend on this ticket, or "None"]
+- **Shared Interfaces**: [interfaces this ticket defines or consumes, with direction]
+- **Model Override**: [optional — "sonnet" for mechanical tasks, omit for default]
+```
+
+#### Annotation Rules
+
+1. **Parallel Group** — Assign the same letter to tickets that are fully independent (no file overlap, no data dependency, no shared database migrations)
+2. **Files Touched** — Be specific. Include new files to be created and existing files to be modified. This is used for file overlap detection between tickets in the same wave.
+3. **Depends On / Blocks** — Only declare dependencies where one ticket's implementation REQUIRES another's output (API contract, database schema, shared type). Do NOT declare soft preferences as dependencies.
+4. **Shared Interfaces** — If ticket A defines `IProfileResponse` and ticket B consumes it, both tickets must list it with direction: `IProfileResponse (defines)` / `IProfileResponse (consumes)`
+5. **Model Override** — Only set for clearly mechanical tickets (simple CRUD, config changes, straightforward migrations). When omitted, the session default model is used.
+
+### 7. Interface Contract Generation
+
+When the dependency analysis identifies shared interfaces between tickets, generate a contract block in the planning output:
+
+```markdown
+### Shared Interface Contract: [InterfaceName]
+
+**Defined by**: [ticket ID]
+**Consumed by**: [ticket IDs]
+
+```typescript
+// Contract — do not modify after defining ticket completes
+interface IProfileResponse {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  createdAt: string; // ISO 8601
+}
+```
+
+**Status**: Unlocked (locked after [defining ticket ID] implementation completes)
+```
+
+Interface contracts are included in the adaptation phase context for consuming tickets, ensuring they code against the agreed interface rather than inventing their own.
+
+### 8. Service Inventory Check (If Available)
 
 If a previous discovery has been run:
 ```bash

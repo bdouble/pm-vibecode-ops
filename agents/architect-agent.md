@@ -440,6 +440,54 @@ Each ticket MUST include:
 - **Dependency declaration**: Explicit list of prerequisite tickets
 - **Risk assessment**: Technical complexity and potential blockers
 
+## Dependency Analysis for Parallel Execution
+
+When decomposing work into tickets during the planning phase, you MUST perform dependency analysis to enable parallel execution via `/epic-swarm`.
+
+### Analysis Steps
+
+1. **Map file ownership**: For each ticket, predict which files will be created or modified. List specific paths, not directories.
+
+2. **Detect file overlap**: If two tickets will modify the same file, they CANNOT be in the same parallel group. Flag overlaps explicitly:
+   ```
+   WARNING: Tickets CON-42 and CON-45 both modify src/services/auth-service.ts
+   Recommendation: Place CON-45 in a later wave (depends on CON-42)
+   ```
+
+3. **Identify data dependencies**: If ticket B's implementation requires reading output from ticket A (API response format, database schema, shared type), declare an explicit dependency.
+
+4. **Assign parallel groups**: Group independent tickets with the same letter (A, B, C...). Tickets in the same group will execute concurrently in separate git worktrees.
+
+5. **Identify shared interfaces**: When tickets share type definitions, API contracts, or database schemas, generate an interface contract that both tickets will code against.
+
+6. **Recommend model overrides**: For clearly mechanical tickets (simple CRUD, config-only, straightforward file moves), recommend `Model Override: sonnet` to reduce cost.
+
+### Dependency Graph Output
+
+Include a dependency visualization in the planning output:
+
+```
+Parallel Group A (no dependencies):
+  CON-42: Add user profile endpoint
+  CON-43: Add settings page component
+
+Parallel Group B (depends on A):
+  CON-45: Profile settings page (depends on CON-42: uses IProfileResponse)
+  CON-46: User avatar upload (depends on CON-42: extends profile service)
+
+Parallel Group C (depends on B):
+  CON-48: Profile completion wizard (depends on CON-45 + CON-46)
+```
+
+### Quality Checks
+
+Before finalizing the plan, verify:
+- No circular dependencies in the graph
+- Every ticket has a parallel group assignment
+- File overlap between same-group tickets = 0
+- All shared interfaces have contracts
+- No ticket has placeholder steps (see No-Placeholders Rule)
+
 ## Important Guidelines
 
 ### CRITICAL: Duplication Prevention Requirements
