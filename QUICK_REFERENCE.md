@@ -53,7 +53,7 @@ Use individual phases when debugging a specific phase or needing manual interven
 |---------|---------|-------------|
 | `/epic-swarm [epic-id]` | **Run tickets in parallel** | Approve wave plan, resolve conflicts |
 
-Requires dependency annotations from `/planning`. Independent tickets run concurrently in separate git worktrees. Sequential merge with conflict detection.
+Requires dependency annotations from `/planning`. The orchestrator drives all workflow phases directly, dispatching specialized agents in parallel across tickets within each phase. Independent tickets run concurrently in separate git worktrees. Sequential merge with conflict detection.
 
 ---
 

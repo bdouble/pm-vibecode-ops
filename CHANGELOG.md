@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Multi-Agent Swarm Orchestration
-- **`/epic-swarm` command** — Orchestrate parallel execution of epic sub-tickets using dependency-aware wave scheduling. Analyzes ticket dependencies, groups independent tickets into waves, isolates each in a git worktree, runs full `/execute-ticket` in each, merges sequentially, and runs security review on the integrated codebase.
+- **`/epic-swarm` command** — Orchestrate parallel execution of epic sub-tickets using dependency-aware wave scheduling. Analyzes ticket dependencies, groups independent tickets into waves, isolates each in a git worktree. Orchestrates all workflow phases directly from the main session — dispatches specialized agents in parallel across tickets within each phase (architecture constraint: Claude Code subagents cannot spawn subagents). Phase-synchronized execution: all tickets complete adaptation before implementation begins, ensuring interface contracts propagate correctly. Merges sequentially and runs security review on the integrated codebase.
 - **Swarm state persistence** — State file at `.claude/swarm-state/{epic-id}.json` with create/update/resume lifecycle. Interrupted swarms resume from last checkpoint.
 - **Worktree safety patterns** — Gitignore verification before worktree creation, clean baseline tests per worktree, automatic cleanup on completion.
 

@@ -1,6 +1,6 @@
 ---
 description: Orchestrate parallel execution of epic sub-tickets using dependency-aware wave scheduling with worktree isolation
-allowed-tools: Task, Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
+allowed-tools: Task, Agent, Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), WebFetch, mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
 argument-hint: <epic-id> [--max-parallel N] [--dry-run] [--wave N]
 workflow-phase: epic-swarm
 closes-ticket: false
@@ -8,7 +8,9 @@ closes-ticket: false
 
 # Epic Swarm Orchestrator
 
-Execute multiple tickets from an epic concurrently using dependency-aware wave scheduling. Each ticket runs in its own git worktree with full `/execute-ticket` workflow isolation.
+Execute multiple tickets from an epic concurrently. The orchestrator (this command, running in the main Claude Code session) drives all phases directly, dispatching specialized agents in parallel across tickets within each phase. Each ticket works in its own git worktree.
+
+**Architecture constraint:** Claude Code subagents cannot spawn other subagents. Therefore this command orchestrates every phase for every ticket directly — it does NOT delegate to `/execute-ticket`. Instead, it follows the same phase sequence but manages all tickets and all phases from the main session, dispatching the same specialized agents (architect-agent, backend-engineer-agent, etc.) that execute-ticket uses.
 
 ## Input
 
@@ -19,7 +21,7 @@ Execute multiple tickets from an epic concurrently using dependency-aware wave s
 
 ---
 
-## Phase 1: Analysis
+## Phase 1: Analysis and Context Gathering
 
 ### 1.1 Fetch Epic and Sub-Tickets
 
@@ -39,7 +41,6 @@ Use mcp__linear-server__list_issues with parentId filter to get all sub-tickets
 ```bash
 state_file=".claude/swarm-state/[epic-id].json"
 if [ -f "$state_file" ]; then
-  # Offer to resume
   echo "Existing swarm state found for [epic-id]."
   echo "Current wave: N, Completed tickets: X/Y"
 fi
@@ -81,11 +82,106 @@ Swarm scope for EPIC-123:
   Skip (3): CON-40 (Done), CON-41 (Done), CON-47 (In Progress)
 ```
 
-### 1.5 Create Swarm State File
+### 1.5 Epic Context Gathering
+
+**THIS STEP IS CRITICAL TO IMPLEMENTATION QUALITY.**
+
+Every ticket agent must have full, verbatim access to all research, requirements, and reference materials. The orchestrator gathers this context ONCE, writes it to disk, and every agent reads it directly. This eliminates context loss through summarization hops.
+
+**1.5.1 Gather epic-level context from Linear:**
+- Epic description (full, verbatim — do NOT summarize)
+- ALL epic comments (full, verbatim, chronological)
+- Extract every referenced document path and URL from the epic body and comments
+
+**1.5.2 Read ALL local referenced documents:**
+- Research briefs, requirements documents, design specs, ADRs, implementation references
+- Read each file IN FULL using the Read tool — do NOT summarize or excerpt
+- Classify each as prescriptive (contains specific implementable requirements, IDs, schemas, field names) or contextual (background information, analysis)
+- If a document references OTHER documents or URLs, follow those references and read them too
+
+**1.5.3 Fetch ALL external URLs:**
+- API documentation, open source repos, blog posts, design references, example implementations
+- Fetch each URL using WebFetch — capture the full content
+- If a URL fails, log it and continue — note the failure in the context bundle
+- Normalize GitHub URLs (blob→raw, gist→raw)
+
+**1.5.4 Read ALL ticket descriptions and comments:**
+- For EVERY ticket in the swarm scope, fetch full description and all comments from Linear
+- Extract any ticket-level document references and URLs not already gathered at epic level
+- Read/fetch those as well — follow every reference chain
+
+**1.5.5 Write the epic context bundle:**
+
+Write ALL gathered context to `.claude/swarm-context/{epic-id}/epic-context.md`:
+
+```markdown
+# Epic Context Bundle: [epic-id]
+Generated: [timestamp]
+
+## Epic Description (VERBATIM — do NOT summarize when passing to agents)
+[full epic description, completely unmodified]
+
+## Epic Comments (VERBATIM, chronological)
+[all epic comments, completely unmodified]
+
+## Referenced Documents
+
+### [document-name] — PRESCRIPTIVE
+Source: [file path or URL]
+[FULL document content, completely unmodified]
+
+### [next document...] — CONTEXTUAL
+Source: [file path or URL]
+[FULL document content, completely unmodified]
+
+## Interface Contracts
+[all shared interface contracts from planning]
+
+## Fetch Failures
+[any URLs or files that could not be read, with error details]
+```
+
+**Also write per-ticket context files** to `.claude/swarm-context/{epic-id}/{ticket-id}.md`:
+
+```markdown
+# Ticket Context: [ticket-id] — [title]
+
+## Ticket Description (VERBATIM)
+[full ticket description]
+
+## Acceptance Criteria (VERBATIM)
+[extracted from description, each criterion on its own line]
+
+## Technical Notes (VERBATIM)
+[extracted from description]
+
+## Ticket Comments (VERBATIM, chronological)
+[all comments]
+
+## Ticket-Specific References
+[any documents or URLs referenced only by this ticket, full content]
+
+## Adaptation Scope Decisions
+[if resuming and adaptation is complete, include any deferred items]
+```
+
+**ABSOLUTE RULES for context bundles:**
+- Every document is included VERBATIM — no summarization, no excerpting, no paraphrasing
+- If a research brief says "copy the implementation pattern from [source]", the source content MUST be in the bundle
+- If a ticket says "follow the approach in [document]", the document MUST be in the bundle
+- If a brief contains a table of IDs, field names, or schemas — include the ENTIRE table, not a summary
+- Missing context produces wrong implementations. When in doubt, include MORE context, not less
+- These bundles are the single source of truth that all agents read directly from disk
+
+Ensure `.claude/swarm-context/` is gitignored:
+```bash
+git check-ignore .claude/swarm-context/ || echo ".claude/swarm-context/" >> .gitignore
+```
+
+### 1.6 Create Swarm State File
 
 ```bash
 mkdir -p .claude/swarm-state
-# Ensure .claude/ is in .gitignore
 git check-ignore .claude/swarm-state || echo ".claude/" >> .gitignore
 ```
 
@@ -95,9 +191,10 @@ Initialize state:
   "epicId": "[epic-id]",
   "startedAt": "[timestamp]",
   "currentWave": 1,
-  "maxParallel": 4,
+  "currentPhase": "adaptation",
   "waves": [],
   "pendingCodexReviews": [],
+  "contextBundlePath": ".claude/swarm-context/[epic-id]/",
   "config": {
     "maxParallel": 4,
     "autoMerge": false,
@@ -120,7 +217,7 @@ Sort all tickets by dependency depth:
 
 ### 2.2 File Overlap Check Within Waves
 
-For each wave, check if any two tickets in the wave predict modifying the same file:
+For each wave, check if any two tickets predict modifying the same file:
 - If overlap detected: move the later ticket (by ID) to the next wave
 - Log: "Ticket CON-46 moved to Wave 3 due to file overlap with CON-45 on src/services/auth.ts"
 
@@ -129,11 +226,11 @@ For each wave, check if any two tickets in the wave predict modifying the same f
 If a wave has more tickets than `--max-parallel`:
 - Keep the first N tickets (lowest IDs) in this wave
 - Move remaining to a new wave at the same dependency level
-- Preserve dependency ordering (don't move a ticket before its dependencies)
+- Preserve dependency ordering
 
 ### 2.4 Present Wave Plan
 
-Display the wave plan to the user:
+Display to the user and await approval:
 
 ```
 ## Epic Swarm: Wave Plan
@@ -160,11 +257,41 @@ Total tickets: N | Waves: M | Max parallel: K
 
 **If `--dry-run`:** Show the plan and stop. Do not execute.
 
-**Otherwise:** Ask user to approve, adjust, or abort.
-
 ---
 
 ## Phase 3: Wave Execution (repeat per wave)
+
+### Architecture
+
+**The main session orchestrates all phases directly.** For each workflow phase, it dispatches specialized agents in parallel across all tickets in the wave, one agent per ticket. Agents run in isolated worktrees.
+
+```
+Main Session (this command)
+  │
+  ├─ Phase: Adaptation ──────────────────────────────
+  │   ├─ Agent: architect-agent → worktree CON-42
+  │   ├─ Agent: architect-agent → worktree CON-43    (parallel)
+  │   └─ Agent: architect-agent → worktree CON-44
+  │   └─ [wait for all, post reports to Linear]
+  │
+  ├─ Phase: Implementation ──────────────────────────
+  │   ├─ Agent: backend-engineer-agent → worktree CON-42
+  │   ├─ Agent: frontend-engineer-agent → worktree CON-43  (parallel)
+  │   └─ Agent: backend-engineer-agent → worktree CON-44
+  │   └─ [wait for all, post reports, verify AC]
+  │
+  ├─ Phase: Testing ─────────────────────────────────
+  │   ├─ Agent: qa-engineer-agent → worktree CON-42
+  │   ├─ Agent: qa-engineer-agent → worktree CON-43  (parallel)
+  │   └─ Agent: qa-engineer-agent → worktree CON-44
+  │   └─ [wait for all, post reports]
+  │
+  │   ... (documentation, code review, codex review, security)
+  │
+  └─ Integration: merge all worktrees to main
+```
+
+This preserves ticket-level parallelism (N tickets run concurrently) while using the same specialized agents as `/execute-ticket`. Phases are synchronized across the wave — all tickets complete adaptation before any starts implementation. This ensures interface contracts and shared decisions propagate correctly.
 
 ### 3.1 Pre-Wave Setup
 
@@ -172,21 +299,17 @@ For each ticket in the current wave:
 
 **3.1.1 Create worktree:**
 ```bash
-# Verify .claude/worktrees/ is gitignored
 git check-ignore .claude/worktrees/ || echo ".claude/worktrees/" >> .gitignore
 
-# Detect default branch from origin/HEAD (fallback to main)
 default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 default_branch=${default_branch:-main}
 
-# Create worktree with ticket branch
 git worktree add .claude/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "origin/$default_branch"
 ```
 
-**3.1.2 Install dependencies in worktree:**
+**3.1.2 Install dependencies:**
 ```bash
 cd .claude/worktrees/[ticket-id]
-# Auto-detect and install
 [ -f package.json ] && npm ci
 [ -f requirements.txt ] && pip install -r requirements.txt
 [ -f Cargo.toml ] && cargo build
@@ -199,62 +322,146 @@ cd .claude/worktrees/[ticket-id]
 npm test  # or appropriate test command
 ```
 - If baseline tests fail: report to user, ask whether to proceed
-- This establishes a clean baseline to distinguish new bugs from pre-existing ones
 
-**3.1.4 Copy interface contracts** (if shared interfaces exist):
-- Place contract files in each worktree that consumes them
-- Contracts serve as reference during implementation
-
-### 3.2 Parallel Dispatch
-
-For each ticket in the wave, spawn an Agent with worktree isolation:
-
-```
-Spawn Agent with:
-  - isolation: "worktree" (use the worktree created in 3.1)
-  - model: [ticket's Model Override, or session default]
-  - prompt: "/execute-ticket [ticket-id]"
+**3.1.4 Copy context bundles into worktrees:**
+```bash
+# Copy epic context bundle and ticket-specific context into each worktree
+cp .claude/swarm-context/[epic-id]/epic-context.md .claude/worktrees/[ticket-id]/.epic-context.md
+cp .claude/swarm-context/[epic-id]/[ticket-id].md .claude/worktrees/[ticket-id]/.ticket-context.md
 ```
 
-Each agent:
-- Runs the full execute-ticket workflow (phases 1-5.5) in its worktree
-- Posts all phase reports to its own Linear ticket comments (unchanged behavior)
-- Returns a structured status (DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED)
+Also copy interface contracts if shared interfaces exist.
 
-### 3.3 Monitor Wave Progress
+### 3.2 Phase-by-Phase Parallel Dispatch
 
-While agents are running:
-- Check Linear ticket status periodically for phase report headers
-- Watch for BLOCKED or NEEDS_CONTEXT status codes
+For each workflow phase, dispatch agents in parallel across all tickets in the wave. The orchestrator builds each agent's prompt with full context.
 
-**Handle BLOCKED:**
-- Pause the blocked ticket
+**The phase sequence:**
+
+| Phase | Agent | Sandbox | Blocking |
+|-------|-------|---------|----------|
+| Adaptation | `architect-agent` | read-only | BLOCKED → pause ticket |
+| Implementation | `backend-engineer-agent` or `frontend-engineer-agent` | write | BLOCKED or AC failure → pause ticket |
+| Testing | `qa-engineer-agent` | write | BLOCKED or gate failure → pause ticket |
+| Documentation | `technical-writer-agent` | write | BLOCKED → pause ticket |
+| Code Review | `code-reviewer-agent` | read-only | CHANGES_REQUESTED → pause ticket |
+| Codex Review | *(MCP tool, not agent)* | write | Rate limit → queue, continue |
+| Security Review | `security-engineer-agent` | read-only | CRITICAL/HIGH findings → pause ticket |
+
+**For each phase, for each ticket in the wave:**
+
+#### 3.2.1 Build the agent prompt
+
+**CRITICAL: CONTEXT FIDELITY RULES**
+
+The agent prompt MUST include ALL of the following, VERBATIM and UNABRIDGED:
+
+1. **Instruct the agent to read the context files first:**
+   ```
+   BEFORE doing any work, you MUST read these context files:
+   - .epic-context.md (epic-level research, requirements, and reference materials)
+   - .ticket-context.md (this ticket's description, AC, technical notes, comments)
+
+   These files contain the FULL verbatim research briefs, requirements documents,
+   and reference materials for this work. Read them IN FULL. Do not skim.
+   Do not summarize. The specific details in these documents ARE your requirements.
+   ```
+
+2. **Ticket identity:** ticket ID, title
+
+3. **All prior phase reports for THIS ticket** (verbatim — copy the full text of each report from Linear comments). If the adaptation report says to use a specific pattern from a reference document, the agent needs the adaptation report to know that.
+
+4. **Phase-specific instructions** from the relevant agent definition
+
+5. **Interface contracts** that this ticket defines or consumes
+
+6. **Deferred items** from prior phases for this ticket
+
+**DO NOT:**
+- Summarize or condense any context — pass it verbatim
+- Omit "long" documents to save tokens — missing context produces wrong implementations
+- Assume the agent "already knows" something — each agent is a fresh session with no memory
+- Skip the instruction to read context files — agents will not read them unprompted
+
+#### 3.2.2 Dispatch agents in parallel
+
+```
+For each ticket in the wave (parallel):
+  Spawn Agent with:
+    - The agent definition matching this phase (e.g., architect-agent for adaptation)
+    - model: [ticket's Model Override, or session default]
+    - Working directory set to the ticket's worktree
+    - The full prompt built in 3.2.1
+```
+
+Launch all agents for the current phase simultaneously. Wait for all to return.
+
+#### 3.2.3 Process results
+
+For each returned agent:
+
+1. **Parse the status code:** DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED
+2. **Post the phase report to Linear** as a comment on the ticket
+3. **Update swarm state** with the phase completion status
+
+**Handle BLOCKED or NEEDS_CONTEXT:**
+- Pause ONLY the blocked ticket (other tickets continue through remaining phases)
 - Notify user with the agent's escalation diagnostic
-- Other tickets in the wave continue independently
+- Blocked ticket can be resumed in a later wave or manually
 
-**Handle NEEDS_CONTEXT:**
-- Pause the ticket
-- Present the context request to user
-- Resume after user provides context
+**Handle DONE_WITH_CONCERNS:**
+- Include concerns in subsequent phase prompts for this ticket
+- Continue to next phase
+
+#### 3.2.4 Phase-specific post-processing
+
+**After Implementation phase:**
+- Verify acceptance criteria completion (same as execute-ticket Step 3.4.2)
+- If AC verification fails: pause for user decision before advancing to Testing
+- Update the ticket-specific context file with implementation details
+
+**After Code Review phase:**
+- If CHANGES_REQUESTED: pause ticket, present requested changes to user
+- If DONE with over-building/under-building flags: pause for user decision
+
+**After all phases complete for a ticket:**
+- Commit all changes in the ticket's worktree
+- Push the feature branch
+
+### 3.3 Codex Review Phase
+
+The Codex review runs differently from agent phases — it uses MCP tools, not agent dispatch.
+
+For each ticket that completed code review:
+
+```
+Call mcp__codex-review-server__codex_review_and_fix with:
+  - project_dir: [absolute path to ticket's worktree]
+  - base_branch: [the worktree's base branch]
+  - context: [ticket description + AC summary]
+```
+
+- If MCP server not available: skip with note to Linear
+- If rate limited: retry once (60s), then mark as `codex-review-pending` and continue
+- Post Codex review report to Linear
+- Commit any Codex fixes in the worktree
 
 ### 3.4 Wave Completion Gate
 
 All tickets in the wave must reach one of:
-- **Completed through Phase 5.5** (code review + codex review done)
-- **BLOCKED** (held for manual intervention or next wave)
-- **codex-review-pending** (Codex rate limit hit; ticket is otherwise complete)
-
-Once all tickets are settled, proceed to integration.
+- **All phases complete** (through Codex review)
+- **BLOCKED** (held for manual intervention)
+- **codex-review-pending** (Codex rate limit; ticket otherwise complete)
 
 ### 3.5 Post Wave Update to Linear
 
 ```
-Use mcp__linear-server__create_comment on the EPIC (not individual tickets):
-  body: "## Swarm Update: Wave [N] Complete\n\n
+Use mcp__linear-server__create_comment on the EPIC:
+  body: "## Swarm Update: Wave [N] — [Phase] Complete\n\n
   | Ticket | Status | Notes |\n
   | CON-42 | Complete | All phases passed |\n
   | CON-43 | Complete | Codex review pending (rate limit) |\n
-  | CON-44 | Blocked | Merge conflict with CON-42 on src/auth.ts |"
+  | CON-44 | Blocked | AC verification failed at implementation |"
 ```
 
 ---
@@ -263,28 +470,20 @@ Use mcp__linear-server__create_comment on the EPIC (not individual tickets):
 
 ### 4.1 Sequential Merge
 
-Merge tickets to the default branch one at a time, in order (fewest dependencies first, then fewest files):
-
-For each completed ticket:
+Merge tickets to the default branch one at a time (fewest dependencies first, then fewest files):
 
 ```bash
-# Detect and update default branch (fallback to main)
 default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 default_branch=${default_branch:-main}
 git checkout "$default_branch"
 git pull origin "$default_branch"
 
-# Merge the ticket branch
 git merge feature/[ticket-id]-[slug] --no-ff -m "merge: [ticket-id] — [ticket title]"
 ```
 
 **If merge conflict:**
-- Check conflict strategy (`SWARM_CONFLICT_STRATEGY`):
-  - `stop` (default): STOP, show the conflict files to user, ask for resolution
-  - `auto-trivial`: Attempt auto-resolution for lockfiles (package-lock.json, yarn.lock) and version files. For anything else, STOP.
-- Log the conflict in swarm state
-- If user resolves: continue merging remaining tickets
-- If user aborts: hold remaining tickets for next wave
+- `SWARM_CONFLICT_STRATEGY=stop` (default): STOP, show conflict files, ask user
+- `SWARM_CONFLICT_STRATEGY=auto-trivial`: Auto-resolve lockfiles and version files only. STOP for everything else.
 
 **After each merge, run integration tests:**
 ```bash
@@ -300,11 +499,9 @@ git push origin "$default_branch"
 
 ### 4.2 Update Swarm State
 
-After integration, update the state file:
 - Mark merged tickets as `merged`
 - Record merge commit SHAs
 - Update `currentWave` to N+1
-- Move any blocked tickets to the next wave's candidates
 
 ---
 
@@ -312,67 +509,53 @@ After integration, update the state file:
 
 ### 5.1 Post-Merge Security Review
 
-For each merged ticket, run the security review on the integrated codebase:
+For each merged ticket, run security review on the integrated codebase. Security reviews CAN run in parallel (they are read-only assessments on the same branch).
 
 ```
-Spawn Agent:
-  - prompt: "/security-review [ticket-id]"
-  - The agent reviews against the MERGED main branch (sees all integrated code)
+For each merged ticket (parallel):
+  Spawn Agent:
+    - agent: security-engineer-agent
+    - prompt: [ticket context + full codebase access on merged main]
+    - Include: the epic context bundle, ticket context, all prior phase reports
 ```
 
-Security reviews CAN run in parallel (they are read-only assessments on the same main branch).
+The security agent reviews against the MERGED codebase — it sees all integrated code, not just the ticket's isolated changes.
 
 ### 5.2 Handle Security Results
 
-- **PASS (no critical/high findings):**
-  - Close the ticket in Linear (`state: "Done"`)
-  - Add `security-approved` label
-  - Mark as `closed` in swarm state
-
-- **FAIL (critical/high findings):**
-  - Do NOT close the ticket
-  - Create a follow-up comment on the ticket with the findings
-  - Notify user: "Ticket CON-42 failed security review. Findings: [summary]"
-  - The ticket remains open for remediation (can be fixed in a later wave or manually)
+- **PASS:** Close ticket in Linear, add `security-approved` label, mark as `closed` in swarm state
+- **FAIL:** Do NOT close. Post findings to ticket. Notify user. Ticket remains open for remediation.
 
 ---
 
 ## Phase 6: Wave Transition
 
-### 6.1 Evaluate Wave Results
+### 6.1 Evaluate and Report
 
-After security gate:
-- Count: tickets closed, tickets blocked, tickets pending security fixes
-- Report to user
+Count: tickets closed, blocked, pending. Report to user.
 
 ### 6.2 Update Dependency Graph
 
-- Tickets closed in this wave → unblock dependent tickets
-- Tickets that failed security → their dependents remain blocked
-- Refresh the remaining ticket pool
+- Closed tickets → unblock dependents
+- Failed tickets → dependents remain blocked
 
 ### 6.3 Plan Next Wave
 
-If there are remaining tickets:
-- Apply the same wave planning logic (Phase 2)
-- Include any tickets moved from prior waves (blocked, overlap, rate-limited)
-- Present new wave plan to user for approval
+Apply wave planning logic (Phase 2) to remaining tickets. Present new plan for approval.
 
 ### 6.4 Repeat
 
-Loop back to Phase 3 for the next wave. Continue until all tickets are processed.
+Loop back to Phase 3 for the next wave until all tickets are processed.
 
 ---
 
 ## Phase 7: Epic Completion
 
-When all waves are complete and all tickets are closed (or explicitly deferred):
-
 ### 7.1 Final Status Report
 
 Post to the epic in Linear:
 
-```
+```markdown
 ## Swarm Complete
 
 **Epic**: [epic-id] — [title]
@@ -396,12 +579,10 @@ Post to the epic in Linear:
 ### 7.2 Clean Up Worktrees
 
 ```bash
-# Remove worktrees for completed tickets
 for dir in .claude/worktrees/*/; do
   ticket_id=$(basename "$dir")
-  if [[ ticket is closed ]]; then
-    git worktree remove "$dir" --force
-  fi
+  # Only remove worktrees for closed tickets
+  git worktree remove "$dir" --force 2>/dev/null || true
 done
 ```
 
@@ -409,9 +590,9 @@ Worktrees for blocked/pending tickets are preserved for manual intervention.
 
 ### 7.3 Transition to /close-epic
 
-Inform user: "All waves complete. Run `/close-epic [epic-id]` for retrofit analysis, follow-up tickets, and to clean up swarm state."
+"All waves complete. Run `/close-epic [epic-id]` for retrofit analysis, follow-up tickets, and to clean up swarm state."
 
-The `/close-epic` command will delete `.claude/swarm-state/[epic-id].json` as its final step.
+`/close-epic` deletes `.claude/swarm-state/[epic-id].json` as its final step.
 
 ---
 
@@ -427,8 +608,6 @@ The `/close-epic` command will delete `.claude/swarm-state/[epic-id].json` as it
 ---
 
 ## Parallel Dispatch Decision Criteria
-
-Before placing tickets in the same wave:
 
 **PARALLELIZE when:**
 - Tickets touch completely different files/modules
@@ -447,24 +626,23 @@ Before placing tickets in the same wave:
 
 ## Error Recovery
 
-### Interrupted Swarm (crash, compaction, user stop)
-- Swarm state is persisted to disk after every significant event
+### Interrupted Swarm
+- Swarm state persisted after every significant event
 - Re-run `/epic-swarm [epic-id]` to detect and offer resume
-- Completed tickets are not re-executed
-- In-progress tickets restart from their last completed phase (via execute-ticket's resume logic)
+- Completed phases/tickets are not re-executed
+- In-progress phases restart for the current wave
 
 ### Failed Merge
-- The failed merge is recorded in swarm state
-- User resolves the conflict manually
-- Re-run the swarm to continue from the failed merge point
+- Recorded in swarm state
+- User resolves manually
+- Re-run swarm to continue
 
 ### Rate-Limited Codex Review
-- Ticket marked as `codex-review-pending` in swarm state
-- Ticket proceeds to security review without Codex review
-- User can run `/codex-review [ticket-id]` independently later
-- Pending reviews listed in swarm status reports
+- Ticket marked `codex-review-pending`
+- Proceeds to security without Codex review
+- Run `/codex-review [ticket-id]` independently later
 
 ### Blocked Ticket
-- Blocked ticket's dependents are automatically held
-- User intervention required (escalation diagnostic provided)
+- Dependents automatically held
+- User intervention required
 - After resolution, re-run swarm to continue

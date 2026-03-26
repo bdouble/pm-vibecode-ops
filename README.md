@@ -38,7 +38,7 @@ Skills enforce standards during development, not just at review time. Production
 Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based testing focuses on code that matters. Inline documentation AI can't miss. Strong guidance to fail fast and fix issues rather than building workarounds you'd otherwise miss.
 
 **7. Multi-Agent Swarm Orchestration**
-Execute multiple tickets in parallel with automatic dependency management. The `/epic-swarm` command analyzes ticket dependencies, groups independent work into waves, isolates each ticket in its own git worktree, and merges results sequentially — turning linear ticket execution into concurrent development.
+Execute multiple tickets in parallel with automatic dependency management. The `/epic-swarm` command analyzes ticket dependencies, groups independent work into waves, isolates each ticket in its own git worktree, and drives all workflow phases directly from the main session — dispatching specialized agents (architect, engineer, QA, etc.) in parallel across tickets within each phase, then merging results sequentially.
 
 ### What You Get
 
@@ -144,10 +144,13 @@ For epics with independent tickets, the swarm orchestrator:
 - Analyzes ticket dependencies from planning annotations to build a dependency graph
 - Groups independent tickets into waves (max 4 concurrent by default)
 - Creates isolated git worktrees per ticket — no file conflicts between parallel agents
-- Runs full `/execute-ticket` workflow in each worktree (including Codex review)
+- Drives all workflow phases directly from the main session, dispatching specialized agents (architect, backend engineer, QA, etc.) in parallel across tickets within each phase
+- Phase-synchronized execution: all tickets complete adaptation before implementation begins, ensuring interface contracts propagate correctly
 - Merges completed tickets to main sequentially with conflict detection
 - Runs security review on the integrated codebase (post-merge)
 - Persists swarm state for resume after interruption
+
+**Architecture note:** The orchestrator dispatches agents directly rather than delegating to `/execute-ticket` subagents, because Claude Code subagents cannot spawn their own subagents.
 
 **Prerequisites:** Tickets must have dependency annotations from the `/planning` phase (parallel group, files touched, depends-on/blocks).
 
