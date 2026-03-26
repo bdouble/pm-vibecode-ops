@@ -1,15 +1,6 @@
 ---
 name: testing-philosophy
-description: |
-  This skill should be used when enforcing test accuracy over coverage quantity. Activate when:
-  - User says: "write tests", "add tests", "test this", "improve coverage", "testing phase"
-  - User says: "tests failing", "fix tests", "debug test", "test suite broken", "run tests"
-  - User says: "CI failing", "pipeline broken", "build red", "tests red", "skip tests", "disable test"
-  - User asks: "why is this test failing", "how do I test this", "what should I test"
-  - Creating/editing: *.spec.ts, *.test.ts, *.spec.js, *.test.js, __tests__/*, *.test.py, *_test.go
-
-  Enforces fixing ALL existing broken tests BEFORE writing new tests. Read actual API before mocking.
-  Gate sequence: Fix existing → Discover API → Compile → Execute → Coverage (secondary).
+description: Enforces test accuracy over coverage quantity with a fix-first methodology. Use when writing, editing, or debugging test files (*.spec.ts, *.test.ts, etc.), or when user mentions "write tests", "tests failing", "fix tests", "CI failing", "improve coverage", or "run tests".
 ---
 
 # Testing Philosophy
@@ -138,6 +129,19 @@ await expect(service.failingOp()).rejects.toThrow(ValidationError);
 | *.test.*, __tests__/ | YES | YES | N/A |
 
 **Remember: 50% coverage with correct tests > 90% with broken tests.**
+
+## Rationalizations -- STOP
+
+If you think any of these, you are about to write unreliable tests.
+
+| Excuse | Reality |
+|--------|---------|
+| "The existing broken tests are someone else's problem" | You must fix ALL broken tests before writing new ones. No exceptions. |
+| "I'll mock the API to save time" | Read the actual implementation first. Mocks based on assumptions create false passes. |
+| "Coverage is what matters" | Accuracy is what matters. 50% accurate coverage beats 90% mocked coverage. |
+| "This test is too complex to write properly" | If the test is complex, the code may need refactoring. The difficulty is a signal. |
+| "I'll fix the test later" | A failing test you ignore trains everyone to ignore failing tests. Fix it now. |
+| "Skipping this test unblocks the build" | Skipping tests hides bugs. Fix the test or fix the code. |
 
 ## Additional Resources
 

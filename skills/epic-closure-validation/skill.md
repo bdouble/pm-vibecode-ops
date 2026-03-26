@@ -1,14 +1,6 @@
 ---
 name: epic-closure-validation
-description: |
-  This skill should be used when validating epic completion before closure. Activate when:
-  - User says: "close epic", "finish epic", "complete epic", "epic done", "mark epic complete"
-  - User says: "are all tickets done", "check epic status", "verify epic completion"
-  - User mentions: epic IDs with closure intent (EPIC-*, EPc-*)
-  - Using commands: /close-epic, epic closure workflows
-
-  Blocks closing epics with incomplete sub-tickets. Requires all sub-tickets Done/Cancelled
-  before epic can be closed. Prevents premature closure and ensures business value delivered.
+description: Validates all sub-tickets are complete before allowing epic closure. Use when closing an epic, checking epic completion status, or when user mentions "close epic", "epic done", "check epic status", "/close-epic", or references epic IDs with closure intent.
 ---
 
 # Epic Closure Validation

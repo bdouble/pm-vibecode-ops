@@ -1,15 +1,6 @@
 ---
 name: production-code-standards
-description: |
-  This skill should be used when enforcing production-grade code quality. Activate when:
-  - User says: "implement", "write code", "add feature", "fix bug", "create service", "build"
-  - User says: "make it work", "quick fix", "just get it working", "temporary solution", "workaround", "hack"
-  - User says: "review PR", "check this code", "is this production ready"
-  - Editing files in: src/, lib/, app/, services/, modules/, controllers/, domain/
-  - Using tools: Write, Edit on .ts, .js, .tsx, .jsx, .py, .go files
-
-  Blocks TODO/FIXME/HACK comments, empty catch blocks, fallback logic, || default patterns,
-  setTimeout for race conditions, mocked services outside tests. Enforces fail-fast error handling.
+description: Enforces production-grade code quality standards. Use when writing, editing, or reviewing production code in src/, lib/, app/, services/, or similar directories, or when user mentions "implement", "write code", "add feature", "fix bug", "quick fix", "workaround", or "review PR".
 ---
 
 # Production Code Standards
@@ -148,6 +139,19 @@ If proper implementation is blocked:
 4. **WAIT** - Blocker must be fixed first
 
 **If implementation requires a workaround, do not implement. Communicate the blocker clearly.**
+
+## Rationalizations -- STOP
+
+If you think any of these, you are about to violate this skill.
+
+| Excuse | Reality |
+|--------|---------|
+| "This is just a quick prototype" | There is no prototype code in this workflow. All code is production code. |
+| "I'll clean it up later" | Later never comes. Write it correctly now. |
+| "The TODO is just a reminder" | TODOs are banned. Create a Linear ticket instead. |
+| "This fallback makes it more resilient" | Fallbacks hide bugs. Fail fast so problems surface immediately. |
+| "Tests don't need production standards" | Test code with workarounds creates false confidence. Tests must be accurate. |
+| "This is a minor change, standards don't apply" | Minor changes are where standards slip. Apply them especially here. |
 
 ## Related Skills
 - **testing-philosophy**: Test code may use mocks and fixtures; production code must not

@@ -1,18 +1,6 @@
 ---
 name: security-patterns
-description: |
-  This skill should be used when enforcing OWASP Top 10 security patterns during code writing. Activate when:
-  - User says: "authentication", "login", "password", "JWT", "OAuth", "session", "token"
-  - User says: "validate input", "sanitize", "authorize", "access control", "permissions"
-  - User says: "database query", "SQL", "user data", "PII", "encrypt", "hash", "webhook"
-  - User mentions: "XSS", "CSRF", "injection", "rate limit", "secure cookie", "credentials"
-  - Writing: auth/, login, password, token, session, query, .where(, .raw(
-
-  Enforces auth on every protected endpoint, parameterized queries only, secrets from env only,
-  input validation, no sensitive data in error responses, security event logging (no PII).
-
-  Also activate for agentic security patterns when user mentions or code contains:
-  - "agent", "MCP server", "tool calling", "multi-agent", "LLM orchestration"
+description: Enforces OWASP Top 10 and agentic security patterns during code writing. Use when code handles authentication, authorization, user input, database queries, secrets, sessions, tokens, webhooks, file uploads, or when user mentions "login", "password", "JWT", "OAuth", "SQL", "XSS", "CSRF", "injection", "agent", "MCP server", or "tool calling".
   - Imports: @anthropic-ai/sdk, openai, langchain, @modelcontextprotocol, autogen, crewai
 ---
 
@@ -199,6 +187,20 @@ The following code patterns indicate elevated security risk. When any appear in 
 - **Defense in depth**: Multiple layers of protection
 - **Least privilege**: Minimal permissions required
 - **Secure defaults**: Safe configuration out of the box
+
+## Rationalizations -- STOP
+
+If you think any of these, you are about to introduce a vulnerability.
+
+| Excuse | Reality |
+|--------|---------|
+| "This is an internal-only endpoint" | Internal endpoints get exposed. Secure everything. |
+| "We'll add auth later" | Later means never. Auth is not optional. |
+| "This is just a prototype" | Prototypes become production. Security from day one. |
+| "The input is already validated upstream" | Validate at every boundary. Never trust callers. |
+| "This SQL is safe because the input comes from our code" | All SQL must be parameterized. No exceptions. |
+| "Only admins use this feature" | Admin privilege escalation is a top attack vector. |
+| "The secret is only in the test" | Test secrets leak to CI logs, git history, and screenshots. |
 
 See `references/owasp-patterns.md` for detailed code examples for each OWASP Top 10:2025 vulnerability.
 

@@ -1,17 +1,6 @@
 ---
 name: divergent-exploration
-description: |
-  This skill should be used when exploring 3-5 distinct approaches before committing to one. Activate when:
-  - User says: "design", "architect", "plan", "how should we", "what's the best way"
-  - User says: "options", "alternatives", "trade-offs", "pros and cons", "compare approaches"
-  - User says: "help me decide", "how should I implement", "what approach should I take"
-  - User says: "refactor", "redesign", "rearchitect", "rebuild", "rewrite", "migrate"
-  - User asks: "which approach", "what are my options", "how would you solve this"
-  - Planning: epic creation, feature design, architecture decisions, complex problem solving
-  - About to recommend a single approach for a non-trivial decision
-
-  Enforces generating 3-5 GENUINELY DISTINCT alternatives (not variations). Evaluate each on:
-  user impact, complexity, time to value, dependencies, reversibility, risk. Present options, don't decide.
+description: Explores 3-5 genuinely distinct approaches before committing to one. Use when facing a non-trivial design decision, architecture choice, or implementation approach, or when user asks about "options", "alternatives", "trade-offs", "best way", "how should we", or "compare approaches". Do NOT use for trivial or single-path decisions.
 ---
 
 # Divergent Exploration

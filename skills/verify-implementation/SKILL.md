@@ -1,16 +1,6 @@
 ---
 name: verify-implementation
-description: |
-  This skill should be used when requiring evidence before any completion claim. Activate when:
-  - User says: "is it done", "is this done", "are we finished", "ready for review", "create PR", "commit"
-  - User says: "ready to close", "mark as complete", "verify my work", "did I miss anything"
-  - User says: "ship it", "LGTM", "merge it", "push it", "deploy this", "good to go", "send it"
-  - About to say: "tests pass", "build succeeds", "bug fixed", "feature complete", "done"
-  - About to say: "should work", "probably works", "I think it's fixed", "that should do it"
-  - Marking Linear tickets as complete or creating pull requests
-
-  Blocks unverified completion claims. Every "done/fixed/passing" requires executed command output.
-  Run tests and show output. Run build and show output. Demonstrate features working. No speculation.
+description: Requires executed evidence before any completion claim. Use when about to claim work is done, fixed, passing, or ready for review, or when user says "is it done", "create PR", "commit", "ship it", "merge it", "deploy", or "mark as complete".
 ---
 
 # Verify Implementation
@@ -143,6 +133,56 @@ Product managers cannot independently verify technical claims. This skill ensure
 - **Trustworthy**: Claims match reality
 
 Trust is earned through verifiable reporting—not confident assertions.
+
+## Banned Language
+
+NEVER claim completion using these words or phrases:
+- "should work", "should be fixed", "should pass"
+- "probably works", "probably fixed"
+- "seems to", "appears to", "looks like it works"
+- "I believe", "I think it's fixed"
+- "likely resolved", "most likely working"
+- "Great!", "Perfect!", "Done!", "All good!"
+
+Every completion claim MUST be accompanied by fresh command output executed in THIS response. If the verification command is not visible in your current response, you have not verified.
+
+## Subagent Verification Protocol
+
+When a subagent or delegated task reports success, NEVER trust the self-report. Instead:
+
+1. **Check the diff**: Run `git diff` or `git log` to see what actually changed
+2. **Run tests independently**: Execute the test suite yourself, don't rely on reported results
+3. **Verify the claim**: Compare what was claimed against what you observe
+4. **Report observed state**: Tell the user what YOU verified, not what was reported to you
+
+"The agent said tests pass" is NOT evidence. "I ran `npm test` and got 0 failures (output below)" IS evidence.
+
+## Regression Test Verification
+
+When claiming a bug is fixed with a regression test, verify the full red-green cycle:
+
+1. **Write the test** that reproduces the bug
+2. **Run it** -- confirm it PASSES (proves the fix works)
+3. **Revert the fix** -- temporarily undo your code change
+4. **Run it again** -- confirm it FAILS (proves the test actually catches the bug)
+5. **Restore the fix** -- re-apply your code change
+6. **Run it again** -- confirm it PASSES again
+
+A regression test that never fails is not testing anything. The revert step proves the test has value.
+
+## Rationalizations -- STOP
+
+If you think any of these, you are about to make an unverified claim.
+
+| Excuse | Reality |
+|--------|---------|
+| "It should work now" | "Should" is not evidence. Run the command and show output. |
+| "I'm confident the fix is correct" | Confidence is not verification. Execute and prove it. |
+| "The agent said it passed" | Never trust subagent self-reports. Check the diff and run tests independently. |
+| "I just ran it a moment ago" | If it's not in THIS response with fresh output, it doesn't count. |
+| "It's a trivial change, no need to verify" | Trivial changes break production. Verify everything. |
+| "Partial verification is enough" | Run the full test suite. Partial checks miss regressions. |
+| "The linter passed, so it works" | Linting checks syntax, not behavior. Run the actual tests. |
 
 ## Related Skills
 - **testing-philosophy**: Gate sequence for test verification

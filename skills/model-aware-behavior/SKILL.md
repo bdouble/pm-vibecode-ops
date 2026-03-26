@@ -1,15 +1,6 @@
 ---
 name: model-aware-behavior
-description: |
-  This skill should be used when enforcing read-before-write discipline and preventing scope creep. Activate when:
-  - User says: "modify", "change", "update", "edit", "refactor", "fix", "implement"
-  - User says: "explore codebase", "understand this code", "how does this work"
-  - About to use: Edit, Write, MultiEdit tools on any code file
-  - Proposing changes to files not yet read in this session
-
-  Enforces reading ALL files before proposing changes. Never speculate about unread code.
-  Do ONLY what is requested - no "while I'm here" improvements, no gold-plating, no scope creep.
-  Parallelize independent tool calls; serialize dependent ones.
+description: Enforces read-before-write discipline and prevents scope creep. Use when about to propose or make code changes, especially to files not yet read in this session, or when user asks to "modify", "change", "update", "refactor", "fix", or "implement" code.
 ---
 
 # Model-Aware Behavior
@@ -190,6 +181,19 @@ These patterns indicate the skill is not being applied correctly:
 | Making three separate Bash calls that could run in parallel | Combine independent calls into a single message |
 | Editing a file, then reading it to check the result | Read first, edit second — Edit tool shows the result |
 | Adding "improvements" the user did not request | Apply the three-question gate above |
+
+## Rationalizations -- STOP
+
+If you think any of these, you are about to speculate or overcorrect.
+
+| Excuse | Reality |
+|--------|---------|
+| "I can infer what this file does from context" | Read it. Inference is speculation. |
+| "This is a small change, I don't need to read the whole file" | Small changes in unread files cause large regressions. Read first. |
+| "While I'm here, I should also fix this other thing" | Do ONLY what was requested. Create a ticket for the other thing. |
+| "This code could be improved" | Unrequested improvements are scope creep. Stay focused. |
+| "I've seen similar patterns before" | This codebase may differ. Read the actual implementation. |
+| "Reading all these files will take too long" | Reading takes seconds. Fixing speculative mistakes takes hours. |
 
 ## Additional Resources
 

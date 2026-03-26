@@ -1,14 +1,33 @@
 #!/usr/bin/env bash
 # PM Workflow Session Start Hook
-# Injects context about PM workflow skills and commands for non-engineer users
+# Reads the using-pm-workflow meta-skill and injects it as session context.
+# This ensures all skills are checked before every response.
 
 set -euo pipefail
 
-cat << 'EOF'
+# Resolve the plugin root directory (parent of scripts/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+SKILL_FILE="$PLUGIN_ROOT/skills/using-pm-workflow/SKILL.md"
+
+if [ -f "$SKILL_FILE" ]; then
+  # Read the skill content, stripping the YAML frontmatter (between --- markers)
+  SKILL_CONTENT=$(awk 'BEGIN{skip=0} /^---$/{skip++; next} skip>=2{print}' "$SKILL_FILE")
+else
+  SKILL_CONTENT="WARNING: Meta-skill file not found at $SKILL_FILE. Skills may not auto-activate."
+fi
+
+# Escape the content for JSON embedding
+# Replace backslashes, double quotes, newlines, tabs, and carriage returns
+JSON_CONTENT=$(printf '%s' "$SKILL_CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+
+# Output the hook response with the skill content as additionalContext
+cat << EOF
 {
   "hookSpecificOutput": {
     "hookEventName": "SessionStart",
-    "additionalContext": "<EXTREMELY_IMPORTANT>\nThis session is using the PM Workflow system designed for Product Managers and non-engineers to produce production-quality code.\n\nBEFORE ANY ACTION, you MUST:\n1. Check which skills apply to the current task\n2. Follow skill enforcement strictly - skills are NOT optional\n3. Use the structured workflow commands in sequence\n\nAVAILABLE SKILLS (auto-activate based on context):\n- production-code-standards: Blocks workarounds, temporary code, fallbacks, TODO comments\n- service-reuse: REQUIRES checking service inventory before creating ANY new service\n- testing-philosophy: Fix broken tests BEFORE writing new tests; verify actual APIs\n- mvd-documentation: Document 'why' not 'what'; no placeholder content\n- security-patterns: Auth on every endpoint; parameterized queries; input validation\n- model-aware-behavior: Read ALL relevant files before proposing changes; no speculation\n- using-pm-workflow: Guide users through workflow phases correctly\n- verify-implementation: Verify work before marking tasks complete\n- divergent-exploration: Explore alternative approaches before converging on solution\n- epic-closure-validation: Validates all sub-tickets Done/Cancelled before epic closure\n\nWORKFLOW COMMANDS (execute in sequence):\nProject-Level:\n  /generate-service-inventory - Catalog existing services first\n  /discovery - Analyze patterns and architecture\n  /epic-planning - Create business-focused epics\n  /planning - Decompose epics into technical tickets\n\nTicket-Level:\n  /adaptation - Create implementation guide\n  /implementation - Write production code\n  /testing - Build comprehensive test suite\n  /documentation - Generate API docs\n  /codereview - Quality assurance review\n  /security-review - OWASP assessment (closes ticket on pass)\n\nCRITICAL REMINDERS:\n- Users are often non-engineers - explain technical decisions clearly\n- ALL code must be production-ready - no shortcuts, no 'we can fix it later'\n- Skills BLOCK prohibited patterns - respect their enforcement\n- Only /security-review closes tickets - other phases keep tickets open\n</EXTREMELY_IMPORTANT>"
+    "additionalContext": ${JSON_CONTENT}
   }
 }
 EOF

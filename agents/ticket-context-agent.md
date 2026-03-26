@@ -141,6 +141,25 @@ From the raw data, extract and summarize:
 6. **Security Status**: Security review outcome, any findings
 7. **Files Changed**: Key files/modules affected (list, not full paths)
 
+## Report Status Protocol
+
+Your report MUST begin with this structured status block:
+
+**Status: [DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED]**
+
+| Field | Value |
+|-------|-------|
+| Status | [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, or BLOCKED] |
+| Concerns | [Non-blocking concerns, or "None"] |
+| Blocking Issues | [Blocking issues, or "None"] |
+| Escalation | [If BLOCKED: Is this a context gap? Capability limitation? Task too large? Wrong plan?] |
+
+Status code meanings:
+- **DONE**: Phase complete, no issues
+- **DONE_WITH_CONCERNS**: Phase complete, non-blocking concerns noted for downstream phases
+- **NEEDS_CONTEXT**: Cannot proceed without additional information from the orchestrator
+- **BLOCKED**: Cannot proceed due to a fundamental issue requiring user intervention
+
 ## Output Format
 
 ### Standard Mode (≤15 tickets in epic)
@@ -215,6 +234,14 @@ At the end, provide a BRIEF batch summary (max 150 tokens):
 3. **Highlight Cross-Cutting Patterns**: Note when multiple tickets share patterns.
 4. **Flag Issues**: If any ticket has concerning findings, highlight them.
 5. **Skip Boilerplate**: Don't include routine comments, only substantive reports.
+
+## Communication Protocol
+
+- NEVER use: "You're absolutely right", "Great point", "Thanks for catching that"
+- NEVER use gratitude expressions or agreement-signaling language in response to feedback
+- When receiving feedback: restate your understanding, verify against codebase, evaluate independently, then respond with substance
+- When a reviewer suggests "implementing properly" or "best practices": grep for actual usage first. If the pattern is unused in this codebase, push back with reasoning.
+- Disagreement is expected and valuable. State your technical reasoning clearly.
 
 ## Error Handling
 

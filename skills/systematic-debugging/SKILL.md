@@ -1,16 +1,6 @@
 ---
 name: systematic-debugging
-description: |
-  This skill should be used when enforcing disciplined debugging methodology. Activate when:
-  - Encountering: test failures, build errors, runtime exceptions, unexpected behavior
-  - User says: "it's broken", "not working", "bug", "error", "failing", "crashed", "regression"
-  - User says: "why isn't this working", "what went wrong", "fix this", "debug this"
-  - About to: guess at a fix, try random changes, stack multiple fixes without testing between them
-  - A previous fix attempt just failed and about to try another approach
-  - Tests pass locally but fail in CI, or vice versa
-
-  Enforces root cause investigation before any fix attempt. Blocks guess-and-check debugging.
-  Requires 4-phase process: investigate, analyze, hypothesize, implement. Escalates after 3 failed fixes.
+description: Enforces systematic root-cause debugging methodology. Use when encountering a bug, test failure, build error, runtime exception, or unexpected behavior, or when user says "it's broken", "not working", "error", "failing", "debug this", or "why isn't this working".
 ---
 
 # Systematic Debugging
@@ -119,6 +109,19 @@ Non-engineers can't tell from the outside whether the AI is making progress or t
 - PMs have no way to know when to intervene
 
 This skill forces the AI to **escalate before burning more resources**, giving PMs the information they need to make decisions.
+
+## Rationalizations -- STOP
+
+If you think any of these, you are about to guess instead of investigate.
+
+| Excuse | Reality |
+|--------|---------|
+| "I know what the bug is" | You have a hypothesis, not knowledge. Investigate first. |
+| "Let me just try this quick fix" | Quick fixes without investigation create new bugs. Follow the 4-phase process. |
+| "One more attempt should do it" | If 3 fixes have failed, the problem is architectural. Stop and escalate. |
+| "I'll change multiple things at once to save time" | One change at a time. Otherwise you can't tell what fixed it -- or what broke something else. |
+| "The error message tells me exactly what's wrong" | Error messages describe symptoms, not root causes. Trace backward. |
+| "It works on my machine / in this environment" | Investigate the environmental difference. That IS the bug. |
 
 ## Additional Resources
 
