@@ -11,8 +11,8 @@ This guide walks you through setting up the Model Context Protocol (MCP) servers
 5. [Optional: Playwright MCP](#optional-playwright-mcp)
 6. [Optional: Codex Review MCP](#optional-codex-review-mcp)
 7. [Complete Configuration Example](#complete-configuration-example)
-7. [Verification and Testing](#verification-and-testing)
-8. [Troubleshooting](#troubleshooting)
+8. [Verification and Testing](#verification-and-testing)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 

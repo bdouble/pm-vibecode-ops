@@ -479,24 +479,23 @@ Add this block at the end of each ticket description:
 
 When the dependency analysis identifies shared interfaces between tickets, generate a contract block in the planning output:
 
-```markdown
-### Shared Interface Contract: [InterfaceName]
+    ### Shared Interface Contract: [InterfaceName]
 
-**Defined by**: [ticket ID]
-**Consumed by**: [ticket IDs]
+    **Defined by**: [ticket ID]
+    **Consumed by**: [ticket IDs]
 
-```typescript
-// Contract — do not modify after defining ticket completes
-interface IProfileResponse {
-  id: string;
-  name: string;
-  email: string;
-  avatarUrl: string | null;
-  createdAt: string; // ISO 8601
-}
-```
+    ```typescript
+    // Contract — do not modify after defining ticket completes
+    interface IProfileResponse {
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl: string | null;
+      createdAt: string; // ISO 8601
+    }
+    ```
 
-**Status**: Unlocked (locked after [defining ticket ID] implementation completes)
+    **Status**: Unlocked (locked after [defining ticket ID] implementation completes)
 ```
 
 Interface contracts are included in the adaptation phase context for consuming tickets, ensuring they code against the agreed interface rather than inventing their own.

@@ -215,7 +215,7 @@ Use mcp__linear-server__create_comment with:
 
 ---
 
-## Step 6: Add Label
+## Step 7: Add Label
 
 ```bash
 # Add codex-reviewed label to the PR if one exists
