@@ -43,7 +43,32 @@ Use mcp__linear-server__get_issue to fetch ticket: $ARGUMENTS
 
 If validation fails, report the error and stop.
 
+### Step 1.2.5: Detect Worktree Mode
+
+Check if this session is running inside a git worktree (e.g., spawned by `/epic-swarm`):
+
+```bash
+# Detect worktree mode
+git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ "$git_common_dir" != "$git_dir" ]; then
+  WORKTREE_MODE=true
+else
+  WORKTREE_MODE=false
+fi
+```
+
+**When `WORKTREE_MODE=true`:**
+- The swarm orchestrator has already created the worktree and branch
+- **SKIP** Step 1.3 (branch creation) — the branch already exists
+- **SKIP** PR creation in post-implementation steps — the swarm handles merge and PR
+- **SKIP** `git push` after each phase — the swarm handles pushing during integration
+- **DO** post all phase reports to Linear (the ticket's comment thread is the coordination record)
+- **DO** return structured status codes to the orchestrator (DONE / BLOCKED / etc.)
+
 ### Step 1.3: Create Feature Branch
+
+**Skip this step if `WORKTREE_MODE=true`.**
 
 Before any phase execution, ensure we're on the correct feature branch:
 
