@@ -1046,10 +1046,18 @@ After all phases complete (or on blocking halt), provide summary:
 | testing | ✅ Complete | [Coverage %] |
 | documentation | ✅ Complete | [Docs created] |
 | codereview | ✅ Complete | [APPROVED] |
+| codex-review | ✅ Complete / ⚠️ Skipped | [N findings, M auto-fixed] / [reason: server unavailable, rate limit, or error] |
 | security-review | ✅ Complete | [No critical issues] |
 
+**If codex-review was skipped or failed**, include a clear note:
+```
+⚠️ Cross-model Codex review was not completed for this ticket.
+Reason: [server not configured / rate limit reached / authentication expired / error details]
+Action: Run `/codex-review [ticket-id]` to perform cross-model review independently.
+```
+
 ### Metrics
-- Total phases completed: [X/6]
+- Total phases completed: [X/7]
 - Blocking issues encountered: [count]
 - Time from start: [timestamp]
 

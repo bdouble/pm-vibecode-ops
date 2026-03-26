@@ -441,17 +441,20 @@ Call mcp__codex-review-server__codex_review_and_fix with:
   - context: [ticket description + AC summary]
 ```
 
-- If MCP server not available: skip with note to Linear
-- If rate limited: retry once (60s), then mark as `codex-review-pending` and continue
-- Post Codex review report to Linear
-- Commit any Codex fixes in the worktree
+**Track the outcome for each ticket:**
+- **Success:** Post Codex review report to Linear. Commit any fixes.
+- **MCP server not available:** Mark ticket as `codex-review-skipped` with reason `server_unavailable`. Post to Linear: "Cross-model review skipped — Codex MCP server not configured."
+- **Rate limited:** Retry once (60s). If still limited, mark as `codex-review-skipped` with reason `rate_limit`. Post to Linear: "Cross-model review deferred — rate limit reached."
+- **Error (auth, timeout, other):** Mark as `codex-review-skipped` with reason from error. Post to Linear: "Cross-model review failed — [error message]."
+
+In ALL skip/failure cases, the ticket continues to security review. Codex review is valuable but never a hard gate.
 
 ### 3.4 Wave Completion Gate
 
 All tickets in the wave must reach one of:
-- **All phases complete** (through Codex review)
+- **All phases complete** (including Codex review)
+- **All phases complete except Codex** (codex-review-skipped — ticket still proceeds)
 - **BLOCKED** (held for manual intervention)
-- **codex-review-pending** (Codex rate limit; ticket otherwise complete)
 
 ### 3.5 Post Wave Update to Linear
 
@@ -569,11 +572,24 @@ Post to the epic in Linear:
 | 1 | CON-42, CON-43, CON-44 | All closed |
 | 2 | CON-45, CON-46 | CON-45 closed, CON-46 security fix pending |
 
+### Cross-Model Review Status
+| Ticket | Codex Review | Reason |
+|--------|-------------|--------|
+| CON-42 | Completed | 3 findings auto-fixed |
+| CON-43 | Skipped | Codex MCP server not configured |
+| CON-44 | Skipped | Rate limit reached |
+| CON-45 | Completed | No findings |
+| CON-46 | Failed | Authentication expired |
+
+[If ALL tickets completed Codex review successfully, replace this table with: "All tickets received cross-model Codex review."]
+[If ANY tickets were skipped/failed, include this table so the user knows which tickets lack cross-model review coverage and can run `/codex-review [ticket-id]` independently.]
+
 ### Deferred Items
-[List any codex-review-pending or blocked tickets]
+[List any blocked tickets and their blocking reasons]
 
 ### Next Steps
 - Run `/close-epic [epic-id]` for retrofit analysis and follow-up ticket creation
+- [If Codex reviews were skipped] Run `/codex-review [ticket-id]` for tickets missing cross-model review
 ```
 
 ### 7.2 Clean Up Worktrees
