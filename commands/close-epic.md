@@ -424,26 +424,9 @@ IF still missing after retry:
 
 7. **Apply CLAUDE.md updates** - Use Edit tool to update project CLAUDE.md
 
-8. **Clean up swarm state** (if epic was executed via `/epic-swarm`):
-   ```bash
-   state_file=".claude/swarm-state/[epic-id].json"
-   if [ -f "$state_file" ]; then
-     rm "$state_file"
-     echo "Swarm state cleaned up for [epic-id]"
-   fi
-   ```
-   Also clean up any remaining worktrees for this epic's tickets:
-   ```bash
-   for dir in .claude/worktrees/*/; do
-     ticket_id=$(basename "$dir")
-     # Only remove if the ticket is Done
-     git worktree remove "$dir" --force 2>/dev/null || true
-   done
-   ```
+8. **Verify success** - Confirm the comment was added, retrofit tickets created, deferred recovery tickets created, and epic is closed
 
-9. **Verify success** - Confirm the comment was added, retrofit tickets created, deferred recovery tickets created, and epic is closed
-
-10. **Report to user** - Summarize closure actions, retrofit tickets created, deferred recovery tickets created, downstream propagation
+9. **Report to user** - Summarize closure actions, retrofit tickets created, deferred recovery tickets created, downstream propagation
 
 **YOU are responsible for the Linear comment, retrofit ticket creation, epic closure, and CLAUDE.md updates, not the agent.**
 
