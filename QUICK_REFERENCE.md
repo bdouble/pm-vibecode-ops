@@ -19,11 +19,11 @@
 
 | Command | Purpose | Your Action |
 |---------|---------|-------------|
-| `/execute-ticket [ticket-id]` | **Runs all 6 phases automatically** | Fix blocking issues only |
+| `/execute-ticket [ticket-id]` | **Runs all 7 phases automatically** (incl. Codex review) | Fix blocking issues only |
 
 **Why agentic workflow?** 8x faster, zero intervention for passing tickets, consistent quality, full traceability.
 
-The command handles: adaptation, implementation, testing, documentation, code review, and security review. Creates branch, draft PR, adds labels, and converts to ready when security passes.
+The command handles: adaptation, implementation, testing, documentation, code review, cross-model Codex review, and security review. Creates branch, draft PR, adds labels, and converts to ready when security passes.
 
 ### Ticket-Level: Individual Phases (Advanced)
 
@@ -36,6 +36,7 @@ For special cases requiring phase-by-phase control:
 | 7 | `/testing [ticket-id]` | Build & run tests | Review coverage |
 | 8 | `/documentation [ticket-id]` | Generate docs | Review docs |
 | 9 | `/codereview [ticket-id]` | Quality check | Review findings |
+| 9.5 | `/codex-review [ticket-id]` | Cross-model review | Approve fixes |
 | 10 | `/security-review [ticket-id]` | **Final gate** | **Fix criticals** |
 
 Use individual phases when debugging a specific phase or needing manual intervention.
@@ -45,6 +46,14 @@ Use individual phases when debugging a specific phase or needing manual interven
 | # | Command | Purpose | Your Action |
 |---|---------|---------|-------------|
 | 11 | `/close-epic [epic-id]` | **Final epic gate** | Review report |
+
+### Concurrent Execution (New in 3.0)
+
+| Command | Purpose | Your Action |
+|---------|---------|-------------|
+| `/epic-swarm [epic-id]` | **Run tickets in parallel** | Approve wave plan, resolve conflicts |
+
+Requires dependency annotations from `/planning`. Independent tickets run concurrently in separate git worktrees. Sequential merge with conflict detection.
 
 ---
 
@@ -71,6 +80,8 @@ Before merging, verify:
 | **Adaptation** | Implementation plan | Maximizes code reuse |
 | **Skills** | Auto-activated quality rules | Enforces standards during development |
 | **Quality Gates** | Automated checks | Ensures production-ready code |
+| **Epic Swarm** | Parallel ticket execution | Faster epic completion |
+| **Cross-Model Review** | Codex reviews Claude's code | Catches different bugs |
 
 ---
 
@@ -109,6 +120,12 @@ Your PRD must include:
 
 # Epic closure (after all tickets in epic are Done)
 /close-epic EPIC-123
+
+# Concurrent execution (new in 3.0)
+/epic-swarm EPIC-123
+
+# Cross-model review (standalone)
+/codex-review TICKET-201
 ```
 
 ---
@@ -147,4 +164,4 @@ Your PRD must include:
 
 ---
 
-**Version 2.26.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 3.0.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

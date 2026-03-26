@@ -18,7 +18,7 @@ Welcome! This guide will help you navigate the documentation and get up and runn
 - Step-by-step instructions
 
 **Need to configure integrations?** → [MCP Setup](docs/MCP_SETUP.md)
-- Linear, Perplexity, Sequential Thinking setup
+- Linear, Perplexity, Sequential Thinking, Codex Review setup
 - API key configuration
 
 **Then review** → [EXAMPLES.md](EXAMPLES.md)
@@ -44,6 +44,11 @@ Welcome! This guide will help you navigate the documentation and get up and runn
 - Agent specifications
 - Skills documentation
 - Integration details
+
+**New in 3.0** → [CHANGELOG.md](CHANGELOG.md)
+- Multi-agent swarm orchestration
+- Cross-model Codex review
+- Enhanced security review
 
 **For AI agents** → `/agents/` directory
 - Specialized agent configurations

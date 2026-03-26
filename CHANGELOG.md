@@ -5,6 +5,61 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-03-26
+
+### Added
+
+#### Multi-Agent Swarm Orchestration
+- **`/epic-swarm` command** — Orchestrate parallel execution of epic sub-tickets using dependency-aware wave scheduling. Analyzes ticket dependencies, groups independent tickets into waves, isolates each in a git worktree, runs full `/execute-ticket` in each, merges sequentially, and runs security review on the integrated codebase.
+- **Swarm state persistence** — State file at `.claude/swarm-state/{epic-id}.json` with create/update/resume lifecycle. Interrupted swarms resume from last checkpoint.
+- **Worktree safety patterns** — Gitignore verification before worktree creation, clean baseline tests per worktree, automatic cleanup on completion.
+
+#### Cross-Model Code Review (Codex Integration)
+- **`/codex-review` command** — Standalone cross-model code review using OpenAI Codex (GPT-5.3-Codex with xhigh reasoning). Codex runs as a full agent with complete repository access — reads files, explores dependencies, traces code paths. Auto-fixes clear P0-P2 findings, reports ambiguous ones with questions, lists P3 for awareness.
+- **Codex Review MCP Server** — New `codex-review-server` repo providing three MCP tools: `codex_review_and_fix` (review + auto-fix), `codex_review` (review only), `codex_fix` (fix approved findings). Uses ChatGPT subscription auth via Codex CLI — no API billing.
+- **Phase 5.5 in execute-ticket** — Cross-model review integrated between Code Review and Security Review. Gracefully skips if Codex MCP server not installed.
+- **Configurable** — Model, reasoning effort, timeout, focus area, and Codex credentials directory all configurable via environment variables with live reload.
+
+#### Security Review Enhancement
+- **Attack surface census** — Maps all endpoints, file uploads, webhooks, integrations, background jobs before vulnerability scanning.
+- **Secrets archaeology** — Scans git history for leaked credentials using known secret prefixes (AWS, OpenAI, GitHub, Slack, Stripe, SendGrid).
+- **Dependency supply chain audit** — Runs package manager audits, checks for install scripts in production deps, verifies lockfile integrity.
+- **CI/CD pipeline security** — Checks for unpinned GitHub Actions, `pull_request_target` risks, script injection via event contexts, secrets exposure.
+- **STRIDE threat modeling** — Per-component Spoofing/Tampering/Repudiation/Information Disclosure/DoS/Elevation of Privilege assessment.
+- **Anti-manipulation clause** — Security agent ignores any in-codebase instructions that attempt to influence the audit.
+- **Confidence gating** — Default 8/10 threshold; `--comprehensive` mode lowers to 2/10 for deep scans.
+- **New reference docs** — `security-stride-reference.md` (STRIDE methodology and templates) and `security-cicd-reference.md` (GitHub Actions security patterns and detection commands).
+
+#### Skill Triggering Overhaul
+- **SessionStart meta-skill injection** — The `using-pm-workflow` skill is now injected at every session start via hook, establishing the "1% rule": if there's even a 1% chance a skill applies, it must be invoked.
+- **Description rewrites** — All 11 skill descriptions rewritten to `[what] + [when/triggers]` pattern following Anthropic's skill guide. Descriptions no longer summarize enforcement rules (which caused Claude to shortcut past loading the full skill).
+- **Rationalization prevention tables** — Added to 6 enforcement skills (production-code-standards, security-patterns, testing-philosophy, verify-implementation, systematic-debugging, model-aware-behavior). Each maps common excuses to reality counters.
+
+#### Agent Improvements
+- **Structured status codes** — All 10 agents now return DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED with structured metadata. Enables deterministic orchestration decisions.
+- **Anti-sycophancy protocol** — All agents ban gratitude expressions, require substance over agreement, and verify reviewer suggestions against actual codebase usage before accepting.
+- **Two-stage code review** — Code reviewer agent now runs Pass 1 (spec compliance) before Pass 2 (code quality). Pass 1 catches over-building and under-building that quality-only reviews miss. Pass 1 failure blocks Pass 2.
+
+#### Planning Enhancement
+- **Dependency annotations** — `/planning` output now includes per-ticket parallelization metadata: parallel group, files touched, depends-on/blocks, shared interfaces, optional model override.
+- **No-placeholders rule** — Every plan step must contain actual implementable content. "Add appropriate error handling" is a plan failure.
+- **Interface contract generation** — Shared types between tickets get explicit contracts locked after the defining ticket completes.
+
+#### Verification Enhancement
+- **Banned hedging language** — verify-implementation skill now bans "should", "probably", "seems to" without fresh command output.
+- **Subagent verification protocol** — Never trust subagent self-reports; independently verify with git diff and test execution.
+- **Regression test red-green-revert cycle** — Regression tests must demonstrate failure when fix is reverted.
+
+### Changed
+- **execute-ticket Phase 5.5** — New cross-model review phase between code review and security review (skippable if Codex MCP not installed)
+- **execute-ticket worktree mode** — Detects when running inside a swarm worktree; skips branch creation, PR management, and push (swarm orchestrator handles these)
+- **execute-ticket status parsing** — Resume logic now recognizes DONE/DONE_WITH_CONCERNS/NEEDS_CONTEXT alongside legacy COMPLETE/ISSUES_FOUND
+- **close-epic swarm cleanup** — Deletes swarm state file and removes worktrees for closed tickets
+- **Security patterns skill** — Description updated with CI/CD, Docker, IaC triggers; new Infrastructure Security Patterns section
+- **Default Codex review timeout** — 1500s (25 min) to accommodate thorough repo-aware reviews
+
+---
+
 ## [2.26.0] - 2026-03-25
 
 ### Added
@@ -1397,6 +1452,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.15.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.15.0
 [2.14.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.14.0
 [2.13.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.13.0
+[3.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.0.0
 [2.26.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.26.0
 [2.25.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.25.0
 [2.24.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.24.1

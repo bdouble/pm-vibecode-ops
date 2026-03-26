@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-2.26.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
 
 ## What This Is
 
@@ -35,7 +35,10 @@ Instead of one generic AI, you work with expert agents—architect, backend engi
 Skills enforce standards during development, not just at review time. Production code standards, security patterns, and testing philosophy activate automatically as Claude writes code—preventing issues before they're created.
 
 **6. Production-First Quality Focus**
-Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based testing focuses on code that matters. Inline documentation AI can't miss. Strong guidance to fail fast and fix issues rather than building workarounds you'd otherwise miss. 
+Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based testing focuses on code that matters. Inline documentation AI can't miss. Strong guidance to fail fast and fix issues rather than building workarounds you'd otherwise miss.
+
+**7. Multi-Agent Swarm Orchestration**
+Execute multiple tickets in parallel with automatic dependency management. The `/epic-swarm` command analyzes ticket dependencies, groups independent work into waves, isolates each ticket in its own git worktree, and merges results sequentially — turning linear ticket execution into concurrent development.
 
 ### What You Get
 
@@ -99,6 +102,8 @@ One command orchestrates all six phases automatically:
 - Gathers parent epic context, referenced documents, and external URLs (two-level chain)
 - Classifies research briefs as prescriptive or contextual; extracts conformance checklists
 - Runs adaptation, implementation, testing, documentation, code review, and security review
+- Includes cross-model Codex review between code review and security review (Phase 5.5)
+- Two-stage code review: spec compliance gates code quality review
 - Verifies implementation against referenced document specifications before advancing
 - Creates draft PR after implementation, converts to ready when security passes
 - Adds PR labels and phase comments for full traceability
@@ -119,8 +124,9 @@ For special cases requiring phase-by-phase control:
 6. `/implementation` - AI writes production code following guide
 7. `/testing` - Build and fix comprehensive test suite until passing
 8. `/documentation` - Generate API docs, user guides, inline documentation
-9. `/codereview` - Requirements verification, best practices, SOLID/DRY analysis, and pattern compliance
-10. `/security-review` - OWASP vulnerability scan → **closes ticket when passing**
+9. `/codereview` - Two-stage review: spec compliance then code quality (Pass 1 gates Pass 2)
+10. `/codex-review` - Cross-model adversarial review using OpenAI Codex (auto-fixes clear P0-P2 findings)
+11. `/security-review` - Enhanced OWASP + STRIDE + supply chain + CI/CD security scan → **closes ticket when passing**
 
 Use individual phases when you need to:
 - Debug a specific phase that failed in agentic execution
@@ -129,6 +135,21 @@ Use individual phases when you need to:
 
 ### Epic-Level Completion
 11. `/close-epic` - Close completed epic with deferred work recovery, retrofit analysis, and downstream propagation → **closes epic when all tickets done**
+
+### Concurrent Execution: Epic Swarm (New in 3.0)
+
+**`/epic-swarm [epic-id]`** - Execute multiple tickets from an epic in parallel
+
+For epics with independent tickets, the swarm orchestrator:
+- Analyzes ticket dependencies from planning annotations to build a dependency graph
+- Groups independent tickets into waves (max 4 concurrent by default)
+- Creates isolated git worktrees per ticket — no file conflicts between parallel agents
+- Runs full `/execute-ticket` workflow in each worktree (including Codex review)
+- Merges completed tickets to main sequentially with conflict detection
+- Runs security review on the integrated codebase (post-merge)
+- Persists swarm state for resume after interruption
+
+**Prerequisites:** Tickets must have dependency annotations from the `/planning` phase (parallel group, files touched, depends-on/blocks).
 
 Each phase includes quality gates. Security review is the final gate that marks tickets as complete. Epic closure is the final gate that marks epics as complete after all sub-tickets pass.
 
@@ -151,6 +172,7 @@ Each phase includes quality gates. Security review is the final gate that marks 
 - AI coding tool (Claude Code or OpenAI Codex)
 - Ticketing system with MCP integration ([Linear](https://linear.app) recommended, [Jira](https://www.atlassian.com/software/jira)  and other systems with MCP integrations supported)
 - Git repository
+- (Optional) [Codex Review MCP Server](https://github.com/bdouble/codex-review-server) for cross-model code review
 - [Complete prerequisite checklist](docs/INSTALLATION.md#prerequisites)
 
 ### Installation
@@ -174,7 +196,7 @@ That's it! The plugin system automatically installs all commands, agents, skills
 - **Local** - Available only in this project, only for you
 
 **What gets installed:**
-- **Commands** (`/adaptation`, `/implementation`, etc.) - Explicit workflow phases you invoke
+- **Commands** (`/adaptation`, `/implementation`, `/codex-review`, `/epic-swarm`, etc.) - Explicit workflow phases you invoke
 - **Agents** - Specialized AI roles (architect, QA engineer, security engineer)
 - **Skills** - Auto-activated quality enforcement during development
 - **Hooks** - Session automation for workflow context
