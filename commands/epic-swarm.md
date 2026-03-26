@@ -66,10 +66,20 @@ If file overlap in same group: move the overlapping ticket to the next wave and 
 
 ### 1.4 Filter Tickets
 
-Exclude from the swarm:
-- Tickets already marked Done or Cancelled
+**Include in the swarm:**
+- Tickets in Todo, Backlog, or Unstarted status — these are the work to be done
+- Tickets marked as `codex-review-pending` in swarm state — re-queue for Codex review retry
 
-Do NOT exclude tickets marked as `codex-review-pending` in swarm state. Re-queue them in their original wave (or next available wave) so Codex review can be retried.
+**Exclude from the swarm:**
+- Tickets in Done or Cancelled status — already complete
+- Tickets in In Progress status — likely being worked on by another session or manually. Report these to the user: "Ticket CON-42 is In Progress — skipping. If this ticket should be included, reset it to Todo first."
+
+**Present the filtered list to the user** before proceeding:
+```
+Swarm scope for EPIC-123:
+  Include (5): CON-42, CON-43, CON-44, CON-45, CON-46 (all Todo)
+  Skip (3): CON-40 (Done), CON-41 (Done), CON-47 (In Progress)
+```
 
 ### 1.5 Create Swarm State File
 
