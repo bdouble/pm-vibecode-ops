@@ -279,6 +279,16 @@ Based on workflow capabilities and user experiences:
 
 ---
 
+## Acknowledgments
+
+Several open-source projects inspired key design decisions in v3.0:
+
+- **[superpowers](https://github.com/obra/superpowers)** by Jesse Vincent — The skill triggering architecture (SessionStart meta-skill injection, description-as-trigger-only pattern, rationalization prevention tables) is directly inspired by superpowers' approach to reliable skill activation. The two-stage code review (spec compliance then quality), anti-sycophancy protocol, verification intensity patterns, no-placeholders planning rule, and defense-in-depth debugging methodology also draw from superpowers' battle-tested skill designs.
+
+- **[gstack](https://github.com/garrytan/gstack)** by Garry Tan — The enhanced security review (attack surface census, secrets archaeology, dependency supply chain audit, CI/CD pipeline security, STRIDE threat modeling, confidence gating, and anti-manipulation clause) was inspired by gstack's `/cso` Chief Security Officer skill and its 15-phase security audit methodology.
+
+---
+
 ## License
 
 This work is licensed under a [Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/).
