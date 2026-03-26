@@ -1,6 +1,6 @@
 ---
 description: Orchestrate all ticket workflow phases (adaptation → implementation → testing → documentation → codereview → codex-review → security-review) automatically
-allowed-tools: Task, Read, Grep, Glob, Bash, Bash(gh:*), Bash(git:*), WebFetch, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
+allowed-tools: Task, Read, Grep, Glob, Bash, Bash(gh:*), Bash(git:*), WebFetch, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
 argument-hint: <ticket-id>
 ---
 
@@ -138,10 +138,10 @@ Use mcp__linear-server__list_comments for ticket: $ARGUMENTS
 **Resume Logic:**
 - If no reports found → Start from adaptation
 - If some reports found → Check status within each report:
-  - Header present AND `Status: COMPLETE` → Phase done, skip to next
-  - Header present AND `Status: BLOCKED` or `ISSUES_FOUND` → Phase needs re-run from this point
+  - Header present AND `Status: DONE`, `Status: DONE_WITH_CONCERNS`, or `Status: COMPLETE` → Phase done, skip to next
+  - Header present AND `Status: BLOCKED`, `Status: NEEDS_CONTEXT`, or `ISSUES_FOUND` → Phase needs re-run from this point
   - Header present but no clear status → Treat as incomplete, re-run phase
-- If all reports found with `Status: COMPLETE` → Ticket already complete, report status and stop
+- If all reports found with completed statuses (`DONE`, `DONE_WITH_CONCERNS`, or `COMPLETE`) → Ticket already complete, report status and stop
 
 **Important:** Do not rely solely on header presence. A phase report may exist from a previous blocked run that needs to be re-executed.
 
@@ -550,7 +550,7 @@ Agent tool parameters:
 Agent must return a structured report. Parse for:
 
 **Required fields:**
-- `Status:` - COMPLETE, BLOCKED, or ISSUES_FOUND
+- `Status:` - DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED (accept legacy COMPLETE / ISSUES_FOUND for compatibility)
 - `Summary:` - Brief description of work done
 - `Files Changed:` or `Files Reviewed:` - List of affected files
 
@@ -595,7 +595,7 @@ If ANY required field is missing or empty:
 
 #### 3.4.2 Verify Acceptance Criteria Completion (Implementation Phase Only)
 
-After the implementation agent reports COMPLETE, verify key acceptance criteria with automated checks **before** posting the report to Linear or advancing to the next phase.
+After the implementation agent reports `DONE`, `DONE_WITH_CONCERNS`, or legacy `COMPLETE`, verify key acceptance criteria with automated checks **before** posting the report to Linear or advancing to the next phase.
 
 **Step 1: Parse AC into verification targets**
 
@@ -802,8 +802,8 @@ After implementation agent returns, before posting report:
 
 2. **Validate changes exist:**
    ```
-   IF changes == 0 AND report.Status == "COMPLETE":
-     - Log warning: "Implementation reported COMPLETE but no file changes detected"
+   IF changes == 0 AND report.Status is one of ["DONE", "DONE_WITH_CONCERNS", "COMPLETE"]:
+     - Log warning: "Implementation reported completion but no file changes detected"
      - Check for unstaged changes: git diff --name-only
      - If still no changes: PAUSE for user decision
        Options: [Retry Implementation] [Review Manually] [Mark as No-Op and Continue]
@@ -1201,7 +1201,7 @@ When agents bypass issues (correct behavior for low-priority items), they MUST d
 
 ### Orchestrator Validation Rule
 
-Before posting a COMPLETE report, the orchestrator MUST:
+Before posting a completed report (`DONE`, `DONE_WITH_CONCERNS`, or legacy `COMPLETE`), the orchestrator MUST:
 1. Extract all acceptance criteria from the ticket
 2. Check each deferred item against the AC list (fuzzy match on key terms)
 3. If ANY deferred item matches an AC → reclassify as `AC-DEFERRED`

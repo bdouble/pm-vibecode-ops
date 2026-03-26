@@ -1,7 +1,6 @@
 ---
 name: security-patterns
-description: Enforces OWASP Top 10 and agentic security patterns during code writing and infrastructure configuration. Use when code handles authentication, authorization, user input, database queries, secrets, sessions, tokens, webhooks, file uploads, CI/CD pipelines, Docker configuration, or infrastructure-as-code, or when user mentions "login", "password", "JWT", "OAuth", "SQL", "XSS", "CSRF", "injection", "agent", "MCP server", "tool calling", "GitHub Actions", "Dockerfile", or "pipeline".
-  - Imports: @anthropic-ai/sdk, openai, langchain, @modelcontextprotocol, autogen, crewai
+description: Enforces OWASP Top 10 and agentic security patterns during code writing and infrastructure configuration. Use when code handles authentication, authorization, user input, database queries, secrets, sessions, tokens, webhooks, file uploads, CI/CD pipelines, Docker configuration, or infrastructure-as-code, or when user mentions "login", "password", "JWT", "OAuth", "SQL", "XSS", "CSRF", "injection", "agent", "MCP server", "tool calling", "GitHub Actions", "Dockerfile", or "pipeline", or uses imports such as @anthropic-ai/sdk, openai, langchain, @modelcontextprotocol, autogen, or crewai.
 ---
 
 # Security Patterns
