@@ -3,279 +3,262 @@
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
 ![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
 
-## What This Is
+**A production development workflow for Product Managers who build with AI.**
 
-A battle-tested workflow that enables Product Managers and other non-engineers to transform product requirements into production-ready code through structured AI collaboration.
+Write a PRD. Run a few commands. Ship features with tests, documentation, and security review, without waiting for engineering.
 
-Write a PRD. Run 11 commands. Ship features with tests, documentation, and security review.
+We're in the era of personal software, where non-engineers can build real applications with AI. This workflow is the structure that makes it reliable.
 
 ---
 
-## Why This Matters
+## AI Coding Without Structure Fails in Specific, Predictable Ways
 
-Traditional product development bottlenecks on engineering capacity. AI coding tools promise speed but without structure create unmaintainable chaos—duplicate code, security holes, missing tests, and technical debt.
+AI coding tools are powerful enough that non-engineers can build real applications. But without structure, the output breaks down fast:
 
-This workflow provides the structure AI needs to help non-engineers move beyond prototypes and build production software reliably:
+- **Duplicate functions everywhere.** AI forgets what it built yesterday and recreates the same logic in a different file. You end up with `sendMessage()`, `transmitMessage()`, and `deliverMessage()`, none of them talking to each other.
+- **Features that look done but aren't.** AI cheerfully reports "complete" on code that doesn't work. You can't read thousands of lines to verify.
+- **Security holes left open.** Authentication without rate limiting. Inputs validated but SQL injection vectors missed.
+- **Workarounds hiding bugs.** Try-catch blocks that swallow exceptions. Fallback logic that papers over failures. Technical debt accumulating from day one.
+- **Unmaintainable code.** Every change breaks something else. The codebase works just enough to be dangerous.
 
-### Six Key Innovations
+Workflows like [Superpowers](https://github.com/obra/superpowers) and [gstack](https://github.com/garrytan/gstack) solve this well for engineers. They assume you can read code, debug failures, and make architectural decisions yourself.
 
-**1. Service Inventory System**
-Automatically catalogs existing code before building anything new. Prevents the #1 AI coding disaster: rebuilding functionality that already exists.
+**This workflow is for everyone else.** Product Managers, founders, and non-engineers who need production-quality output from AI but can't be their own code reviewer.
 
-**2. Adaptation Phase**
-Transforms "what exists" into "how to build this feature." AI gets explicit guidance on which services to reuse and how to integrate with existing patterns.
+---
 
-**3. Automated Ticket Memory**
-Your ticketing system (Linear/Jira) becomes AI's external memory. Discovery findings, architectural decisions, and implementation guidance persist across sessions—and you can read and verify everything AI knows.
+## AI Needs More Structure Than Human Developers
 
-**4. Specialized Agent Workflow**
-Instead of one generic AI, you work with expert agents—architect, backend engineer, QA, security, technical writer. Each focuses on their specialty with strict boundaries to prevent scope creep.
+Human engineers carry context in their heads: what services exist, what patterns the codebase follows, what the team decided last sprint. AI starts fresh every session with zero memory, zero awareness of existing code, and zero quality instincts.
 
-**5. Auto-Activated Quality Skills (Claude Only)**
-Skills enforce standards during development, not just at review time. Production code standards, security patterns, and testing philosophy activate automatically as Claude writes code—preventing issues before they're created.
+PM Vibe Code Ops provides that structure through discovery, planning, implementation, testing, review, and security, so non-engineers get production-quality results instead of prototypes that collapse under real use.
 
-**6. Production-First Quality Focus**
-Zero tolerance for workarounds, fallbacks, or temporary solutions. Risk-based testing focuses on code that matters. Inline documentation AI can't miss. Strong guidance to fail fast and fix issues rather than building workarounds you'd otherwise miss.
+---
 
-**7. Multi-Agent Swarm Orchestration**
-Execute multiple tickets in parallel with automatic dependency management. The `/epic-swarm` command analyzes ticket dependencies, groups independent work into waves, isolates each ticket in its own git worktree, and drives all workflow phases directly from the main session — dispatching specialized agents (architect, engineer, QA, etc.) in parallel across tickets within each phase, then merging results sequentially.
+## What Makes This Different
 
-### What You Get
+### AI knows what exists before writing a single line
 
-- **Prevent duplication**: Service inventory catches 60-75% code reuse opportunities
-- **Maintain quality at scale**: Built-in gates ensure code remains maintainable as applications grow
-- **Move faster on routine work**: Handle straightforward features without bottlenecking on engineering
-- **Preserve engineering focus**: Engineers tackle complex challenges while AI handles CRUD operations
+The **Service Inventory** catalogs your entire codebase before any new code is written. AI sees what's already built, with reuse scores for each service. This prevents the most common AI coding failure: rebuilding functionality that already exists.
+
+### Context engineering over prompt engineering
+
+Most people focus on writing better prompts. The real unlock is giving AI the right context about your project, and making that context inspectable.
+
+Your **ticketing system becomes AI's memory**. Discovery findings, architectural decisions, and implementation guidance are written to Linear or Jira tickets automatically. You can read everything AI knows. You can correct it when it's wrong. The context lives in a system you can inspect, even if you can't inspect the code itself.
+
+### Specialized agents with strict scope boundaries
+
+Instead of one generic AI trying to do everything at once, **10 specialized agents** each handle their phase. The architect creates implementation guidance and never writes code. The backend engineer follows that guidance and never makes architecture decisions. The reviewer catches problems and never adds features. Each agent stays in its lane.
+
+### Security review blocks completion
+
+Tickets don't close until they pass **OWASP + STRIDE + supply chain + CI/CD security review**. This isn't optional. Vulnerabilities block "done." Production readiness is enforced at the workflow level.
+
+### Quality standards enforced during coding
+
+AI loves temporary solutions. This workflow forbids them through **auto-activated quality skills** that enforce production code standards, testing philosophy, and security patterns as code is written. Not in a review step afterward, but during the actual writing.
 
 ---
 
 ## Who This Is For
 
-**Perfect for:**
-- Product Managers leading technical teams who want to accelerate delivery
+**Built for:**
+- Product Managers who build with AI tools but keep hitting quality walls
 - Technical PMs who want to multiply their output on routine development
-- Solo founders building MVPs with AI assistance
-- Engineering leaders enabling non-technical staff to contribute safely
+- Solo founders building MVPs that need to actually work in production
+- Engineering leaders enabling non-technical staff to ship safely
 
 **Best suited for:**
 - Internal tools and operational software
-- MVPs and prototypes that evolve into products
+- MVPs and prototypes that evolve into real products
 - Standard web applications with common patterns
 - Features for existing codebases following established conventions
 
-**Requires additional engineering expertise for:**
-- Mission-critical systems where failures have serious consequences
-- Highly regulated industries (healthcare, finance) requiring deep compliance review
-- Novel architectures or cutting-edge technology integration
-- Systems requiring significant performance optimization
+**Bring engineering expertise for:**
+- Mission-critical or safety-critical systems
+- Highly regulated industries requiring deep compliance review
+- Novel architectures or performance-critical systems
 
 ---
 
-## Have Realistic Expectations
+## The Workflow
 
-This workflow helps PMs and other non-engineers build software that works in production—with proper tests, documentation, and security review.
+```
+YOU                           AI (with PM Vibe Code Ops)
+─────────────────────────────────────────────────────────
+Write a PRD            →
+                       ←     Catalogs existing code (/generate-service-inventory)
+                       ←     Analyzes patterns and architecture (/discovery)
+                       ←     Creates epics from requirements (/epic-planning)
+                       ←     Decomposes into engineering tickets (/planning)
+                       ←     Implements, tests, reviews, secures (/execute-ticket)
+Review PRs, merge      →     Ships with tests, docs, and security review
+```
 
-**It will not** produce the elegantly architected, concise, highly scalable code that senior engineers would write.
+One command, `/execute-ticket`, orchestrates the full ticket lifecycle: adaptation, implementation, testing, documentation, two-stage code review, cross-model Codex review, and security review. It creates a PR, pauses only for blocking issues, and marks tickets done when security passes.
 
-**It will** enable you to ship real features, maintain code quality as your application grows, and avoid the unmaintainable mess that unstructured AI coding creates.
-
-The honest truth: AI-assisted development with proper quality gates produces reliable software for many use cases. It does not replace the judgment of experienced engineers for complex systems. Use this workflow for appropriate projects, and involve engineering expertise when stakes demand it.
-
----
-
-## How It Works
-
-The workflow consists of three phases:
-
-### Project-Level Commands (Recurring)
-1. `/generate-service-inventory` - Catalog existing code *(run after major codebase updates)*
-2. `/discovery` - Analyze patterns and architecture *(run before each epic planning phase)*
-3. `/epic-planning` - Create business-focused epics *(run for each new feature, PRD, or major initiative)*
-4. `/planning` - Decompose epics into engineering tickets *(run for each new epic)*
-
-### Ticket-Level Execution: Agentic Workflow (Recommended)
-
-**`/execute-ticket [ticket-id]`** - The recommended approach for ticket-level work
-
-One command orchestrates all six phases automatically:
-- Creates feature branch using Linear's branch naming
-- Gathers parent epic context, referenced documents, and external URLs (two-level chain)
-- Classifies research briefs as prescriptive or contextual; extracts conformance checklists
-- Runs adaptation, implementation, testing, documentation, code review, and security review
-- Includes cross-model Codex review between code review and security review (Phase 5.5)
-- Two-stage code review: spec compliance gates code quality review
-- Verifies implementation against referenced document specifications before advancing
-- Creates draft PR after implementation, converts to ready when security passes
-- Adds PR labels and phase comments for full traceability
-- Pauses only for blocking issues (failing tests, security vulnerabilities, conformance gaps)
-
-**Why use the agentic workflow:**
-- 8x faster than running phases manually
-- Zero human intervention for tickets that pass all quality gates
-- Consistent quality across all tickets
-- Full traceability with PR comments and labels
-- Resume capability if interrupted
-
-### Ticket-Level Execution: Individual Phases (Advanced)
-
-For special cases requiring phase-by-phase control:
-
-5. `/adaptation` - Create implementation guide (reuse analysis, pattern selection)
-6. `/implementation` - AI writes production code following guide
-7. `/testing` - Build and fix comprehensive test suite until passing
-8. `/documentation` - Generate API docs, user guides, inline documentation
-9. `/codereview` - Two-stage review: spec compliance then code quality (Pass 1 gates Pass 2)
-10. `/codex-review` - Cross-model adversarial review using OpenAI Codex (auto-fixes clear P0-P2 findings)
-11. `/security-review` - Enhanced OWASP + STRIDE + supply chain + CI/CD security scan → **closes ticket when passing**
-
-Use individual phases when you need to:
-- Debug a specific phase that failed in agentic execution
-- Run only certain phases (e.g., just testing and security review)
-- Manually intervene between phases
-
-### Epic-Level Completion
-11. `/close-epic` - Close completed epic with deferred work recovery, retrofit analysis, and downstream propagation → **closes epic when all tickets done**
-
-### Concurrent Execution: Epic Swarm (New in 3.0)
-
-**`/epic-swarm [epic-id]`** - Execute multiple tickets from an epic in parallel
-
-For epics with independent tickets, the swarm orchestrator:
-- Analyzes ticket dependencies from planning annotations to build a dependency graph
-- Groups independent tickets into waves (max 4 concurrent by default)
-- Creates isolated git worktrees per ticket — no file conflicts between parallel agents
-- Drives all workflow phases directly from the main session, dispatching specialized agents (architect, backend engineer, QA, etc.) in parallel across tickets within each phase
-- Phase-synchronized execution: all tickets complete adaptation before implementation begins, ensuring interface contracts propagate correctly
-- Merges completed tickets to main sequentially with conflict detection
-- Runs security review on the integrated codebase (post-merge)
-- Persists swarm state for resume after interruption
-
-**Architecture note:** The orchestrator dispatches agents directly rather than delegating to `/execute-ticket` subagents, because Claude Code subagents cannot spawn their own subagents.
-
-**Prerequisites:** Tickets must have dependency annotations from the `/planning` phase (parallel group, files touched, depends-on/blocks).
-
-Each phase includes quality gates. Security review is the final gate that marks tickets as complete. Epic closure is the final gate that marks epics as complete after all sub-tickets pass.
-
-**Best practice**: Run each command in a fresh Claude Code session to prevent context overflow and ensure optimal performance.
+For epics with independent tickets, `/epic-swarm` runs multiple tickets in parallel with automatic dependency management, isolated git worktrees, and phase-synchronized execution.
 
 ---
 
 ## Quick Start
 
-### Choose Your Platform
+### Installation
 
-**For Claude Code Users** (Recommended):
-- Standard git branches, one ticket at a time → [Installation](docs/INSTALLATION.md)
+**Claude Code (recommended):**
+```bash
+# Add the marketplace
+/plugin marketplace add bdouble/pm-vibecode-ops
 
-**For OpenAI Codex Users**:
-- Platform-agnostic prompts in `codex/prompts/` → [Codex Guide](codex/README.md)
+# Install the plugin
+/plugin install pm-vibecode-ops@pm-vibecode-ops
+```
+
+Select **"User" scope** when prompted to make it available across all projects.
+
+**OpenAI Codex:** Platform-agnostic prompts in `codex/prompts/`. See [Codex Guide](codex/README.md).
 
 ### Prerequisites
 
 - AI coding tool (Claude Code or OpenAI Codex)
-- Ticketing system with MCP integration ([Linear](https://linear.app) recommended, [Jira](https://www.atlassian.com/software/jira)  and other systems with MCP integrations supported)
+- Ticketing system with MCP integration ([Linear](https://linear.app) recommended, [Jira](https://www.atlassian.com/software/jira) and other MCP-integrated systems supported)
 - Git repository
 - (Optional) [Codex Review MCP Server](https://github.com/bdouble/codex-review-server) for cross-model code review
 - [Complete prerequisite checklist](docs/INSTALLATION.md#prerequisites)
-
-### Installation
-
-**Install from Claude Code Marketplace**:
-```bash
-# Add the marketplace first
-/plugin marketplace add bdouble/pm-vibecode-ops
-
-# Then install from marketplace
-/plugin install pm-vibecode-ops@pm-vibecode-ops
-```
-
-When prompted, **select "User" scope** to make the plugin available across all projects.
-
-That's it! The plugin system automatically installs all commands, agents, skills, and hooks.
-
-**Scope options explained**:
-- **User** (recommended) - Available in all projects for you
-- **Project** - Available to all collaborators in this repository (commits to `.claude/settings.json`)
-- **Local** - Available only in this project, only for you
-
-**What gets installed:**
-- **Commands** (`/adaptation`, `/implementation`, `/codex-review`, `/epic-swarm`, etc.) - Explicit workflow phases you invoke
-- **Agents** - Specialized AI roles (architect, QA engineer, security engineer)
-- **Skills** - Auto-activated quality enforcement during development
-- **Hooks** - Session automation for workflow context
-
-**For OpenAI Codex users**: See [Codex Guide](codex/README.md) for platform-agnostic prompts.
-
-**MCP configuration** (Linear, Perplexity, etc.): [docs/MCP_SETUP.md](docs/MCP_SETUP.md)
-**First-time terminal users**: [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
 
 ### Your First Feature (2-4 Hours)
 
 1. Write a PRD with clear success criteria → [Writing AI-Friendly PRDs](PM_GUIDE.md#writing-ai-friendly-prds)
 2. Run project-level commands (inventory, discovery, epic planning, technical planning)
-3. Run `/execute-ticket [ticket-id]` for each ticket - one command handles all phases automatically
+3. Run `/execute-ticket [ticket-id]` for each ticket
 4. Merge when all quality gates pass
 
-**Detailed walkthrough**: [GET_STARTED.md](GET_STARTED.md#your-first-feature-2-4-hours)
+**Detailed walkthrough:** [GET_STARTED.md](GET_STARTED.md#your-first-feature-2-4-hours)
+
+---
+
+## Realistic Expectations
+
+This workflow helps non-engineers build software that works in production, with proper tests, documentation, and security review.
+
+It will not produce the elegantly architected code that senior engineers write. It will let you ship real features, maintain quality as your application grows, and avoid the unmaintainable mess that unstructured AI coding creates.
+
+AI-assisted development with proper quality gates produces reliable software for many use cases. It does not replace engineering judgment for complex systems. Use this for appropriate projects, and involve engineers when stakes demand it.
+
+---
+
+## Outcomes
+
+**Speed:**
+- 50-75% reduction in development time for routine features
+- `/execute-ticket` is 8x faster than running phases manually
+- Hours-to-days iteration cycles vs. days-to-weeks
+
+**Quality:**
+- 90%+ test coverage achievable consistently
+- Automated security review catches vulnerabilities before production
+- Comprehensive documentation generated automatically
+- Code follows existing patterns via service inventory
+
+**Team impact:**
+- PMs ship routine features without bottlenecking engineering
+- Engineers focus on complex challenges requiring human expertise
+- Clear audit trail from requirements to deployment
+
+---
+
+## Complete Workflow Reference
+
+### Project-Level Commands (Recurring)
+
+| # | Command | Purpose | When to Run |
+|---|---------|---------|-------------|
+| 1 | `/generate-service-inventory` | Catalog existing code | After major codebase updates |
+| 2 | `/discovery` | Analyze patterns and architecture | Before each epic planning phase |
+| 3 | `/epic-planning` | Create business-focused epics | For each new feature or PRD |
+| 4 | `/planning` | Decompose epics into engineering tickets | For each new epic |
+
+### Ticket-Level: Agentic Workflow (Recommended)
+
+**`/execute-ticket [ticket-id]`** orchestrates all phases automatically:
+- Creates feature branch using Linear's branch naming
+- Gathers parent epic context, referenced documents, and external URLs
+- Classifies research briefs as prescriptive or contextual; extracts conformance checklists
+- Runs adaptation, implementation, testing, documentation, code review, and security review
+- Includes cross-model Codex review between code review and security review
+- Two-stage code review: spec compliance gates code quality review
+- Creates draft PR after implementation, converts to ready when security passes
+- Pauses only for blocking issues (failing tests, security vulnerabilities, conformance gaps)
+
+### Ticket-Level: Individual Phases (Advanced)
+
+For cases requiring phase-by-phase control:
+
+| # | Command | Purpose |
+|---|---------|---------|
+| 5 | `/adaptation` | Create implementation guide (reuse analysis, pattern selection) |
+| 6 | `/implementation` | AI writes production code following guide |
+| 7 | `/testing` | Build and fix comprehensive test suite until passing |
+| 8 | `/documentation` | Generate API docs, user guides, inline documentation |
+| 9 | `/codereview` | Two-stage review: spec compliance then code quality |
+| 10 | `/codex-review` | Cross-model adversarial review using OpenAI Codex |
+| 11 | `/security-review` | OWASP + STRIDE + supply chain + CI/CD security scan |
+
+### Epic-Level
+
+| Command | Purpose |
+|---------|---------|
+| `/close-epic` | Close completed epic with deferred work recovery and retrofit analysis |
+| `/epic-swarm [epic-id]` | Execute multiple tickets in parallel with dependency management |
+
+**Best practice:** Run each command in a fresh Claude Code session to prevent context overflow.
 
 ---
 
 ## Documentation
 
-### For Non-Technical Product Managers
+### For Product Managers
 
-Start here if you don't have a development background:
+| Guide | Contents |
+|-------|----------|
+| [PM_GUIDE.md](PM_GUIDE.md) | Complete workflow guide with non-technical explanations |
+| [GET_STARTED.md](GET_STARTED.md) | Quick start and navigation |
+| [EXAMPLES.md](EXAMPLES.md) | Real-world case studies |
+| [FAQ.md](FAQ.md) | 50+ answered questions |
+| [GLOSSARY.md](GLOSSARY.md) | Technical terms explained for PMs |
 
-- **[PM_GUIDE.md](PM_GUIDE.md)** - Complete workflow guide with non-technical explanations
-- **[GET_STARTED.md](GET_STARTED.md)** - Quick start and navigation guide
-- **[EXAMPLES.md](EXAMPLES.md)** - Real-world case studies showing the workflow in action
-- **[FAQ.md](FAQ.md)** - Common questions and troubleshooting
-- **[GLOSSARY.md](GLOSSARY.md)** - Technical terms explained for PMs
+### Technical Reference
 
-### For Technical Reference
-
-Detailed command syntax and architecture:
-
-- **[TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md)** - Complete command documentation, agent specifications, architecture details
-- **[SKILLS.md](SKILLS.md)** - Auto-activated quality enforcement (production standards, security patterns, testing philosophy, systematic debugging)
-- **[INSTALLATION.md](docs/INSTALLATION.md)** - Comprehensive installation guide
+| Guide | Contents |
+|-------|----------|
+| [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md) | Complete command documentation and architecture |
+| [SKILLS.md](SKILLS.md) | Auto-activated quality enforcement details |
+| [AGENTS.md](AGENTS.md) | Specialized agent specifications |
+| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Comprehensive installation guide |
+| [docs/MCP_SETUP.md](docs/MCP_SETUP.md) | MCP configuration (Linear, Perplexity, etc.) |
+| [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md) | First-time terminal user guide |
 
 ---
 
-## What You Can Expect
+## Plugin Components
 
-Based on workflow capabilities and user experiences:
+The plugin system automatically provides all components:
 
-**Speed**:
-- 50-75% reduction in development time for routine features
-- Faster iteration cycles (hours to days vs. days to weeks)
-- Reduced time-to-production for well-defined requirements
+| Component | What It Does |
+|-----------|-------------|
+| **Commands** | 11 workflow phases you invoke (`/adaptation`, `/implementation`, `/execute-ticket`, `/epic-swarm`, etc.) |
+| **Agents** | 10 specialized AI roles (architect, backend engineer, QA, security engineer, etc.) |
+| **Skills** | 11 auto-activated quality standards (production code, security patterns, testing philosophy, etc.) |
+| **Hooks** | Session automation for workflow context |
 
-**Quality**:
-- 90%+ test coverage achievable consistently
-- Automated security review catches vulnerabilities before production
-- Comprehensive documentation generated automatically
-- Code follows existing patterns and conventions
-
-**Team Impact**:
-- PMs can ship routine features without bottlenecking engineering
-- Engineers focus on complex challenges requiring human expertise
-- Reduced context switching for development teams
-- Better alignment between product requirements and implementation
-
-**Process Benefits**:
-- Service inventory prevents code duplication (60-75% reuse typical)
-- Quality gates ensure consistent standards
-- Clear audit trail from requirements to deployment
-- Predictable delivery timelines for appropriate features
-
-[See educational walkthroughs demonstrating the workflow](EXAMPLES.md)
+**Scope options:** User (recommended, all projects), Project (all collaborators), Local (this project only).
 
 ---
 
 ## Support & Community
 
-- **Questions?** Start with [FAQ.md](FAQ.md) - 50+ answered questions
+- **Questions?** Start with [FAQ.md](FAQ.md)
 - **Stuck?** Check [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 - **Issues?** [Open an issue on GitHub](https://github.com/bdouble/pm-vibecode-ops/issues)
 - **Contributing?** [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -286,18 +269,12 @@ Based on workflow capabilities and user experiences:
 
 Several open-source projects inspired key design decisions in v3.0:
 
-- **[superpowers](https://github.com/obra/superpowers)** by Jesse Vincent — The skill triggering architecture (SessionStart meta-skill injection, description-as-trigger-only pattern, rationalization prevention tables) is directly inspired by superpowers' approach to reliable skill activation. The two-stage code review (spec compliance then quality), anti-sycophancy protocol, verification intensity patterns, no-placeholders planning rule, and defense-in-depth debugging methodology also draw from superpowers' battle-tested skill designs.
+- **[Superpowers](https://github.com/obra/superpowers)** by Jesse Vincent. The skill triggering architecture, two-stage code review, anti-sycophancy protocol, verification intensity patterns, no-placeholders planning rule, and defense-in-depth debugging methodology draw from superpowers' battle-tested skill designs.
 
-- **[gstack](https://github.com/garrytan/gstack)** by Garry Tan — The enhanced security review (attack surface census, secrets archaeology, dependency supply chain audit, CI/CD pipeline security, STRIDE threat modeling, confidence gating, and anti-manipulation clause) was inspired by gstack's `/cso` Chief Security Officer skill and its 15-phase security audit methodology.
+- **[gstack](https://github.com/garrytan/gstack)** by Garry Tan. The enhanced security review (attack surface census, secrets archaeology, dependency supply chain audit, CI/CD pipeline security, STRIDE threat modeling, confidence gating) was inspired by gstack's `/cso` Chief Security Officer skill.
 
 ---
 
 ## License
 
-This work is licensed under a [Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/).
-
-You are free to share and adapt this material for any purpose, even commercially, as long as you give appropriate credit. See the [LICENSE](LICENSE) file for full details.
-
----
-
-**Ready to transform how you build software?** Start with [PM_GUIDE.md](PM_GUIDE.md) or jump straight to [GET_STARTED.md](GET_STARTED.md).
+This work is licensed under a [Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/). You are free to share and adapt for any purpose, including commercially, with appropriate credit. See [LICENSE](LICENSE).
