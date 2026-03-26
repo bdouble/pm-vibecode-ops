@@ -1,6 +1,6 @@
 ---
 description: Cross-model code review using OpenAI Codex for bug detection, security analysis, and surgical fixes
-allowed-tools: Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment
+allowed-tools: Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment
 argument-hint: <ticket-id>
 workflow-phase: cross-model-review
 closes-ticket: false
@@ -52,51 +52,51 @@ Extract key context from:
 - Implementation report (what was built, approach taken)
 - Code review report (any concerns flagged by Claude)
 
-**1.3 Get git diff:**
+**1.3 Determine base branch:**
 ```bash
-# Get the base branch (usually main)
 base_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-
-# Full diff against base
-git diff ${base_branch}...HEAD
 ```
 
-**1.4 Get changed files list:**
+**1.4 Get project directory:**
 ```bash
-git diff --name-only ${base_branch}...HEAD
+project_dir=$(git rev-parse --show-toplevel)
 ```
 
 ---
 
-## Step 2: Codex Review
+## Step 2: Codex Review and Fix
 
-Call the `codex_review` MCP tool with the gathered context:
+Codex runs as a **full agent** in the repository with complete file access. It reviews the branch diff, explores related files for context, and auto-fixes clear-cut issues — the same as running Codex manually.
 
+**Default mode — Review and auto-fix (recommended):**
+
+```
+Use mcp__codex-review-server__codex_review_and_fix with:
+  - project_dir: [absolute path to project root]
+  - base_branch: [base branch from Step 1.3]
+  - focus: "all" (or user preference: "bugs", "security", "performance")
+  - context: [ticket description + acceptance criteria + implementation summary]
+```
+
+Codex will:
+1. Review all changes with full repo access (reads files, explores imports, traces code paths)
+2. Classify findings as P0 (critical), P1 (high), P2 (medium), P3 (low)
+3. **Auto-fix P0-P2 findings** that are clear-cut (high confidence, obvious fix)
+4. **Report but NOT fix P0-P2 findings** where Codex has questions or uncertainty
+5. **Report P3 findings** for awareness only (never fixed)
+
+**Alternative — Review-only mode:**
+
+If you want to see all findings before any fixes:
 ```
 Use mcp__codex-review-server__codex_review with:
-  - diff: [the full git diff from Step 1.3]
-  - context: [ticket description + acceptance criteria + implementation summary]
-  - focus: "all"  (or override with user preference)
-  - depth: [from CODEX_REVIEW_REASONING env var, default "xhigh"]
+  - project_dir: [absolute path to project root]
+  - base_branch: [base branch]
+  - focus: "all"
+  - context: [ticket context]
 ```
 
-The tool returns structured findings:
-```json
-{
-  "findings": [
-    {
-      "severity": "critical|high|medium|low",
-      "category": "bug|security|performance|logic|edge-case",
-      "file": "src/services/auth.ts",
-      "line": 42,
-      "description": "...",
-      "evidence": "...",
-      "suggested_fix": "...",
-      "confidence": 0.95
-    }
-  ]
-}
-```
+This runs in read-only mode. No files are modified.
 
 **If the MCP tool returns a rate limit error:**
 1. Wait 60 seconds, retry once
@@ -106,74 +106,74 @@ The tool returns structured findings:
 
 ---
 
-## Step 3: Present Findings
+## Step 3: Present Results
 
-Display findings to the user, sorted by severity (critical first):
+Parse Codex's output and present to the user in three sections:
 
 ```
-## Codex Cross-Model Review Findings
+## Codex Cross-Model Review Results
 
-Model: gpt-5.3-codex | Reasoning: xhigh | Findings: N
+Model: gpt-5.3-codex | Reasoning: xhigh
 
-| # | Severity | Category | File:Line | Description |
-|---|----------|----------|-----------|-------------|
-| 1 | CRITICAL | security | src/auth.ts:42 | SQL injection via unsanitized input |
-| 2 | HIGH     | bug      | src/api.ts:89  | Null dereference on empty response |
-| 3 | MEDIUM   | logic    | src/util.ts:15 | Off-by-one in pagination calc |
+### Auto-Fixed (P0-P2, clear-cut)
+| # | Priority | Category | File | What was fixed |
+|---|----------|----------|------|---------------|
+| 1 | P0 | security | src/auth.ts:42 | Parameterized SQL query |
+| 2 | P1 | bug | src/api.ts:89 | Added null check on response |
+
+### Needs Your Decision (P0-P2, has questions)
+| # | Priority | Category | File | Issue | Codex's Question |
+|---|----------|----------|------|-------|-----------------|
+| 3 | P1 | logic | src/util.ts:15 | Off-by-one in pagination | "Should this be 0-indexed or 1-indexed? The API docs are ambiguous." |
+
+### For Awareness (P3)
+| # | Category | File | Description |
+|---|----------|------|-------------|
+| 4 | style | src/config.ts:8 | Magic number could be a named constant |
 ```
 
-**For each finding, ask the user:**
-- **APPROVE** — queue for fix generation
-- **DISMISS** — skip (note the reason for the record)
-- **DEFER** — add to technical debt / follow-up ticket
-
-**If `CODEX_REVIEW_AUTO_FIX=true`:** auto-approve all findings, skip user interaction.
-
-**If no findings:** report clean review, skip to Step 5.
+**For "Needs Your Decision" items, ask the user:**
+- **FIX** — provide guidance, then run second pass
+- **DISMISS** — skip (note the reason)
+- **DEFER** — add to technical debt
 
 ---
 
-## Step 4: Fix Generation (for approved findings)
+## Step 4: Second Pass (if needed)
 
-For each approved finding, generate and apply a fix:
+If the user approved any "Needs Your Decision" items with guidance:
 
-**4.1 Generate fix:**
 ```
 Use mcp__codex-review-server__codex_fix with:
-  - finding: [the finding object]
-  - file_content: [current content of the affected file]
-  - context: [surrounding code context]
+  - project_dir: [absolute path to project root]
+  - findings: [the approved findings with user's guidance]
+  - context: [user's specific instructions for how to approach each fix]
 ```
 
-**4.2 Apply the patch:**
-- Read the current file
-- Apply the suggested changes using Edit tool
-- Preserve surrounding code exactly
+Codex runs again with write access, applying only the specified fixes.
 
-**4.3 Verify the fix:**
+---
+
+## Step 5: Commit and Push
+
+After all fixes (auto and second-pass) are applied:
+
 ```bash
-# Run affected tests
-npm test -- --testPathPattern="[affected test file]"
-# OR run the full suite if test mapping is unclear
-npm test
-```
+# Check what Codex changed
+git diff --stat
+git diff  # review the actual changes
 
-**4.4 If tests fail after applying a fix:**
-- Revert the fix: `git checkout -- [file]`
-- Note the failure in the report
-- Move to the next finding
-- Do NOT attempt to debug Codex's fix — report it for manual review
-
-**4.5 After all fixes are applied and verified:**
-```bash
+# Commit
 git add -A
 git commit -m "fix: address cross-model review findings [$ARGUMENTS]"
 git push origin HEAD
 ```
 
+**Important:** Review the git diff before committing. Codex's auto-fixes should be surgical, but verify nothing unexpected changed.
+
 ---
 
-## Step 5: Post Report to Linear
+## Step 6: Post Report to Linear
 
 Post the cross-model review report as a comment on the Linear ticket:
 
@@ -191,22 +191,24 @@ Use mcp__linear-server__create_comment with:
 **Model**: gpt-5.3-codex | **Reasoning**: xhigh | **Date**: [date]
 
 ### Summary
-- **Findings**: N total (X critical, Y high, Z medium)
-- **Approved**: N | **Dismissed**: N | **Deferred**: N
-- **Fixes Applied**: N (all tests passing)
+- **Total findings**: N (P0: X, P1: Y, P2: Z, P3: W)
+- **Auto-fixed**: N (clear-cut P0-P2)
+- **Fixed after review**: N (P0-P2 with user guidance)
+- **Dismissed**: N
+- **Deferred**: N
+- **For awareness**: N (P3)
 
-### Findings Detail
+### Auto-Fixed Items
+[For each: priority, file, what was changed and why]
 
-#### Finding 1: [description] — [FIXED | DISMISSED | DEFERRED]
-- **Severity**: CRITICAL | **Category**: security
-- **File**: src/auth.ts:42
-- **Evidence**: [evidence from Codex]
-- **Resolution**: [what was done — fix description, or dismissal reason, or deferral note]
+### Human-Decided Items
+[For each: priority, file, decision (fixed/dismissed/deferred), reasoning]
 
-[... repeat for each finding ...]
+### For Awareness (P3)
+[For each: description, file, why it's low priority]
 
 ### Deferred Items
-[List any deferred items for follow-up tickets]
+[List items for follow-up tickets]
 ```
 
 **If this is running as part of `/execute-ticket`:** the report becomes part of the context passed to the Security Review phase.
