@@ -9,7 +9,8 @@ This guide walks you through setting up the Model Context Protocol (MCP) servers
 3. [Recommended: Perplexity MCP](#recommended-perplexity-mcp)
 4. [Recommended: Sequential Thinking MCP](#recommended-sequential-thinking-mcp)
 5. [Optional: Playwright MCP](#optional-playwright-mcp)
-6. [Complete Configuration Example](#complete-configuration-example)
+6. [Optional: Codex Review MCP](#optional-codex-review-mcp)
+7. [Complete Configuration Example](#complete-configuration-example)
 7. [Verification and Testing](#verification-and-testing)
 8. [Troubleshooting](#troubleshooting)
 
@@ -527,6 +528,66 @@ npx playwright install
 ```
 
 Browser binaries are downloaded on first use if not already present.
+
+---
+
+## Optional: Codex Review MCP
+
+**Purpose:** Enables cross-model code review using OpenAI's Codex models. Catches bugs and security issues that Claude may miss through adversarial review with a different model architecture.
+
+**Used by:** `/codex-review` command, Phase 5.5 in `/execute-ticket`
+
+**Cost:** Free with a ChatGPT Plus ($20/month) or Pro ($200/month) subscription. No API key billing.
+
+### Prerequisites
+
+1. **Codex CLI** installed and authenticated:
+   ```bash
+   brew install codex-cli
+   codex login
+   ```
+
+2. **Python 3.10+** with pip
+
+### Installation
+
+```bash
+# Clone the MCP server
+git clone https://github.com/bdouble/codex-review-server.git ~/.claude/mcp/codex-review-server
+
+# Install dependencies
+pip install -r ~/.claude/mcp/codex-review-server/requirements.txt
+
+# Register with Claude Code
+claude mcp add codex-review-server -- python3 ~/.claude/mcp/codex-review-server/server.py
+```
+
+### Configuration
+
+Add to your `.claude/settings.json` (optional — defaults are sensible):
+
+```json
+{
+  "env": {
+    "CODEX_REVIEW_MODEL": "gpt-5.3-codex",
+    "CODEX_REVIEW_REASONING": "xhigh",
+    "CODEX_REVIEW_TIMEOUT": "300",
+    "CODEX_REVIEW_AUTO_FIX": "false"
+  }
+}
+```
+
+### Verification
+
+```
+Ask Claude: "Is the codex-review-server MCP available?"
+```
+
+Claude should confirm the `codex_review` and `codex_fix` tools are accessible.
+
+### Without This MCP
+
+The workflow functions normally without this server. The `/codex-review` command will explain how to install it, and `/execute-ticket` will skip Phase 5.5 with a note.
 
 ---
 

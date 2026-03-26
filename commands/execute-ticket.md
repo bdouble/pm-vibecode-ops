@@ -1,5 +1,5 @@
 ---
-description: Orchestrate all ticket workflow phases (adaptation → implementation → testing → documentation → codereview → security-review) automatically
+description: Orchestrate all ticket workflow phases (adaptation → implementation → testing → documentation → codereview → codex-review → security-review) automatically
 allowed-tools: Task, Read, Grep, Glob, Bash, Bash(gh:*), Bash(git:*), WebFetch, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues
 argument-hint: <ticket-id>
 ---
@@ -21,6 +21,7 @@ Execute all 6 ticket-level workflow phases automatically for the specified ticke
 | 3. testing | qa-engineer-agent | Gate #0 fail (existing tests broken) OR Gates #1-3 fail (new test issues) |
 | 4. documentation | technical-writer-agent | Status: BLOCKED |
 | 5. codereview | code-reviewer-agent | Status: CHANGES_REQUESTED |
+| 5.5 codex-review | *(MCP tool, no agent)* | Rate limit (deferred, not blocking) |
 | 6. security-review | security-engineer-agent | CRITICAL/HIGH severity findings |
 
 **Note:** Only `security-review` closes the ticket when no critical/high issues are found.
@@ -106,6 +107,7 @@ Use mcp__linear-server__list_comments for ticket: $ARGUMENTS
 | `## Testing Report` (containing `Gate #0`) | testing |
 | `## Documentation Report` | documentation |
 | `## Code Review Report` | codereview |
+| `## Cross-Model Review Report` | codex-review |
 | `## Security Review Report` | security-review |
 
 **Resume Logic:**
@@ -466,6 +468,7 @@ This transparency lets the agent make informed decisions about what context it d
 | testing | `qa-engineer-agent` |
 | documentation | `technical-writer-agent` |
 | codereview | `code-reviewer-agent` |
+| codex-review | *(no agent — direct MCP tool calls, see Phase 5.5 below)* |
 | security-review | `security-engineer-agent` |
 
 **Implementation Phase Agent Selection (with fallback):**
@@ -903,6 +906,44 @@ gh pr edit [pr-number] --add-label "security-approved"
 #### 3.7 Continue to Next Phase
 
 If not blocked, proceed to the next phase in sequence.
+
+---
+
+## Step 3.8: Phase 5.5 — Cross-Model Review (Codex)
+
+**This phase runs between codereview and security-review.** It is handled directly by the orchestrator using MCP tool calls, not via an agent.
+
+### Prerequisites Check
+
+Before running this phase, check if the Codex MCP server is available:
+- Attempt to call `mcp__codex-review-server__codex_review` with a minimal probe
+- **If NOT available:** Skip this phase entirely. Post a note to Linear: "Cross-model review skipped — Codex MCP server not configured. Install from: https://github.com/bdouble/codex-review-server"
+- **If available:** Proceed with the review
+
+### Execution
+
+Follow the `/codex-review` command workflow (see `commands/codex-review.md`):
+
+1. **Gather context:** Use the git diff and ticket context already collected by the orchestrator
+2. **Call `codex_review`:** Pass diff + ticket context + implementation summary
+3. **Present findings to user:** Display severity-sorted findings table
+4. **Process user decisions:** APPROVE / DISMISS / DEFER each finding
+   - If `CODEX_REVIEW_AUTO_FIX=true`: auto-approve all
+5. **Apply approved fixes:** Call `codex_fix` per finding, verify with tests, revert on failure
+6. **Commit and push:** Single commit for all fixes
+7. **Post report to Linear:** Cross-Model Review Report as ticket comment
+
+### Rate Limit Handling
+
+If the Codex MCP tool returns a rate limit error:
+1. Retry once after 60 seconds
+2. If still limited: mark as `codex-review-pending`, post note to Linear
+3. **Continue to security-review** — Codex review is valuable but NOT a hard gate
+4. User can run `/codex-review $ARGUMENTS` independently later
+
+### Context for Security Review
+
+The Cross-Model Review Report becomes part of the context passed to the security-review agent. Include it in the security review agent prompt alongside all other phase reports.
 
 ---
 
