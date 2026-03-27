@@ -84,17 +84,7 @@ AI loves temporary solutions. This workflow forbids them through **auto-activate
 
 ## The Workflow
 
-```
-YOU                           AI (with PM Vibe Code Ops)
-─────────────────────────────────────────────────────────
-Write a PRD            →
-                       ←     Catalogs existing code (/generate-service-inventory)
-                       ←     Analyzes patterns and architecture (/discovery)
-                       ←     Creates epics from requirements (/epic-planning)
-                       ←     Decomposes into engineering tickets (/planning)
-                       ←     Implements, tests, reviews, secures (/execute-ticket)
-Review PRs, merge      →     Ships with tests, docs, and security review
-```
+![PM Vibecode Ops Workflow](assets/workflow-pipeline-v2.png)
 
 One command, `/execute-ticket`, orchestrates the full ticket lifecycle: adaptation, implementation, testing, documentation, two-stage code review, cross-model Codex review, and security review. It creates a PR, pauses only for blocking issues, and marks tickets done when security passes.
 
