@@ -397,6 +397,19 @@ cp .claude/swarm-context/[epic-id]/[ticket-id].md .claude/worktrees/[ticket-id]/
 
 Also copy interface contracts if shared interfaces exist.
 
+### 3.2.0 Update Ticket Status to In Progress
+
+Before dispatching any agents, update each ticket's Linear status to "In Progress":
+
+```
+For each ticket in the current wave:
+  Use mcp__linear-server__update_issue:
+    - issue_id: [ticket-id]
+    - state: "In Progress"
+```
+
+Skip if the ticket is already "In Progress" or a later state. This ensures ticket status accurately reflects that work has begun, matching the behavior of `/execute-ticket` Step 1.4.
+
 ### 3.2 Phase-by-Phase Parallel Dispatch
 
 For each workflow phase, dispatch agents in parallel across all tickets in the wave. The orchestrator builds each agent's prompt with full context.
@@ -452,6 +465,24 @@ Both reviews are required. The pre-merge scan catches obvious issues early. The 
 **For each phase, for each ticket in the wave:**
 
 #### 3.2.1 Build the agent prompt
+
+**IMPLEMENTATION PHASE: Agent Selection Logic**
+
+For the Implementation phase, select the correct engineer agent for each ticket. The swarm must use the same selection logic as `/execute-ticket` Step 3.2:
+
+1. **Primary (from ticket metadata):**
+   - Check ticket labels for: `backend`, `frontend`, `fullstack`, or `agent-type:*`
+   - If `backend` or `agent-type:backend` → `backend-engineer-agent`
+   - If `frontend` or `agent-type:frontend` → `frontend-engineer-agent`
+   - If `fullstack` → both agents sequentially (backend first, then frontend)
+
+2. **Fallback (if no label found):**
+   - Scan ticket description for keywords:
+     - `API`, `REST`, `database`, `server`, `endpoint`, `backend`, `migration` → `backend-engineer-agent`
+     - `UI`, `React`, `Vue`, `component`, `page`, `frontend`, `CSS`, `layout` → `frontend-engineer-agent`
+   - If both categories present → default to `backend-engineer-agent`
+
+3. **If still unclear:** Default to `backend-engineer-agent`. Unlike single-ticket mode, the swarm does not pause for user input on agent selection — it defaults silently to avoid blocking the wave. Log the selection rationale in the swarm state for user review.
 
 **CRITICAL: CONTEXT FIDELITY RULES**
 
@@ -604,41 +635,356 @@ For each ticket that just had an agent dispatched:
      2. Re-run the phase for affected tickets in sequential mode
      3. Abort the wave
 
-5. **If no contamination:** Proceed to results processing (3.2.4)
+5. **If no contamination:** Proceed to scope relevance verification (step 6)
 
-**Note:** For read-only phases (Adaptation, Code Review, Security Scan), the contamination check is a lightweight verification — read-only agents should not produce file changes. If file changes ARE detected after a read-only phase dispatch, this is itself a bug and should be reported.
+6. **Scope relevance verification (write phases only):**
 
-#### 3.2.4 Process results
+   After confirming no cross-worktree contamination, verify that file changes are relevant to the ticket's scope. This mirrors `/execute-ticket` Step 3.3.1:
 
-For each returned agent:
+   ```bash
+   cd .claude/worktrees/[ticket-id]
+   changed_files=$(git status --short | awk '{print $2}')
+   ```
 
-1. **Parse the status code:** DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED
-2. **Post the phase report to Linear** as a comment on the ticket
-3. **Update swarm state** with the phase completion status (see State Persistence Protocol below)
+   Compare the list of changed files against the ticket's predicted files (from the adaptation report's "Target Files" section or from the ticket description's "Files Touched" metadata).
+
+   If files outside the predicted scope were modified:
+   - This is not necessarily wrong (agents may discover needed changes during implementation)
+   - Flag for awareness but do NOT block:
+     ```
+     Agent modified files outside predicted scope for [ticket-id]:
+     Predicted: [list from adaptation]
+     Actual: [list from git status]
+     Additional: [files not in predicted list]
+     ```
+   - Continue unless files look clearly wrong (e.g., test files in an implementation phase, config files unrelated to the ticket)
+
+7. **If all checks pass:** Proceed to results processing (3.2.4)
+
+**Note:** For read-only phases (Adaptation, Code Review, Security Scan), the contamination check is a lightweight verification — read-only agents should not produce file changes. If file changes ARE detected after a read-only phase dispatch, this is itself a bug and should be reported. Skip scope relevance verification for read-only phases.
+
+#### 3.2.4 Process Results — Full Post-Phase Pipeline
+
+For each returned agent, execute the following steps IN ORDER. This pipeline mirrors `/execute-ticket` Steps 3.4 through 3.6 to ensure every ticket receives the same post-processing regardless of whether it runs standalone or within a swarm.
+
+##### 3.2.4.1 Parse Status Code
+
+Parse the agent's structured report for:
+
+- **Status:** DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED (accept legacy COMPLETE / ISSUES_FOUND)
+- **Summary:** Brief description of work done
+- **Files Changed** / **Files Reviewed:** List of affected files
 
 **Handle BLOCKED or NEEDS_CONTEXT:**
 - Pause ONLY the blocked ticket (other tickets continue through remaining phases)
 - Notify user with the agent's escalation diagnostic
 - Blocked ticket can be resumed in a later wave or manually
+- **Do NOT post the report to Linear** — the blocking status must be resolved first
 
 **Handle DONE_WITH_CONCERNS:**
 - Include concerns in subsequent phase prompts for this ticket
-- Continue to next phase
+- Continue through remaining pipeline steps
+
+##### 3.2.4.2 Validate Report Structure
+
+Before posting to Linear, validate the agent report contains required fields. This mirrors `/execute-ticket` Step 3.4.1.
+
+**Required fields by phase:**
+
+| Phase | Required Fields |
+|-------|-----------------|
+| Adaptation | `Status:`, `Summary:`, `Target Files` or `Files to Modify` |
+| Implementation | `Status:`, `Summary:`, `Files Changed:` |
+| Testing | `Status:`, `Gate #0`, `Gate #1`, `Gate #2`, `Gate #3` results |
+| Documentation | `Status:`, `Summary:`, `Documentation Updated` or `Docs Created` |
+| Code Review | Always: `Review Status:`, `Requirements Checklist`, `Files Reviewed:`. If `Pass 1 Result: PASS`, also require `Best Practices Assessment` and `SOLID/DRY Assessment`. |
+| Security Scan | `Status:`, `Security Checklist` or findings list |
+
+**Validation algorithm:**
+```
+For each required field for current phase:
+  1. Check field header exists in report (case-insensitive)
+  2. Check field has non-empty content after the header
+
+If ANY required field is missing or empty:
+  - DO NOT post to Linear
+  - Log: "Report validation failed for [ticket-id]: missing [field-name]"
+  - Auto-retry phase ONCE with enhanced prompt requesting the missing fields
+  - If retry also fails validation: PAUSE ticket for user decision
+    Options: [Retry] [Review Raw Output] [Skip Phase] [Continue Anyway]
+```
+
+**Codereview conditional validation:**
+- If report contains `Pass 1 Result: FAIL`, treat "Pass 2 skipped" as valid — do NOT require Pass 2 sections.
+- If report contains `Pass 1 Result: PASS` (or does not specify), require both `Best Practices Assessment` and `SOLID/DRY Assessment`.
+
+##### 3.2.4.3 Verify Implementation Artifacts (Implementation Phase Only)
+
+After the implementation agent reports DONE, verify that file changes actually exist. This mirrors `/execute-ticket` Step 3.6.0.
+
+```bash
+cd .claude/worktrees/[ticket-id]
+changes=$(git status --porcelain | wc -l)
+```
+
+```
+IF changes == 0 AND report.Status is one of ["DONE", "DONE_WITH_CONCERNS", "COMPLETE"]:
+  - Log warning: "Implementation reported completion but no file changes detected for [ticket-id]"
+  - Check for unstaged changes: git diff --name-only
+  - If still no changes: PAUSE ticket for user decision
+    Options: [Retry Implementation] [Review Manually] [Mark as No-Op and Continue]
+```
+
+If changes exist, proceed to AC verification.
+
+##### 3.2.4.4 Verify Acceptance Criteria (Implementation Phase Only)
+
+After confirming file changes exist, verify that acceptance criteria are actually met. This mirrors `/execute-ticket` Step 3.4.2.
+
+**Step 1: Parse AC into verification targets**
+
+Extract each acceptance criterion from the ticket context file and classify:
+- **STRUCTURAL AC** (imports, exports, file creation, pattern removal) → verify with grep/glob
+- **BEHAVIORAL AC** (data flows, error handling, parameter forwarding) → verify by tracing source code
+- **REMOVAL AC** (no legacy code, no banned patterns) → verify with grep expecting zero matches
+
+**Step 2: Generate and run verification commands**
+
+For each STRUCTURAL and REMOVAL AC, generate a verification command and run it in the ticket's worktree:
+
+```bash
+cd .claude/worktrees/[ticket-id]
+# Example: AC "All renderers import from schema files"
+grep -rn "import.*from.*schema" [renderer-dir] | wc -l
+# Expect: count >= [number of renderers]
+```
+
+For each BEHAVIORAL AC, trace the data flow through source code in the worktree.
+
+**Step 3: Compare results against agent claims**
+
+```
+IF any AC fails verification:
+  - DO NOT post the report to Linear
+  - DO NOT advance to the next phase
+  - PAUSE ticket with specific evidence:
+
+    AC VERIFICATION FAILED — [ticket-id]
+
+    The implementation agent reported COMPLETE, but the following
+    acceptance criteria could not be verified:
+
+    | AC | Agent Claim | Verification Result |
+    |----|-------------|---------------------|
+    | [AC text] | [what agent reported] | [actual check output] |
+
+    Options:
+    1. Send verification failures back to implementation agent for correction
+    2. Continue anyway (manual verification later)
+    3. Pause ticket for manual intervention
+
+IF all AC pass verification:
+  - Proceed to next pipeline step
+  - Include verification results in the Linear comment
+```
+
+##### 3.2.4.5 Verify Referenced Document Conformance (Implementation Phase Only)
+
+If the epic context bundle or ticket context file classified any referenced documents as **prescriptive** (contains specific IDs, schemas, field names, interface definitions), verify that the implementation matches those specifications. This mirrors `/execute-ticket` Step 3.4.3.
+
+For each prescriptive document's conformance checklist:
+
+1. **Extract verifiable specifications:** Named items, specific values, enumerated lists, interface fields
+2. **Generate verification queries** in the ticket's worktree:
+   ```bash
+   cd .claude/worktrees/[ticket-id]
+   grep -rn '"[item-name]"\|[item-name]' [target-file-or-directory]
+   ```
+3. **Report results:**
+   - If all specifications match: include brief confirmation in Linear comment
+   - If divergences exist: PAUSE ticket with detailed comparison table
+
+##### 3.2.4.6 Validate Deferred Items Against AC (All Phases)
+
+Before posting the report, scan the agent's Deferred Items table for items that match acceptance criteria. This mirrors `/execute-ticket` Step 3.6.1a and is the critical mechanism that prevents agents from silently dropping AC requirements.
+
+1. **Extract** all items from the agent's Deferred Items table (if present)
+2. **For each item**, check if it matches an acceptance criterion:
+   - Fuzzy match on key terms: file names, function names, component names, patterns mentioned in AC
+   - Check if the deferred item's description overlaps with any AC text
+3. **If a match is found:**
+   - Reclassify the item as `AC-DEFERRED`
+   - DO NOT advance to the next phase
+   - PAUSE ticket:
+     ```
+     ACCEPTANCE CRITERION DEFERRED — [ticket-id]
+
+     The agent deferred an item that matches an acceptance criterion:
+
+     AC: "[acceptance criterion text]"
+     Deferred Item: "[item description]"
+     Agent Reason: "[agent's stated reason for deferral]"
+
+     Options:
+     1. Accept deferral and continue (AC will not be fulfilled)
+     2. Send back to agent for implementation
+     3. Modify AC to reflect reduced scope
+     ```
+   - Wait for user decision
+4. **If no matches found:** Proceed to posting
+
+**This validation runs for ALL phases**, not just implementation. Code review and testing agents can also improperly defer items that match AC.
+
+##### 3.2.4.7 Post Phase Report to Linear
+
+After all validations pass, post the agent's full structured report as a comment on the ticket. This is the **critical step** that was previously missing — it creates the per-phase audit trail that `/close-epic` depends on for extracting deferred and declined items.
+
+```
+Use mcp__linear-server__create_comment:
+  - issue_id: [ticket-id]
+  - body: [formatted report — see format below]
+```
+
+**Comment format (must match `/execute-ticket` format for `/close-epic` compatibility):**
+
+```markdown
+## [Phase Name] Report
+
+[Agent's full structured report — verbatim, unmodified]
+
+---
+*Automated by /epic-swarm — Wave [N]*
+```
+
+**Phase Name mapping:**
+
+| Phase | Report Header |
+|-------|---------------|
+| Adaptation | `## Adaptation Report` |
+| Implementation | `## Implementation Report` |
+| Testing | `## Testing Report` |
+| Documentation | `## Documentation Report` |
+| Code Review | `## Code Review Report` |
+| Codex Review | `## Cross-Model Review Report` |
+| Security Scan (Pre-Merge) | `## Security Scan Report (Pre-Merge)` |
+
+**CRITICAL:** The report headers MUST match the patterns that `/execute-ticket` Step 2 uses for resume detection and that `/close-epic` uses for extracting deferred items. Using different headers will break downstream workflows.
+
+##### 3.2.4.8 Add Quality Labels (Phase-Specific)
+
+After posting the report, add the appropriate quality label to the ticket in Linear. These labels match what the individual workflow commands add:
+
+| Phase | Condition | Label |
+|-------|-----------|-------|
+| Testing | All gates (0-3) PASS | `tests-complete` |
+| Documentation | Report posted successfully | `docs-complete` |
+| Code Review | Review Status: APPROVED | `code-reviewed` |
+
+```
+Use mcp__linear-server__update_issue:
+  - issue_id: [ticket-id]
+  - labelNames: [add the appropriate label]
+```
+
+Labels for security phases are handled in Phase 5.2 (post-merge security review), not here.
+
+##### 3.2.4.9 Commit Changes (Implementation Phase Only)
+
+After posting the implementation report to Linear, commit all changes in the ticket's worktree. This mirrors `/execute-ticket` Step 3.6.1 (worktree-mode steps 1-2 only — no push, no PR).
+
+```bash
+cd .claude/worktrees/[ticket-id]
+git add -A
+git commit -m "feat([ticket-id]): [ticket-title]
+
+[First sentence of implementation summary from agent report]
+
+Linear: [ticket-id]
+Co-Authored-By: Claude <noreply@anthropic.com>"
+```
+
+Do NOT push or create PRs — the swarm handles merge during Phase 4 (Integration).
+
+Subsequent phases (testing, documentation, code review) will make additional file changes in the worktree. These accumulate as uncommitted changes and are committed as part of Phase 3.2.5 post-processing or during Phase 4 integration.
+
+##### 3.2.4.10 Update Swarm State
+
+Update `.claude/swarm-state/[epic-id].json` with:
+- Phase completion status for this ticket
+- Whether the report was posted to Linear (true/false)
+- Any quality labels added
+- Any deferred items found (with classification)
+
+See State Persistence Protocol below for the full state schema.
 
 #### 3.2.5 Phase-specific post-processing
 
+The following post-processing runs AFTER the Section 3.2.4 pipeline completes for each phase. These are additional phase-specific steps beyond the standard pipeline.
+
+**After Adaptation phase:**
+- Update the ticket-specific context file (`.claude/swarm-context/[epic-id]/[ticket-id].md`) with:
+  - Adaptation decisions (target files, approach, trade-offs)
+  - Service reuse mandates identified
+  - Deferred/descoped items from adaptation
+- These updates ensure subsequent phases have full context
+
 **After Implementation phase:**
-- Verify acceptance criteria completion (same as execute-ticket Step 3.4.2)
-- If AC verification fails: pause for user decision before advancing to Testing
-- Update the ticket-specific context file with implementation details
+- The 3.2.4 pipeline already handles: artifact verification (3.2.4.3), AC verification (3.2.4.4), document conformance (3.2.4.5), commit (3.2.4.9)
+- Additionally:
+  - Update the ticket-specific context file with implementation details (files changed, patterns used, integration points)
+  - Commit any remaining uncommitted changes after tests/docs/review phases add their artifacts
+
+**After Testing phase:**
+- If any Gate FAILS (especially Gate #0 — existing test remediation): ticket is PAUSED by the 3.2.4 pipeline
+- After testing completes successfully, commit test files:
+  ```bash
+  cd .claude/worktrees/[ticket-id]
+  git add -A
+  git commit -m "test([ticket-id]): add test suite
+
+  [Brief summary of test coverage from agent report]
+
+  Linear: [ticket-id]
+  Co-Authored-By: Claude <noreply@anthropic.com>"
+  ```
+
+**After Documentation phase:**
+- Commit documentation changes:
+  ```bash
+  cd .claude/worktrees/[ticket-id]
+  git add -A
+  git commit -m "docs([ticket-id]): add documentation
+
+  [Brief summary from agent report]
+
+  Linear: [ticket-id]
+  Co-Authored-By: Claude <noreply@anthropic.com>"
+  ```
 
 **After Code Review phase:**
 - If CHANGES_REQUESTED: pause ticket, present requested changes to user
 - If DONE with over-building/under-building flags: pause for user decision
+- If code review agent made fixes (e.g., linting, formatting), commit them:
+  ```bash
+  cd .claude/worktrees/[ticket-id]
+  git add -A
+  git commit -m "refactor([ticket-id]): apply code review fixes
+
+  Linear: [ticket-id]
+  Co-Authored-By: Claude <noreply@anthropic.com>"
+  ```
+
+**After Security Scan (Pre-Merge) phase:**
+- If CRITICAL/HIGH findings: pause ticket (handled by 3.2.4 pipeline)
+- If PASS: ticket proceeds to Codex Review (3.3) and then Integration (Phase 4)
 
 **After all phases complete for a ticket:**
-- Commit all changes in the ticket's worktree
-- Push the feature branch
+- Ensure all changes are committed in the ticket's worktree
+- Push the feature branch:
+  ```bash
+  cd .claude/worktrees/[ticket-id]
+  git push origin feature/[ticket-id]-[slug]
+  ```
 
 #### State Persistence Protocol
 
@@ -834,7 +1180,7 @@ For each merged ticket (parallel):
 
 The security agent reviews against the MERGED codebase — it sees all integrated code, not just the ticket's isolated changes.
 
-### 5.2 Handle Security Results
+### 5.2 Handle Security Results and Close Tickets
 
 **Before closing any tickets (if `SWARM_AUTO_MERGE=false`):**
 Present the list of tickets to close and await approval:
@@ -850,8 +1196,53 @@ Close these tickets in Linear? [Yes / No / Review individually]
 ```
 WAIT for user approval. If `SWARM_AUTO_MERGE=true`, skip this gate.
 
-- **PASS (and user approves):** Close ticket in Linear, add `security-approved` label, mark as `closed` in swarm state
-- **FAIL:** Do NOT close. Post findings to ticket. Notify user. Ticket remains open for remediation.
+**For each ticket that PASSES (and user approves):**
+
+1. **Post the security review report to the ticket:**
+   ```
+   Use mcp__linear-server__create_comment:
+     - issue_id: [ticket-id]
+     - body: "## Security Review Report\n\n[Full security agent report]\n\n---\n*Automated by /epic-swarm — Post-Merge Security Review*"
+   ```
+
+2. **Add security-approved label:**
+   ```
+   Use mcp__linear-server__update_issue:
+     - issue_id: [ticket-id]
+     - labelNames: [add "security-approved"]
+   ```
+
+3. **Close the ticket — update status to Done:**
+   ```
+   Use mcp__linear-server__update_issue:
+     - issue_id: [ticket-id]
+     - state: "Done"
+   ```
+   This is the **final gate**. Only the post-merge security review closes tickets, matching the behavior of `/security-review` (the only individual command with `closes-ticket: true`).
+
+4. **Update swarm state:** Mark ticket as `closed` with timestamp
+
+**For each ticket that FAILS:**
+
+1. **Post the security findings to the ticket:**
+   ```
+   Use mcp__linear-server__create_comment:
+     - issue_id: [ticket-id]
+     - body: "## Security Review Report\n\nStatus: BLOCKED\n\n[Full security findings]\n\n---\n*Automated by /epic-swarm — Post-Merge Security Review*"
+   ```
+
+2. **Add security-blocked label:**
+   ```
+   Use mcp__linear-server__update_issue:
+     - issue_id: [ticket-id]
+     - labelNames: [add "security-blocked"]
+   ```
+
+3. **Keep status as "In Progress"** — do NOT close the ticket
+4. **Notify user** with the specific CRITICAL/HIGH findings
+5. **Update swarm state:** Mark ticket as `security-blocked`
+
+Ticket remains open for remediation. User can fix issues and re-run security review independently.
 
 ---
 
@@ -962,6 +1353,51 @@ Worktrees for blocked/pending tickets are preserved for manual intervention.
 - Shared database migrations
 - Shared configuration changes
 - Tests depend on each other's fixtures
+
+---
+
+## Deferred Items Handling
+
+When agents bypass issues (correct behavior for low-priority items), they MUST document them in a Deferred Items table for user traceability. This system matches `/execute-ticket` exactly to ensure `/close-epic` can extract deferred and declined items from ticket comments.
+
+**Deferred Items table format (included in every agent report):**
+
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| [AC-DEFERRED/DISCOVERED/OUT-OF-SCOPE] | [CRITICAL/HIGH/MEDIUM/LOW/INFO] | [file:line] | [Brief description] | [Why deferred] |
+
+### Deferred Item Classifications
+
+| Classification | Description | Requires User Approval? |
+|---------------|-------------|------------------------|
+| AC-DEFERRED | An explicit acceptance criterion the agent chose not to implement | **YES — ALWAYS** |
+| DISCOVERED | A new issue found during the phase, not in the original AC | NO — agent discretion |
+| OUT-OF-SCOPE | Work that belongs to a different ticket | NO — agent discretion |
+
+### Orchestrator Validation Rule
+
+The swarm orchestrator validates deferred items as part of the Section 3.2.4.6 pipeline (before posting to Linear). For each agent report:
+
+1. Extract all acceptance criteria from the ticket context file
+2. Check each deferred item against the AC list (fuzzy match on key terms)
+3. If ANY deferred item matches an AC → reclassify as `AC-DEFERRED`
+4. If ANY `AC-DEFERRED` items exist → **PAUSE ticket for user decision** (see Section 3.2.4.6)
+
+**Agents MUST NOT unilaterally defer acceptance criteria.** Deferring discovered issues is expected and encouraged. Deferring AC requires explicit user approval.
+
+### Rules for Deferred Items
+
+1. ANY issue found but not addressed MUST appear in this table
+2. Classification must be set (agents should classify; orchestrator validates and reclassifies if needed)
+3. Location must include file:line for traceability
+4. Reason must explain the bypass decision
+5. Table is always included in full when passing context to downstream phases
+6. Orchestrator posts full table to Linear (not summarized)
+7. Deferred Items tables propagate forward — every subsequent phase agent receives all prior deferred items
+
+### Why This Matters for /close-epic
+
+The `/close-epic` workflow extracts deferred and declined items from ticket comments to generate follow-up tickets. If phase reports are not posted as Linear comments (Gap #1) or if deferred items are not classified (this section), `/close-epic` cannot function correctly. This is the primary reason these items are P0 priority.
 
 ---
 

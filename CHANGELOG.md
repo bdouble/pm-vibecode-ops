@@ -5,6 +5,34 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-04-06
+
+### Added
+
+#### Epic-Swarm Execute-Ticket Parity (14 Gaps Closed)
+
+Comprehensive overhaul of `/epic-swarm` post-phase processing to match the behavior of `/execute-ticket` and individual workflow commands. Previously, swarm-executed tickets received no Linear comments and no status updates, breaking the `/close-epic` workflow and eliminating the per-ticket audit trail.
+
+**P0 — Critical (user-reported):**
+- **Linear comments posted per phase per ticket** — Every phase (adaptation, implementation, testing, documentation, code review, security) now posts a structured `## [Phase Name] Report` comment to the ticket via `create_comment`. Headers match the exact format that `/execute-ticket` and `/close-epic` depend on for resume detection and deferred item extraction.
+- **Ticket status updates** — Tickets are updated to "In Progress" at wave start (new Section 3.2.0) and to "Done" after post-merge security review passes (expanded Phase 5.2). Failed security reviews add `security-blocked` label and keep tickets open.
+
+**P1 — High (functionality gaps):**
+- **Report validation** — New Section 3.2.4.2 validates required fields per phase before posting to Linear. Auto-retries once with enhanced prompt; pauses ticket for user decision on second failure.
+- **AC verification after implementation** — New Section 3.2.4.4 parses acceptance criteria into STRUCTURAL/BEHAVIORAL/REMOVAL categories, generates and runs verification commands, blocks advancement if criteria fail.
+- **Deferred items handling** — New Section 3.2.4.6 + standalone Deferred Items section. Agents must classify deferred items as AC-DEFERRED, DISCOVERED, or OUT-OF-SCOPE. Orchestrator fuzzy-matches deferred items against AC and blocks advancement for any AC-DEFERRED items.
+- **Implementation artifact verification** — New Section 3.2.4.3 checks `git status` to confirm files actually changed when agent reports DONE. Pauses for user if no changes detected.
+
+**P2 — Medium (quality/fidelity gaps):**
+- **Per-phase commits** — Implementation, testing, documentation, and code review each get proper conventional commits in their worktrees (Sections 3.2.4.9 and 3.2.5).
+- **Standardized comment format** — `## [Phase Name] Report\n[report]\n---\n*Automated by /epic-swarm — Wave [N]*` with Phase Name mapping table.
+- **Agent selection logic** — New implementation-phase agent selection in Section 3.2.1: checks ticket labels for backend/frontend/fullstack, falls back to keyword scan, defaults silently to backend-engineer-agent.
+- **Quality labels per phase** — `tests-complete`, `docs-complete`, `code-reviewed` labels added to tickets at appropriate phases (Section 3.2.4.8).
+- **Referenced document conformance** — New Section 3.2.4.5 verifies implementation matches prescriptive document specifications (IDs, schemas, field names).
+- **Post-dispatch scope verification** — Section 3.2.3 enhanced with scope relevance check comparing changed files against predicted files from adaptation report.
+
+---
+
 ## [3.1.1] - 2026-04-06
 
 ### Fixed
@@ -1520,6 +1548,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
 [2.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.0
