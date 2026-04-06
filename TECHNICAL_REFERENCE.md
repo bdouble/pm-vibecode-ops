@@ -457,6 +457,60 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 
 **Time**: 10-20 minutes depending on epic size and options selected
 
+#### `/epic-swarm`
+
+**Purpose**: Orchestrate concurrent execution of an epic's sub-tickets using dependency-aware wave scheduling with worktree isolation, phase-synchronized dispatch, and dual-layer security review.
+
+**Usage**: `/epic-swarm <epic-id> [--max-parallel N] [--dry-run] [--wave N]`
+
+**Examples**:
+```bash
+# Execute all tickets in an epic concurrently
+/epic-swarm EPIC-123
+
+# Limit to 2 concurrent tickets
+/epic-swarm EPIC-123 --max-parallel 2
+
+# Preview the wave plan without executing
+/epic-swarm EPIC-123 --dry-run
+
+# Resume from wave 2
+/epic-swarm EPIC-123 --wave 2
+```
+
+**Key Features**:
+- **Dependency-Aware Wave Scheduling**: Topological sort assigns tickets to waves based on dependency depth. File overlap detection prevents conflicts within waves.
+- **Sequential Write Dispatch**: Write phases (implementation, testing, documentation) dispatch agents one at a time with `cd` to each worktree, guaranteeing isolation. Read-only phases (adaptation, code review, security scan) run in parallel.
+- **Worktree Integrity Verification**: Mandatory post-dispatch check after every agent — verifies changes landed in the correct worktree, checks for cross-contamination, catches stray files in project root.
+- **Approval Gates**: User confirmation required before merge-to-main, push-to-remote, and ticket closure (configurable via `SWARM_AUTO_MERGE`).
+- **Dual Security Review**: Pre-merge per-ticket scan catches individual vulnerabilities; post-merge comprehensive review on the integrated codebase catches cross-ticket security issues.
+- **Persistent Swarm State**: State file updated after every significant event enables resume after interruption.
+- **Context Bundles**: Epic-level and per-ticket context written to disk; agents read from files for full-fidelity context without token limits.
+- **Graceful Degradation**: Works with or without parallelization metadata from `/planning`; falls back to heuristic dependency analysis with user confirmation.
+
+**Configuration**:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SWARM_MAX_PARALLEL` | `4` | Max concurrent tickets per wave |
+| `SWARM_AUTO_MERGE` | `false` | Auto-merge without user approval |
+| `SWARM_BASELINE_TESTS` | `true` | Run baseline tests (blocking) before starting |
+| `SWARM_CONFLICT_STRATEGY` | `stop` | Merge conflict handling: `stop` or `auto-trivial` |
+| `SWARM_PARALLEL_WRITES` | `false` | Allow parallel dispatch for write phases (opt-in) |
+
+**Seven-Phase Workflow**:
+1. Analysis & Context Gathering - Fetch epic/tickets, build dependency DAG, gather context bundles
+2. Wave Planning - Topological sort, file overlap check, present wave plan for approval
+3. Wave Execution - Phase-by-phase dispatch across all tickets in the wave (adaptation → implementation → testing → documentation → code review → codex review → security scan)
+4. Integration - Sequential merge with approval gate, integration tests, push with approval
+5. Security Gate - Comprehensive post-merge security review on integrated codebase
+6. Wave Transition - Update dependency graph, plan next wave
+7. Epic Completion - Final report, worktree cleanup
+
+**Output**: Phase reports posted to each ticket in Linear, wave summaries posted to epic, swarm state file for resume, all tickets closed after post-merge security passes.
+
+**Time**: Varies by epic size. A 2-ticket single-wave epic takes ~45-60 minutes.
+
 ---
 
 ## Specialized Agents

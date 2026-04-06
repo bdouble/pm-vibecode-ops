@@ -5,6 +5,35 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-04-06
+
+### Changed
+
+#### Epic-Swarm Reliability Overhaul (Post-Mortem Fixes)
+
+Based on the first production run of `/epic-swarm` (PRO-330), addressing all issues from the post-mortem report:
+
+- **Sequential write dispatch (P0)** — Write phases (implementation, testing, documentation) now dispatch agents one at a time with explicit `cd` to each worktree, guaranteeing isolation. Read-only phases (adaptation, code review, security scan) remain parallel. Configurable via `SWARM_PARALLEL_WRITES` (default: `false`).
+- **Working directory enforcement (P0)** — Agent prompts now include absolute path instructions at the top: agents must use absolute paths for all file operations and verify they are operating in their assigned worktree. Read-only phase agents also receive an explicit file manifest from `git diff`.
+- **Worktree integrity verification (P0)** — New mandatory Section 3.2.3 runs after every agent dispatch. Checks target worktree for expected changes, checks other worktrees for contamination, checks project root for stray files. Stops the wave immediately if cross-contamination is detected.
+- **Integration approval gate (P1)** — New Section 4.0 requires explicit user approval before merge-to-main and before push-to-remote. Gated on `SWARM_AUTO_MERGE` config (default: `false`). Presents merge plan with branch/ticket/file counts.
+- **Ticket closure approval gate (P1)** — Section 5.2 now requires user approval before closing tickets in Linear after security review passes.
+- **Phase-skip policy (P2)** — The orchestrator can no longer skip phases autonomously. Must present skip rationale and wait for user approval. Logged in swarm state as `skipped_by_user`.
+- **Blocking baseline tests (P2)** — Section 3.1.3 is now explicitly blocking. Tests must pass before wave execution begins. No background "check later" pattern.
+- **Swarm state persistence (P3)** — New State Persistence Protocol with field-level schema and per-ticket phase tracking. State file updated after every significant event (phase start/complete, ticket pause, wave complete, merge, error). Enables reliable resume.
+- **Graceful degradation for missing planning metadata (P4)** — When tickets lack parallelization annotations from `/planning`, the orchestrator performs heuristic dependency analysis (scanning descriptions for file paths, ticket references, shared modules) and presents results for user confirmation.
+- **Context bundle token budget (P5)** — New strategy for when full verbatim inclusion is impractical. Prescriptive documents (requirements, specs, schemas) are always included in full. Contextual documents may be truncated with pointers. User notified of any truncation.
+- **Dual security review** — Phase 3 renamed to "Security Scan (Pre-Merge)" for per-ticket lightweight scan in worktrees. Phase 5 is now "Post-Merge Security Review (Comprehensive)" with preamble explaining cross-ticket integration-level review. Both are required. Comparison table added to spec.
+- **New config variable** — `SWARM_PARALLEL_WRITES` (default: `false`) added to configuration reference and initial state JSON.
+
+#### Execute-Ticket Alignment
+
+- **Post-dispatch verification (Step 3.3.1)** — New step after every agent dispatch checks `git status`, verifies changed files match predicted scope from adaptation report, and in worktree mode checks parent repo for stray files.
+- **Worktree mode security note** — Step 4 now clarifies that in worktree mode, the security review is the pre-merge scan; the swarm orchestrator handles post-merge review and ticket closure.
+- **Phase-skip user approval** — Phase Skip Safety Guide now requires user approval before skipping any phase. Autonomous skipping is prohibited.
+
+---
+
 ## [3.0.0] - 2026-03-26
 
 ### Added
@@ -1484,6 +1513,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
 [2.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.0
 [2.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.2.0
 [2.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.1.0

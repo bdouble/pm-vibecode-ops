@@ -65,6 +65,34 @@ For each sub-ticket, extract from description:
 If circular dependencies detected: report and stop.
 If file overlap in same group: move the overlapping ticket to the next wave and warn.
 
+**If parallelization metadata is missing from any ticket:**
+
+1. Warn the user:
+   ```
+   [N] tickets lack parallelization metadata from /planning.
+   The swarm will analyze dependencies heuristically.
+   ```
+
+2. For each ticket without metadata, scan the description for:
+   - File paths mentioned → predicted "Files Touched"
+   - Other ticket IDs mentioned → potential "Depends On" / "Blocks"
+   - Shared module/service names → potential file overlap indicators
+   - Keywords like "after", "requires", "depends on" → dependency signals
+
+3. Present the heuristic analysis alongside the wave plan (Section 2.4):
+   ```
+   Heuristic Dependency Analysis (tickets lacked /planning metadata)
+
+   | Ticket | Predicted Files | Predicted Dependencies | Confidence |
+   |--------|----------------|----------------------|------------|
+   | CON-42 | src/routes/profile.ts, ... | None | Medium |
+   | CON-43 | src/pages/settings.tsx, ... | None | Medium |
+
+   Are these groupings correct? [Yes / Adjust / Run /planning first]
+   ```
+
+4. WAIT for user confirmation before proceeding with the heuristic plan.
+
 ### 1.4 Filter Tickets
 
 **Include in the swarm:**
@@ -173,6 +201,30 @@ Source: [file path or URL]
 - Missing context produces wrong implementations. When in doubt, include MORE context, not less
 - These bundles are the single source of truth that all agents read directly from disk
 
+**Token Budget Strategy (when full verbatim inclusion is impractical):**
+
+If the total context bundle for a ticket exceeds practical limits:
+
+1. **Always include in full (non-negotiable):**
+   - Ticket descriptions and acceptance criteria
+   - Prescriptive documents (requirements, specs, schemas, interface definitions)
+   - Interface contracts
+   - Prior phase reports for this ticket
+
+2. **Truncate with pointers (contextual documents only):**
+   - Include a `TRUNCATED` notice with the full file path
+   - Include the first 5000 tokens + the last 2000 tokens
+   - Include the instruction: "Read the full document at [path] before implementing"
+
+3. **Report to user:**
+   ```
+   Context bundle for [ticket-id] is [size] tokens.
+   [N] contextual documents were truncated. Prescriptive documents included in full.
+   Review .claude/swarm-context/[epic-id]/[ticket-id].md to verify critical content.
+   ```
+
+The distinction: prescriptive documents contain specific implementable items (IDs, schemas, field names). Contextual documents provide background. When budget is tight, prescriptive content is never sacrificed.
+
 Ensure `.claude/swarm-context/` is gitignored:
 ```bash
 git check-ignore .claude/swarm-context/ || echo ".claude/swarm-context/" >> .gitignore
@@ -198,6 +250,7 @@ Initialize state:
   "config": {
     "maxParallel": 4,
     "autoMerge": false,
+    "parallelWrites": false,
     "conflictStrategy": "stop"
   }
 }
@@ -316,12 +369,24 @@ cd .claude/worktrees/[ticket-id]
 [ -f go.mod ] && go mod download
 ```
 
-**3.1.3 Run baseline tests:**
+**3.1.3 Run baseline tests (BLOCKING):**
+
+For each worktree, run the project's test suite and WAIT for results. Do NOT proceed to Phase 3.2 until ALL worktrees have passing baseline tests.
+
 ```bash
 cd .claude/worktrees/[ticket-id]
-npm test  # or appropriate test command
+npm test  # or appropriate test command detected from package.json / Makefile
 ```
-- If baseline tests fail: report to user, ask whether to proceed
+
+If any worktree's baseline tests fail:
+  - Report the failure with test output to the user
+  - Present options:
+    1. Fix the issue and re-run baseline tests
+    2. Proceed anyway (baseline was already failing — not caused by this work)
+    3. Abort the swarm
+  - WAIT for user decision
+
+Do NOT start baseline tests in the background and "check later." Baseline verification is a blocking prerequisite for wave execution.
 
 **3.1.4 Copy context bundles into worktrees:**
 ```bash
@@ -338,15 +403,51 @@ For each workflow phase, dispatch agents in parallel across all tickets in the w
 
 **The phase sequence:**
 
-| Phase | Agent | Sandbox | Blocking |
-|-------|-------|---------|----------|
-| Adaptation | `architect-agent` | read-only | BLOCKED → pause ticket |
-| Implementation | `backend-engineer-agent` or `frontend-engineer-agent` | write | BLOCKED or AC failure → pause ticket |
-| Testing | `qa-engineer-agent` | write | BLOCKED or gate failure → pause ticket |
-| Documentation | `technical-writer-agent` | write | BLOCKED → pause ticket |
-| Code Review | `code-reviewer-agent` | read-only | CHANGES_REQUESTED → pause ticket |
-| Codex Review | *(MCP tool, not agent)* | write | Rate limit → queue, continue |
-| Security Review | `security-engineer-agent` | read-only | CRITICAL/HIGH findings → pause ticket |
+| Phase | Agent | Dispatch | Blocking |
+|-------|-------|----------|----------|
+| Adaptation | `architect-agent` | PARALLEL (read-only) | BLOCKED → pause ticket |
+| Implementation | `backend-engineer-agent` or `frontend-engineer-agent` | SEQUENTIAL | BLOCKED or AC failure → pause ticket |
+| Testing | `qa-engineer-agent` | SEQUENTIAL | BLOCKED or gate failure → pause ticket |
+| Documentation | `technical-writer-agent` | SEQUENTIAL | BLOCKED → pause ticket |
+| Code Review | `code-reviewer-agent` | PARALLEL (read-only) | CHANGES_REQUESTED → pause ticket |
+| Codex Review | *(MCP tool, not agent)* | SEQUENTIAL (explicit project_dir) | Rate limit → queue, continue |
+| Security Scan (Pre-Merge) | `security-engineer-agent` | PARALLEL (read-only) | CRITICAL/HIGH findings → pause ticket |
+
+**Dispatch modes:**
+- **SEQUENTIAL**: The orchestrator processes one ticket at a time — `cd` to the ticket's worktree, dispatch agent, wait for completion, verify integrity, then move to the next ticket. Default for all write phases.
+- **PARALLEL**: All agents for the wave are dispatched simultaneously. Used only for read-only phases where agents do not modify files.
+- If `SWARM_PARALLEL_WRITES=true` in config, all phases use PARALLEL dispatch. This is an opt-in escape hatch for experienced users who have verified parallel writes work in their environment. Default is `false`.
+
+**Phase Skip Policy:**
+
+The orchestrator MUST NOT skip any phase autonomously. If the orchestrator determines a phase may be unnecessary (e.g., implementation agent already created documentation artifacts), it MUST:
+
+1. Present the skip rationale to the user:
+   ```
+   Phase: Documentation
+   Rationale: Implementation agent created docs at [paths].
+   Recommend: Skip documentation phase (technical-writer-agent verification).
+
+   Options:
+   1. Skip this phase (accept implementation-generated docs)
+   2. Run the phase anyway (recommended — verifies completeness)
+   ```
+2. WAIT for user approval before skipping.
+3. If user approves skip, log it in swarm state as `skipped_by_user`.
+
+When in doubt, run the phase — a redundant pass costs minutes; a missing pass costs user trust.
+
+**Pre-Merge vs Post-Merge Security:**
+
+| Aspect | Phase 3: Security Scan | Phase 5: Security Review |
+|--------|----------------------|------------------------|
+| Timing | Per-ticket, in worktree | Post-merge, on integrated branch |
+| Scope | Only this ticket's changed files | Full integrated codebase |
+| Purpose | Catch per-ticket vulnerabilities | Catch cross-ticket security issues |
+| Dispatch | PARALLEL (read-only) | PARALLEL (read-only) |
+| Blocking | CRITICAL/HIGH → pause ticket | CRITICAL/HIGH → pause, do not close |
+
+Both reviews are required. The pre-merge scan catches obvious issues early. The post-merge review catches integration-level problems (cross-ticket auth weakening, combined data flow vulnerabilities, trust boundary violations that only manifest when multiple tickets are merged).
 
 **For each phase, for each ticket in the wave:**
 
@@ -377,32 +478,143 @@ The agent prompt MUST include ALL of the following, VERBATIM and UNABRIDGED:
 
 6. **Deferred items** from prior phases for this ticket
 
+7. **Working directory enforcement (CRITICAL):**
+   Include these exact instructions at the TOP of the agent prompt, before any other content:
+
+   ```
+   WORKING DIRECTORY: /absolute/path/to/.claude/worktrees/[ticket-id]
+
+   You MUST operate exclusively within this directory:
+   - Use ABSOLUTE paths for ALL file operations, prefixed with the path above
+   - Before creating or modifying ANY file, verify the path starts with
+     /absolute/path/to/.claude/worktrees/[ticket-id]/
+   - Do NOT use relative paths from the repo root
+   - Do NOT write to any directory outside your assigned worktree
+   - If you find yourself writing to a path that does not start with your
+     assigned worktree, STOP and correct immediately
+   ```
+
+   Replace `/absolute/path/to/.claude/worktrees/[ticket-id]` with the actual resolved absolute path for each ticket.
+
+8. **Explicit file scope (for read-only phases: Code Review, Security Scan):**
+   Include an explicit file manifest generated from git diff so the agent knows exactly which files to review:
+
+   ```bash
+   cd .claude/worktrees/[ticket-id]
+   git diff --name-only origin/[default-branch]...HEAD
+   ```
+
+   Include in the agent prompt:
+   ```
+   ## Review Scope
+
+   Review ONLY the following files in /absolute/path/to/.claude/worktrees/[ticket-id]/:
+
+   [list of files from git diff]
+
+   These are the files changed by ticket [ticket-id]. Do NOT review files
+   from other worktrees or the main repository.
+   ```
+
 **DO NOT:**
 - Summarize or condense any context — pass it verbatim
 - Omit "long" documents to save tokens — missing context produces wrong implementations
 - Assume the agent "already knows" something — each agent is a fresh session with no memory
 - Skip the instruction to read context files — agents will not read them unprompted
 
-#### 3.2.2 Dispatch agents in parallel
+#### 3.2.2 Dispatch agents
+
+Dispatch mode depends on the phase (see Dispatch column in the phase table above). The orchestrator MUST check the Dispatch column before every phase and use the correct mode.
+
+**Mode A — SEQUENTIAL (Implementation, Testing, Documentation):**
 
 ```
-For each ticket in the wave (parallel):
-  Spawn Agent with:
-    - The agent definition matching this phase (e.g., architect-agent for adaptation)
-    - model: [ticket's Model Override, or session default]
-    - Working directory set to the ticket's worktree
-    - The full prompt built in 3.2.1
+For each ticket in the wave (one at a time):
+  1. cd to /absolute/path/to/.claude/worktrees/[ticket-id]
+  2. Spawn Agent with:
+     - The agent definition matching this phase
+     - model: [ticket's Model Override, or session default]
+     - The full prompt built in 3.2.1 (including working directory enforcement)
+  3. Wait for agent to complete
+  4. Run worktree integrity verification (Section 3.2.3)
+  5. Process results (Section 3.2.4)
+  6. cd back to project root
+  7. Proceed to next ticket
 ```
 
-Launch all agents for the current phase simultaneously. Wait for all to return.
+Sequential dispatch guarantees worktree isolation by ensuring only one write-phase agent runs at a time, with the orchestrator's cwd set to the correct worktree.
 
-#### 3.2.3 Process results
+**Mode B — PARALLEL (Adaptation, Code Review, Security Scan):**
+
+```
+For all tickets in the wave (simultaneously):
+  1. Spawn all agents with:
+     - The agent definition matching this phase
+     - model: [ticket's Model Override, or session default]
+     - The full prompt built in 3.2.1 (including working directory enforcement)
+  2. Wait for ALL agents to return
+  3. Run worktree integrity verification for EACH ticket (Section 3.2.3)
+  4. Process results for each ticket (Section 3.2.4)
+```
+
+Parallel dispatch is safe for read-only phases because agents only read files and produce reports — they do not create or modify files in the worktree.
+
+**If `SWARM_PARALLEL_WRITES=true`:** All phases use Mode B. The orchestrator still runs worktree integrity verification after every dispatch. If verification detects contamination, the orchestrator falls back to Mode A for the remainder of the wave and reports the incident.
+
+#### 3.2.3 Worktree Integrity Verification (MANDATORY after every agent dispatch)
+
+After each agent returns (whether sequential or parallel), verify that file changes landed in the correct worktree BEFORE processing results or advancing to the next phase.
+
+For each ticket that just had an agent dispatched:
+
+1. **Check target worktree:**
+   ```bash
+   cd .claude/worktrees/[ticket-id]
+   git status --short
+   ```
+   Verify that changed files are relevant to THIS ticket (match against the ticket's predicted files from the adaptation report or description).
+
+2. **Check OTHER worktrees for contamination:**
+   ```bash
+   for dir in .claude/worktrees/*/; do
+     other_id=$(basename "$dir")
+     if [ "$other_id" != "[ticket-id]" ]; then
+       cd "$dir"
+       unexpected=$(git status --short)
+       if [ -n "$unexpected" ]; then
+         echo "CONTAMINATION: $other_id has unexpected changes: $unexpected"
+       fi
+     fi
+   done
+   ```
+
+3. **Check project root for stray files:**
+   ```bash
+   cd [project-root]
+   git status --short
+   ```
+   If ANY files were modified in the project root that belong to a ticket's scope, contamination has occurred.
+
+4. **If contamination detected:**
+   - STOP the wave immediately
+   - Report the cross-contamination with specific file lists per worktree
+   - Do NOT proceed to the next phase or the next ticket
+   - Present options to the user:
+     1. Manually separate the files and continue
+     2. Re-run the phase for affected tickets in sequential mode
+     3. Abort the wave
+
+5. **If no contamination:** Proceed to results processing (3.2.4)
+
+**Note:** For read-only phases (Adaptation, Code Review, Security Scan), the contamination check is a lightweight verification — read-only agents should not produce file changes. If file changes ARE detected after a read-only phase dispatch, this is itself a bug and should be reported.
+
+#### 3.2.4 Process results
 
 For each returned agent:
 
 1. **Parse the status code:** DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED
 2. **Post the phase report to Linear** as a comment on the ticket
-3. **Update swarm state** with the phase completion status
+3. **Update swarm state** with the phase completion status (see State Persistence Protocol below)
 
 **Handle BLOCKED or NEEDS_CONTEXT:**
 - Pause ONLY the blocked ticket (other tickets continue through remaining phases)
@@ -413,7 +625,7 @@ For each returned agent:
 - Include concerns in subsequent phase prompts for this ticket
 - Continue to next phase
 
-#### 3.2.4 Phase-specific post-processing
+#### 3.2.5 Phase-specific post-processing
 
 **After Implementation phase:**
 - Verify acceptance criteria completion (same as execute-ticket Step 3.4.2)
@@ -427,6 +639,59 @@ For each returned agent:
 **After all phases complete for a ticket:**
 - Commit all changes in the ticket's worktree
 - Push the feature branch
+
+#### State Persistence Protocol
+
+After EVERY significant event, update `.claude/swarm-state/[epic-id].json`:
+
+**Events that trigger state update:**
+- Phase starts for a ticket
+- Phase completes for a ticket (any status)
+- Ticket pauses (BLOCKED/NEEDS_CONTEXT)
+- Wave completes
+- Merge succeeds or fails
+- Error occurs
+
+**State schema (per-ticket tracking):**
+```json
+{
+  "epicId": "[epic-id]",
+  "startedAt": "[timestamp]",
+  "lastUpdated": "[timestamp]",
+  "currentWave": 1,
+  "currentPhase": "implementation",
+  "tickets": {
+    "[ticket-id]": {
+      "wave": 1,
+      "status": "in_progress",
+      "currentPhase": "implementation",
+      "phases": {
+        "adaptation": {
+          "status": "DONE",
+          "completedAt": "[timestamp]",
+          "dispatch": "parallel"
+        },
+        "implementation": {
+          "status": "in_progress",
+          "startedAt": "[timestamp]"
+        }
+      },
+      "worktreePath": ".claude/worktrees/[ticket-id]",
+      "branchName": "feature/[ticket-id]-[slug]",
+      "mergeCommit": null,
+      "codexReview": null
+    }
+  },
+  "config": {
+    "maxParallel": 4,
+    "autoMerge": false,
+    "parallelWrites": false,
+    "conflictStrategy": "stop"
+  }
+}
+```
+
+Write the state file IMMEDIATELY after each event. This is the persistence mechanism that enables resume — if it is not current, resume will re-execute completed work or miss blocked tickets.
 
 ### 3.3 Codex Review Phase
 
@@ -471,6 +736,33 @@ Use mcp__linear-server__create_comment on the EPIC:
 
 ## Phase 4: Integration (per wave)
 
+### 4.0 Integration Approval Gate
+
+Before merging ANY branches, present the integration plan to the user and WAIT for explicit approval:
+
+```
+## Ready to Merge
+
+Merging [N] branches to [default_branch]:
+
+| Order | Branch | Ticket | Files Changed | Test Status |
+|-------|--------|--------|---------------|-------------|
+| 1 | feature/PRO-304-... | PRO-304 | 12 files | Passing |
+| 2 | feature/PRO-305-... | PRO-305 | 8 files | Passing |
+
+Merge strategy: --no-ff (sequential, one at a time)
+Integration tests will run after each merge.
+Push to remote after all merges succeed.
+
+Proceed? [Yes / No / Review branches first]
+```
+
+**WAIT for user approval before proceeding.**
+
+- If `SWARM_AUTO_MERGE=true`: skip this gate and merge automatically.
+- If `SWARM_AUTO_MERGE=false` (default): this gate is MANDATORY.
+- Do NOT interpret the absence of `--dry-run` as approval to merge.
+
 ### 4.1 Sequential Merge
 
 Merge tickets to the default branch one at a time (fewest dependencies first, then fewest files):
@@ -496,6 +788,15 @@ npm test  # or appropriate test command
 - Do NOT auto-revert — the user decides
 
 **Push after all wave merges succeed:**
+
+**Before pushing (if `SWARM_AUTO_MERGE=false`):**
+```
+All [N] merges succeeded. Integration tests passing.
+
+Push to origin/[default_branch]? [Yes / No]
+```
+WAIT for user approval.
+
 ```bash
 git push origin "$default_branch"
 ```
@@ -510,7 +811,16 @@ git push origin "$default_branch"
 
 ## Phase 5: Security Gate (per wave)
 
-### 5.1 Post-Merge Security Review
+### 5.1 Post-Merge Security Review (Comprehensive)
+
+This is the COMPREHENSIVE security review on the integrated codebase. It runs AFTER all wave merges succeed. Unlike the per-ticket security scan in Phase 3 (which reviews isolated ticket changes in worktrees), this review:
+
+- Sees ALL merged code from the wave together
+- Checks cross-ticket auth and trust boundary interactions
+- Validates that combined data flows don't introduce new vulnerabilities
+- Reviews integration test results for security implications
+
+Include ALL prior security scan reports (from Phase 3) in the agent prompt so it can focus on integration-level concerns rather than re-checking per-ticket issues.
 
 For each merged ticket, run security review on the integrated codebase. Security reviews CAN run in parallel (they are read-only assessments on the same branch).
 
@@ -526,7 +836,21 @@ The security agent reviews against the MERGED codebase — it sees all integrate
 
 ### 5.2 Handle Security Results
 
-- **PASS:** Close ticket in Linear, add `security-approved` label, mark as `closed` in swarm state
+**Before closing any tickets (if `SWARM_AUTO_MERGE=false`):**
+Present the list of tickets to close and await approval:
+```
+Security review passed for [N] tickets. Ready to close:
+
+| Ticket | Pre-Merge Scan | Post-Merge Review | Codex Review |
+|--------|---------------|-------------------|--------------|
+| CON-42 | PASS | PASS | Completed |
+| CON-43 | PASS | PASS | Skipped (rate limit) |
+
+Close these tickets in Linear? [Yes / No / Review individually]
+```
+WAIT for user approval. If `SWARM_AUTO_MERGE=true`, skip this gate.
+
+- **PASS (and user approves):** Close ticket in Linear, add `security-approved` label, mark as `closed` in swarm state
 - **FAIL:** Do NOT close. Post findings to ticket. Notify user. Ticket remains open for remediation.
 
 ---
@@ -620,6 +944,7 @@ Worktrees for blocked/pending tickets are preserved for manual intervention.
 | `SWARM_AUTO_MERGE` | `false` | Auto-merge without user approval |
 | `SWARM_BASELINE_TESTS` | `true` | Run baseline tests in each worktree before starting |
 | `SWARM_CONFLICT_STRATEGY` | `stop` | Merge conflict handling: `stop` or `auto-trivial` |
+| `SWARM_PARALLEL_WRITES` | `false` | Allow parallel dispatch for write phases. When false (default), write phases dispatch sequentially with cd between agents. |
 
 ---
 

@@ -53,7 +53,7 @@ Use individual phases when debugging a specific phase or needing manual interven
 |---------|---------|-------------|
 | `/epic-swarm [epic-id]` | **Run tickets in parallel** | Approve wave plan, resolve conflicts |
 
-Requires dependency annotations from `/planning`. The orchestrator drives all workflow phases directly, dispatching specialized agents in parallel across tickets within each phase. Independent tickets run concurrently in separate git worktrees. Sequential merge with conflict detection.
+Requires dependency annotations from `/planning` (gracefully degrades with heuristic analysis if missing). Write phases dispatch sequentially to guarantee worktree isolation; read-only phases run in parallel. Approval gates before merge and push. Dual security review: per-ticket pre-merge scan + comprehensive post-merge review on integrated codebase. Persistent swarm state enables resume after interruption.
 
 ---
 
@@ -164,4 +164,4 @@ Your PRD must include:
 
 ---
 
-**Version 3.0.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 3.1.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

@@ -545,6 +545,36 @@ Agent tool parameters:
 
 **Critical:** Agents do NOT have Linear access. Include ALL necessary context in the prompt.
 
+#### 3.3.1 Post-Dispatch Verification
+
+After every agent returns, verify that file changes are as expected:
+
+1. **Check for file changes:**
+   ```bash
+   git status --short
+   ```
+
+2. **Verify changed files match ticket scope:**
+   Compare the list of changed files against the ticket's predicted files (from the adaptation report's "Target Files" section). If files outside the predicted scope were modified:
+   - This is not necessarily wrong (agents may discover needed changes)
+   - But flag it for awareness:
+     ```
+     Agent modified files outside predicted scope:
+     Predicted: [list from adaptation]
+     Actual: [list from git status]
+     Additional: [files not in predicted list]
+     ```
+   - Continue unless files look clearly wrong (e.g., test files in an implementation phase, config files not mentioned in the ticket)
+
+3. **In WORKTREE_MODE:** Also verify no files were modified in the parent repo or other worktrees:
+   ```bash
+   # Check parent repo for stray files
+   parent_dir=$(git rev-parse --git-common-dir | sed 's|/\.git.*||')
+   cd "$parent_dir"
+   git status --short
+   ```
+   If unexpected changes found in the parent repo, report to the user before proceeding.
+
 #### 3.4 Parse Agent Report
 
 Agent must return a structured report. Parse for:
@@ -775,6 +805,8 @@ Wait for user response before continuing.
 
 **Recommendation:** Only skip `documentation` if blocked. For all other phases, fix the blocking issue and re-run.
 
+**Phase skip requires user approval.** If a phase appears unnecessary (e.g., implementation agent already created docs), present the rationale and wait for user confirmation before skipping. Do NOT skip autonomously.
+
 #### 3.6 Post Report to Linear
 
 After successful phase completion (non-blocking), post the agent's report as a comment:
@@ -983,6 +1015,8 @@ The Cross-Model Review Report becomes part of the context passed to the security
 ---
 
 ## Step 4: Handle Security Review Completion
+
+**Worktree mode note:** When `WORKTREE_MODE=true`, this security review is the pre-merge per-ticket scan. The swarm orchestrator runs a separate comprehensive post-merge security review (epic-swarm Phase 5) after integration. Do NOT close the ticket here when in worktree mode — the swarm orchestrator handles ticket closure after post-merge security review passes.
 
 When security-review phase completes:
 
