@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-04-06
+
+### Fixed
+- **Codex review timeout** — Tripled default from 1500s (25 min) to 4500s (75 min). Codex reviews were being aborted before completion due to insufficient timeout for thorough repo-aware reviews.
+
+---
+
 ## [3.1.0] - 2026-04-06
 
 ### Changed
@@ -85,7 +92,7 @@ Based on the first production run of `/epic-swarm` (PRO-330), addressing all iss
 - **execute-ticket status parsing** — Resume logic now recognizes DONE/DONE_WITH_CONCERNS/NEEDS_CONTEXT alongside legacy COMPLETE/ISSUES_FOUND
 - **close-epic swarm cleanup** — Deletes swarm state file and removes worktrees for closed tickets
 - **Security patterns skill** — Description updated with CI/CD, Docker, IaC triggers; new Infrastructure Security Patterns section
-- **Default Codex review timeout** — 1500s (25 min) to accommodate thorough repo-aware reviews
+- **Default Codex review timeout** — 4500s (75 min) to accommodate thorough repo-aware reviews
 
 ---
 
@@ -1513,6 +1520,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
 [2.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.0
 [2.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.2.0
