@@ -10,9 +10,42 @@ closes-ticket: false
 
 Execute multiple tickets from an epic concurrently. The orchestrator (this command, running in the main Claude Code session) drives all phases directly, dispatching specialized agents in parallel across tickets within each phase. Each ticket works in its own git worktree, and all work merges to an **epic-level branch** (not main) to prevent partial deployments and enable human review before code reaches the default branch.
 
-**Architecture constraint:** Claude Code subagents cannot spawn other subagents. Therefore this command orchestrates every phase for every ticket directly — it does NOT delegate to `/execute-ticket`. Instead, it follows the same phase sequence but manages all tickets and all phases from the main session, dispatching the same specialized agents (architect-agent, backend-engineer-agent, etc.) that execute-ticket uses.
+---
 
-**Git command constraint — NO compound commands:** Claude Code blocks compound shell commands that combine `cd` with `git` (e.g., `cd dir && git status`, or `cd dir; git commit`), even in multi-line scripts, to prevent bare repository attacks. This triggers a permission prompt that breaks automation. **All git operations on worktrees MUST use `git -C <path>` instead of `cd <path>` + `git`.** This applies to the orchestrator AND to instructions given to agents. Every code example in this document uses `git -C` for this reason. Agents MUST also be instructed to use `git -C` in their prompts.
+## HARD CONSTRAINTS — read before executing ANY step
+
+These constraints are non-negotiable. Violating any of them breaks the workflow.
+
+### 1. NEVER merge to main or the default branch
+
+All merges target the **epic branch** (`epic/[epic-id]`). The default branch (main/master) is NEVER modified by this workflow. Not during integration. Not after security review. Not at any point.
+
+- Worktrees branch from the epic branch (Phase 3.1.1)
+- Wave merges target the epic branch (Phase 4.1)
+- Push targets the epic branch (Phase 4.1)
+- A PR from epic branch → main is created at completion (Phase 7.2)
+- The ONLY way code reaches main is through that PR, reviewed by a human
+
+**Before ANY `git merge` or `git push`, verify the target branch:**
+```bash
+current=$(git branch --show-current)
+if [ "$current" = "main" ] || [ "$current" = "master" ]; then
+  echo "ABORT: On default branch. Switch to epic branch first."
+  exit 1
+fi
+```
+
+If you find yourself about to merge to or push to main/master: **STOP. You are violating this constraint.** Check out the epic branch and merge there instead.
+
+### 2. No compound cd + git commands
+
+Claude Code blocks compound commands combining `cd` with `git`. All git operations on worktrees MUST use `git -C <path>`. This applies to the orchestrator AND to agents.
+
+### 3. Subagents cannot spawn subagents
+
+The orchestrator dispatches all agents directly — it does NOT delegate to `/execute-ticket`.
+
+---
 
 ## Input
 
@@ -231,7 +264,9 @@ Ensure `.swarm/` is gitignored:
 git check-ignore .swarm/ || echo ".swarm/" >> .gitignore
 ```
 
-### 1.6 Create Epic Branch
+### 1.6 Create Epic Branch (BLOCKING — must complete before Phase 2)
+
+**This step is a hard prerequisite.** No wave planning, no worktree creation, no agent dispatch, and no merging may occur until the epic branch exists and is verified. See Hard Constraint #1 at the top of this document.
 
 All ticket work merges to an epic-level branch — never directly to the default branch. This prevents partially completed epics from triggering staging deployments and gives the team a single PR to review when the epic is complete.
 
@@ -254,7 +289,18 @@ if git branch -a | grep -q "remotes/origin/$epic_branch"; then
 fi
 ```
 
-Return to the project root after branch setup — worktrees are created from this branch in Phase 3.
+**Verify the epic branch was created successfully:**
+```bash
+epic_branch="epic/[epic-id]"
+current=$(git branch --show-current)
+if [ "$current" != "$epic_branch" ]; then
+  echo "FATAL: Epic branch creation failed. Current branch: $current"
+  exit 1
+fi
+echo "Epic branch '$epic_branch' created and active."
+```
+
+**Do NOT proceed to Phase 2 until this verification passes.** Return to the project root after branch setup — worktrees are created from this branch in Phase 3.
 
 ### 1.7 Create Swarm State File
 
@@ -377,13 +423,19 @@ This preserves ticket-level parallelism (N tickets run concurrently) while using
 
 For each ticket in the current wave:
 
-**3.1.1 Create worktree:**
+**3.1.1 Create worktree (from epic branch — NEVER from main):**
 ```bash
 git check-ignore .swarm/ || echo ".swarm/" >> .gitignore
 
 epic_branch="epic/[epic-id]"
 
-# Worktrees branch from the epic branch, not from main
+# VERIFY epic branch exists before creating worktrees (Hard Constraint #1)
+if ! git branch --list "$epic_branch" | grep -q "$epic_branch"; then
+  echo "FATAL: Epic branch '$epic_branch' does not exist. Run Phase 1.6 first."
+  exit 1
+fi
+
+# Worktrees branch from the epic branch, NOT from main
 git worktree add .swarm/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "$epic_branch"
 ```
 
@@ -1094,7 +1146,36 @@ Use mcp__linear-server__create_comment on the EPIC:
 
 ## Phase 4: Integration (per wave)
 
-### 4.0 Integration Approval Gate
+### 4.0 Pre-Merge Safety Check (MANDATORY)
+
+**Before doing ANYTHING in this phase**, verify you are on the epic branch. This check is non-negotiable and must execute before the approval gate.
+
+```bash
+epic_branch="epic/[epic-id]"
+current=$(git branch --show-current)
+
+# HARD STOP if on main/master
+if [ "$current" = "main" ] || [ "$current" = "master" ]; then
+  echo "SAFETY CHECK FAILED: Currently on '$current'. Switching to epic branch."
+  git checkout "$epic_branch"
+fi
+
+# Verify epic branch exists
+if ! git branch --list "$epic_branch" | grep -q "$epic_branch"; then
+  echo "SAFETY CHECK FAILED: Epic branch '$epic_branch' does not exist."
+  echo "Run Phase 1.6 (Create Epic Branch) before proceeding."
+  exit 1
+fi
+
+# Ensure we're on the epic branch
+git checkout "$epic_branch"
+git pull origin "$epic_branch"
+echo "SAFETY CHECK PASSED: On epic branch '$epic_branch'. Merges will target this branch."
+```
+
+**If this check fails, STOP.** Do not proceed to the approval gate. Do not merge anything. Create the epic branch (Phase 1.6) first.
+
+### 4.0.1 Integration Approval Gate
 
 Before merging ANY branches, present the integration plan to the user and WAIT for explicit approval:
 

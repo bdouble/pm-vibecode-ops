@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.5] - 2026-04-07
+
+### Fixed
+- **Harden epic branch enforcement to prevent merges to main** — First production run showed the orchestrator ignoring the epic branch instruction and merging directly to main. Added: (1) a prominent "HARD CONSTRAINTS" section at the top of epic-swarm.md with explicit "NEVER merge to main" rule and pre-merge verification script, (2) mandatory pre-merge safety check in Phase 4.0 that validates the current branch before any merge, (3) blocking verification after epic branch creation in Phase 1.6, (4) epic branch existence check before worktree creation in Phase 3.1.1.
+
+---
+
 ## [3.3.4] - 2026-04-07
 
 ### Fixed
@@ -1597,6 +1604,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.3.5]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.5
 [3.3.4]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.4
 [3.3.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.3
 [3.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.2
