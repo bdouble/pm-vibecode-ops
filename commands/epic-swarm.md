@@ -56,7 +56,6 @@ For each sub-ticket, extract from description:
 - `Depends On` — ticket IDs
 - `Blocks` — ticket IDs
 - `Shared Interfaces` — contract references
-- `Model Override` — optional model preference
 
 **Validation:**
 - No circular dependencies (topological sort must succeed)
@@ -318,17 +317,17 @@ Epic: [epic-id] — [epic title]
 Total tickets: N | Waves: M | Max parallel: K
 
 ### Wave 1 (3 tickets, no dependencies)
-| Ticket | Title | Files | Model |
-|--------|-------|-------|-------|
-| CON-42 | Add user profile endpoint | src/routes/profile.ts, src/services/profile.ts | opus |
-| CON-43 | Add settings page | src/pages/settings.tsx, src/components/settings/ | sonnet |
-| CON-44 | Add email templates | src/templates/email/ | sonnet |
+| Ticket | Title | Files |
+|--------|-------|-------|
+| CON-42 | Add user profile endpoint | src/routes/profile.ts, src/services/profile.ts |
+| CON-43 | Add settings page | src/pages/settings.tsx, src/components/settings/ |
+| CON-44 | Add email templates | src/templates/email/ |
 
 ### Wave 2 (2 tickets, depends on Wave 1)
-| Ticket | Title | Depends On | Files | Model |
-|--------|-------|------------|-------|-------|
-| CON-45 | Profile settings page | CON-42 | src/pages/profile-settings.tsx | opus |
-| CON-46 | User avatar upload | CON-42 | src/services/avatar.ts | opus |
+| Ticket | Title | Depends On | Files |
+|--------|-------|------------|-------|
+| CON-45 | Profile settings page | CON-42 | src/pages/profile-settings.tsx |
+| CON-46 | User avatar upload | CON-42 | src/services/avatar.ts |
 
 ### Shared Interface Contracts
 - IProfileResponse: defined by CON-42, consumed by CON-45, CON-46
@@ -590,7 +589,6 @@ For each ticket in the wave (one at a time):
   1. cd to /absolute/path/to/.swarm/worktrees/[ticket-id]
   2. Spawn Agent with:
      - The agent definition matching this phase
-     - model: [ticket's Model Override, or session default]
      - The full prompt built in 3.2.1 (including working directory enforcement)
   3. Wait for agent to complete
   4. Run worktree integrity verification (Section 3.2.3)
@@ -607,7 +605,6 @@ Sequential dispatch guarantees worktree isolation by ensuring only one write-pha
 For all tickets in the wave (simultaneously):
   1. Spawn all agents with:
      - The agent definition matching this phase
-     - model: [ticket's Model Override, or session default]
      - The full prompt built in 3.2.1 (including working directory enforcement)
   2. Wait for ALL agents to return
   3. Run worktree integrity verification for EACH ticket (Section 3.2.3)

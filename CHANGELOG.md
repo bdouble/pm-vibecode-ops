@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.3] - 2026-04-07
+
+### Changed
+- **Remove per-ticket model override from epic-swarm** — All agents now inherit the session's model, matching execute-ticket behavior. Removed `Model Override` from DAG metadata extraction, model column from wave plan display, and model parameter from agent dispatch. Run epic-swarm on the model you want all phases to use.
+
+---
+
 ## [3.3.2] - 2026-04-07
 
 ### Changed
@@ -1583,6 +1590,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.3.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.3
 [3.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.2
 [3.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.1
 [3.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.0
