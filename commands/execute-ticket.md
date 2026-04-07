@@ -1029,12 +1029,43 @@ Before running this phase, check if the Codex MCP server is available:
 
 Follow the `/codex-review` command workflow (see `commands/codex-review.md`):
 
-1. **Gather context:** Collect ticket description, AC, and implementation summary from prior phases
-2. **Call `codex_review_and_fix`:** Pass project directory, base branch, and ticket context. Codex runs as a full agent with repo access — reviews changes, auto-fixes clear P0-P2 findings, reports ambiguous ones with questions, lists P3 for awareness.
-3. **Present results to user:** Show auto-fixed items, items needing decision, and P3 awareness items
-4. **Second pass (if needed):** For approved "needs decision" items, call `codex_fix` with user guidance
-5. **Commit fixes:** Single commit for all fixes. Push only when `WORKTREE_MODE=false`.
-6. **Post report to Linear:** Cross-Model Review Report as ticket comment
+1. **Gather full context:** Collect ticket description, ALL acceptance criteria, implementation summary, and code review concerns from prior phase reports (full, verbatim — not summaries)
+
+2. **Detect tech stack:** Scan project root for stack indicators (package.json → Node/TypeScript, next.config → Next.js, requirements.txt → Python, etc.)
+
+3. **Build structured context string and call `codex_review_and_fix`:**
+   ```
+   We just completed [ticket-id]. Read all ticket context, then conduct a
+   meticulous code review on the branch. Review for:
+
+   1. Compliance with the ticket requirements and acceptance criteria
+   2. Adherence to [detected tech stack] best practices
+   3. SOLID/DRY violations
+   4. Bugs and edge cases
+   5. Code quality issues
+   6. Security vulnerabilities
+   7. Any other issues worth fixing before merge
+
+   Fix all P1-P3 issues that are unambiguous, then provide a report with the
+   remaining prioritized list of questions and issues to resolve.
+
+   ## Ticket Context
+   [Full ticket description — verbatim]
+
+   ## Acceptance Criteria
+   [Full AC — verbatim]
+
+   ## Implementation Summary
+   [From implementation report]
+
+   ## Prior Review Concerns
+   [From code review report]
+   ```
+
+4. **Present ALL results to user:** Show auto-fixed items, items needing decision, and P3 awareness items — follow the `codex-finding-resolution` skill process
+5. **Second pass (if needed):** For approved "needs decision" items, call `codex_fix` with user guidance
+6. **Commit fixes:** Single commit for all fixes. Push only when `WORKTREE_MODE=false`.
+7. **Post report to Linear:** Cross-Model Review Report as ticket comment
 
 ### Rate Limit Handling
 

@@ -33,24 +33,28 @@ Then run: claude mcp add codex-review-server -- python3 ~/.claude/mcp/codex-revi
 
 ## Step 1: Context Gathering
 
-**1.1 Fetch ticket from Linear:**
+**1.1 Fetch ticket and ALL sub-context from Linear:**
 ```
 Use mcp__linear-server__get_issue to fetch ticket: $ARGUMENTS
 ```
 
-Extract:
-- Ticket title and description
-- Acceptance criteria (full, verbatim)
+Extract (full, verbatim — do NOT summarize):
+- Ticket title and full description
+- Acceptance criteria (every item)
 - Technical notes
+- Parent epic context (if applicable)
 
-**1.2 Fetch comments (prior phase reports):**
+**1.2 Fetch ALL comments (prior phase reports):**
 ```
 Use mcp__linear-server__list_comments to get all comments for the ticket
 ```
 
-Extract key context from:
-- Implementation report (what was built, approach taken)
-- Code review report (any concerns flagged by Claude)
+Read ALL phase reports — not just implementation. The full history gives Codex the context to evaluate whether the implementation matches the adaptation decisions, whether testing covered the right areas, and whether code review concerns were addressed:
+- Adaptation report (architecture decisions, target files, patterns to reuse)
+- Implementation report (what was built, files changed, key decisions)
+- Testing report (gate results, coverage, deferred items)
+- Documentation report (what was documented)
+- Code review report (concerns flagged by Claude, requirements checklist results)
 
 **1.3 Determine base branch:**
 ```bash
@@ -61,6 +65,21 @@ base_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/o
 ```bash
 project_dir=$(git rev-parse --show-toplevel)
 ```
+
+**1.5 Detect the project's tech stack:**
+
+Scan the project root for stack indicators to inform the review context:
+```bash
+# Detect package managers and frameworks
+[ -f package.json ] && echo "Node.js project"
+[ -f tsconfig.json ] && echo "TypeScript"
+[ -f next.config.* ] && echo "Next.js"
+[ -f requirements.txt ] || [ -f pyproject.toml ] && echo "Python"
+[ -f Cargo.toml ] && echo "Rust"
+[ -f go.mod ] && echo "Go"
+```
+
+Use the detected stack to inform the `context` field — Codex performs better with explicit stack references because they activate its internal knowledge of framework-specific best practices and common pitfalls.
 
 ---
 
@@ -74,16 +93,59 @@ Codex runs as a **full agent** in the repository with complete file access. It r
 Use mcp__codex-review-server__codex_review_and_fix with:
   - project_dir: [absolute path to project root]
   - base_branch: [base branch from Step 1.3]
-  - focus: "all" (or user preference: "bugs", "security", "performance")
-  - context: [ticket description + acceptance criteria + implementation summary]
+  - focus: "all"
+  - context: [build the context string as described below]
 ```
 
+### Building the Context String
+
+The `context` field is the most important parameter — it determines the quality and specificity of the review. Build it as a structured prompt:
+
+```
+We just completed [ticket-id]. Read all ticket context, then conduct a
+meticulous code review on the branch. Review for:
+
+1. Compliance with the ticket requirements and acceptance criteria
+2. Adherence to [detected tech stack] best practices
+3. SOLID/DRY violations
+4. Bugs and edge cases
+5. Code quality issues
+6. Security vulnerabilities
+7. Any other issues worth fixing before merge
+
+Fix all P1-P3 issues that are unambiguous, then provide a report with the
+remaining prioritized list of questions and issues to resolve.
+
+## Ticket Context
+[Full ticket description — verbatim]
+
+## Acceptance Criteria
+[Full AC list — verbatim]
+
+## Implementation Summary
+[From implementation report — files changed, key decisions, patterns used]
+
+## Prior Review Concerns
+[From code review report — any flagged issues, requirements checklist gaps]
+```
+
+**Tech stack examples for the `[detected tech stack]` placeholder:**
+- TypeScript + Next.js + React project: "TypeScript, Next.js, and React"
+- Python + FastAPI: "Python and FastAPI"
+- Go + gRPC: "Go and gRPC"
+- Rust + Actix: "Rust and Actix"
+
+The explicit stack reference activates framework-specific review patterns in Codex (e.g., React hook rules, Next.js server/client boundary issues, Python async pitfalls).
+
+### What Codex Does
+
 Codex will:
-1. Review all changes with full repo access (reads files, explores imports, traces code paths)
-2. Classify findings as P0 (critical), P1 (high), P2 (medium), P3 (low)
-3. **Auto-fix P0-P2 findings** that are clear-cut (high confidence, obvious fix)
-4. **Report but NOT fix P0-P2 findings** where Codex has questions or uncertainty
-5. **Report P3 findings** for awareness only (never fixed)
+1. Read all ticket context and review the complete branch diff
+2. Explore related files for full understanding (imports, shared types, consumers)
+3. Classify findings as P0 (critical), P1 (high), P2 (medium), P3 (low)
+4. **Auto-fix P1-P3 findings** that are unambiguous (clear fix, high confidence)
+5. **Report P0-P2 findings** where Codex has questions or uncertainty
+6. **Report P3 findings** for awareness
 
 **Alternative — Review-only mode:**
 

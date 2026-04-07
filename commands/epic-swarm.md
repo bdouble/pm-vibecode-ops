@@ -1142,11 +1142,43 @@ Invoke Skill: codex-finding-resolution
 
 For each ticket that completed code review:
 
+**Build the Codex context string** for each ticket (same pattern as `/codex-review` Step 2):
+
+```
+We just completed [ticket-id]. Read all ticket context, then conduct a
+meticulous code review on the branch. Review for:
+
+1. Compliance with the ticket requirements and acceptance criteria
+2. Adherence to [project tech stack] best practices
+3. SOLID/DRY violations
+4. Bugs and edge cases
+5. Code quality issues
+6. Security vulnerabilities
+7. Any other issues worth fixing before merge
+
+Fix all P1-P3 issues that are unambiguous, then provide a report with the
+remaining prioritized list of questions and issues to resolve.
+
+## Ticket Context
+[Full ticket description from .ticket-context.md — verbatim]
+
+## Acceptance Criteria
+[Full AC — verbatim]
+
+## Implementation Summary
+[From implementation phase report — files changed, key decisions]
+
+## Prior Review Concerns
+[From code review phase report — flagged issues, requirements checklist]
+```
+
+Detect the project tech stack from the worktree (package.json, tsconfig.json, etc.) and substitute for `[project tech stack]`. This activates framework-specific review patterns in Codex.
+
 ```
 Call mcp__codex-review-server__codex_review_and_fix with:
   - project_dir: [absolute path to ticket's worktree]
   - base_branch: [the worktree's base branch]
-  - context: [ticket description + AC + implementation summary + all prior phase reports]
+  - context: [the structured context string built above]
 ```
 
 **After Codex returns, follow the `codex-finding-resolution` skill process:**

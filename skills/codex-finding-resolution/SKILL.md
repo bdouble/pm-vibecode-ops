@@ -9,11 +9,23 @@ All Codex findings at P1-P3 severity MUST be resolved — fixed, explicitly dism
 
 ## The Rule
 
-**When Codex returns findings, you MUST process every P1-P3 item to a resolution before advancing.** P0 items are auto-fixed by `codex_review_and_fix`. P1-P3 items require human judgment. The orchestrator presents them to the user, gets decisions, applies fixes, and posts the complete resolution record to Linear.
+**Codex is instructed to auto-fix all unambiguous P1-P3 issues.** The orchestrator then presents the REMAINING items — ambiguous findings, questions, and awareness items — to the user for decisions. Every finding reaches a resolution: auto-fixed, manually fixed, dismissed with reasoning, or deferred with user approval. Nothing is silently dropped.
 
 ## Why This Exists
 
 Production data from the PRO-310 epic swarm showed Codex reviews completing with P1-P3 findings that were silently dropped — never posted to Linear, never fixed, never presented to the user. These findings are frequently more important than Codex's priority labels suggest. In past projects, all P1-P3 items were fixed. The epic-swarm workflow broke this discipline by treating Codex review as a fire-and-forget step.
+
+## Context Quality is Critical
+
+Codex review quality depends directly on the context provided. The `context` field passed to `codex_review_and_fix` should be a structured prompt that includes:
+
+1. **Explicit review dimensions** — requirements compliance, tech-stack best practices, SOLID/DRY, bugs, code quality, security
+2. **Full ticket description and acceptance criteria** — verbatim, not summarized
+3. **Implementation summary** — from the implementation phase report
+4. **Prior code review concerns** — from Claude's code review report
+5. **Tech stack reference** — explicitly name the project's frameworks so Codex activates framework-specific review patterns
+
+See `commands/codex-review.md` Step 2 for the exact context string template.
 
 ## The Resolution Process
 
@@ -30,14 +42,14 @@ Call mcp__codex-review-server__codex_review_and_fix with:
 
 After `codex_review_and_fix` returns:
 
-**Category A — Auto-Fixed (P0-P2 clear-cut):**
-Items Codex fixed automatically. Review the fixes for correctness.
+**Category A — Auto-Fixed (P1-P3 unambiguous):**
+Items Codex fixed automatically because the fix was clear. Review these for correctness — verify Codex didn't introduce regressions or misunderstand the intent.
 
-**Category B — Needs Decision (P1-P2 with questions):**
-Items Codex flagged but couldn't auto-fix. These require user judgment.
+**Category B — Needs Decision (P1-P3 with questions):**
+Items Codex identified but couldn't auto-fix because the right approach is ambiguous. These require user judgment — Codex provides its question or concern for each.
 
-**Category C — For Awareness (P3):**
-Low-priority observations. Present for completeness.
+**Category C — For Awareness (P3 informational):**
+Low-priority observations that don't require action but are worth noting. Present for completeness.
 
 ### Step 3: Present ALL Findings to the User
 
