@@ -8,6 +8,8 @@ argument-hint: <ticket-id>
 
 Execute all 6 ticket-level workflow phases automatically for the specified ticket. Pauses only for blocking issues that require user decision.
 
+**Git command constraint — NO compound commands:** Claude Code blocks compound shell commands that combine `cd` with `git` (e.g., `cd dir && git status`, or multi-line scripts with `cd` followed by `git`) to prevent bare repository attacks. This triggers a permission prompt that breaks automation. **All git operations MUST use `git -C <path>` instead of `cd <path>` + `git`.** This applies to the orchestrator AND to all agents dispatched by this workflow. When building agent prompts, include this instruction explicitly so agents do not use `cd` + `git` patterns.
+
 ## Input
 
 - `$ARGUMENTS` - Linear ticket ID (e.g., `PRJ-123`)
@@ -585,10 +587,9 @@ After every agent returns, verify that file changes are as expected:
 
 3. **In WORKTREE_MODE:** Also verify no files were modified in the parent repo or other worktrees:
    ```bash
-   # Check parent repo for stray files
+   # Check parent repo for stray files (use git -C to avoid compound cd+git)
    parent_dir=$(git rev-parse --git-common-dir | sed 's|/\.git.*||')
-   cd "$parent_dir"
-   git status --short
+   git -C "$parent_dir" status --short
    ```
    If unexpected changes found in the parent repo, report to the user before proceeding.
 

@@ -12,6 +12,8 @@ Execute multiple tickets from an epic concurrently. The orchestrator (this comma
 
 **Architecture constraint:** Claude Code subagents cannot spawn other subagents. Therefore this command orchestrates every phase for every ticket directly — it does NOT delegate to `/execute-ticket`. Instead, it follows the same phase sequence but manages all tickets and all phases from the main session, dispatching the same specialized agents (architect-agent, backend-engineer-agent, etc.) that execute-ticket uses.
 
+**Git command constraint — NO compound commands:** Claude Code blocks compound shell commands that combine `cd` with `git` (e.g., `cd dir && git status`, or `cd dir; git commit`), even in multi-line scripts, to prevent bare repository attacks. This triggers a permission prompt that breaks automation. **All git operations on worktrees MUST use `git -C <path>` instead of `cd <path>` + `git`.** This applies to the orchestrator AND to instructions given to agents. Every code example in this document uses `git -C` for this reason. Agents MUST also be instructed to use `git -C` in their prompts.
+
 ## Input
 
 - `$ARGUMENTS` — Linear epic ID (e.g., `EPIC-42`) and optional flags:
@@ -586,18 +588,16 @@ Dispatch mode depends on the phase (see Dispatch column in the phase table above
 
 ```
 For each ticket in the wave (one at a time):
-  1. cd to /absolute/path/to/.swarm/worktrees/[ticket-id]
-  2. Spawn Agent with:
+  1. Spawn Agent with:
      - The agent definition matching this phase
-     - The full prompt built in 3.2.1 (including working directory enforcement)
-  3. Wait for agent to complete
-  4. Run worktree integrity verification (Section 3.2.3)
-  5. Process results (Section 3.2.4)
-  6. cd back to project root
-  7. Proceed to next ticket
+     - The full prompt built in 3.2.1 (including working directory enforcement with absolute paths)
+  2. Wait for agent to complete
+  3. Run worktree integrity verification (Section 3.2.3)
+  4. Process results (Section 3.2.4)
+  5. Proceed to next ticket
 ```
 
-Sequential dispatch guarantees worktree isolation by ensuring only one write-phase agent runs at a time, with the orchestrator's cwd set to the correct worktree.
+Sequential dispatch guarantees worktree isolation by ensuring only one write-phase agent runs at a time. Agents use absolute paths to their assigned worktree — the orchestrator does NOT `cd` into worktrees. All git operations use `git -C <worktree-path>` to avoid compound command permission prompts.
 
 **Mode B — PARALLEL (Adaptation, Code Review, Security Scan):**
 
@@ -623,8 +623,7 @@ For each ticket that just had an agent dispatched:
 
 1. **Check target worktree:**
    ```bash
-   cd .swarm/worktrees/[ticket-id]
-   git status --short
+   git -C .swarm/worktrees/[ticket-id] status --short
    ```
    Verify that changed files are relevant to THIS ticket (match against the ticket's predicted files from the adaptation report or description).
 
@@ -633,8 +632,7 @@ For each ticket that just had an agent dispatched:
    for dir in .swarm/worktrees/*/; do
      other_id=$(basename "$dir")
      if [ "$other_id" != "[ticket-id]" ]; then
-       cd "$dir"
-       unexpected=$(git status --short)
+       unexpected=$(git -C "$dir" status --short)
        if [ -n "$unexpected" ]; then
          echo "CONTAMINATION: $other_id has unexpected changes: $unexpected"
        fi
@@ -644,7 +642,6 @@ For each ticket that just had an agent dispatched:
 
 3. **Check project root for stray files:**
    ```bash
-   cd [project-root]
    git status --short
    ```
    If ANY files were modified in the project root that belong to a ticket's scope, contamination has occurred.
@@ -665,8 +662,7 @@ For each ticket that just had an agent dispatched:
    After confirming no cross-worktree contamination, verify that file changes are relevant to the ticket's scope. This mirrors `/execute-ticket` Step 3.3.1:
 
    ```bash
-   cd .swarm/worktrees/[ticket-id]
-   changed_files=$(git status --short | awk '{print $2}')
+   changed_files=$(git -C .swarm/worktrees/[ticket-id] status --short | awk '{print $2}')
    ```
 
    Compare the list of changed files against the ticket's predicted files (from the adaptation report's "Target Files" section or from the ticket description's "Files Touched" metadata).
@@ -746,14 +742,13 @@ If ANY required field is missing or empty:
 After the implementation agent reports DONE, verify that file changes actually exist. This mirrors `/execute-ticket` Step 3.6.0.
 
 ```bash
-cd .swarm/worktrees/[ticket-id]
-changes=$(git status --porcelain | wc -l)
+changes=$(git -C .swarm/worktrees/[ticket-id] status --porcelain | wc -l)
 ```
 
 ```
 IF changes == 0 AND report.Status is one of ["DONE", "DONE_WITH_CONCERNS", "COMPLETE"]:
   - Log warning: "Implementation reported completion but no file changes detected for [ticket-id]"
-  - Check for unstaged changes: git diff --name-only
+  - Check for unstaged changes: git -C .swarm/worktrees/[ticket-id] diff --name-only
   - If still no changes: PAUSE ticket for user decision
     Options: [Retry Implementation] [Review Manually] [Mark as No-Op and Continue]
 ```
@@ -776,9 +771,8 @@ Extract each acceptance criterion from the ticket context file and classify:
 For each STRUCTURAL and REMOVAL AC, generate a verification command and run it in the ticket's worktree:
 
 ```bash
-cd .swarm/worktrees/[ticket-id]
 # Example: AC "All renderers import from schema files"
-grep -rn "import.*from.*schema" [renderer-dir] | wc -l
+grep -rn "import.*from.*schema" .swarm/worktrees/[ticket-id]/[renderer-dir] | wc -l
 # Expect: count >= [number of renderers]
 ```
 
@@ -820,8 +814,7 @@ For each prescriptive document's conformance checklist:
 1. **Extract verifiable specifications:** Named items, specific values, enumerated lists, interface fields
 2. **Generate verification queries** in the ticket's worktree:
    ```bash
-   cd .swarm/worktrees/[ticket-id]
-   grep -rn '"[item-name]"\|[item-name]' [target-file-or-directory]
+   grep -rn '"[item-name]"\|[item-name]' .swarm/worktrees/[ticket-id]/[target-file-or-directory]
    ```
 3. **Report results:**
    - If all specifications match: include brief confirmation in Linear comment
@@ -916,9 +909,8 @@ Labels for security phases are handled in Phase 5.2 (post-merge security review)
 After posting the implementation report to Linear, commit all changes in the ticket's worktree. This mirrors `/execute-ticket` Step 3.6.1 (worktree-mode steps 1-2 only — no push, no PR).
 
 ```bash
-cd .swarm/worktrees/[ticket-id]
-git add -A
-git commit -m "feat([ticket-id]): [ticket-title]
+git -C .swarm/worktrees/[ticket-id] add -A
+git -C .swarm/worktrees/[ticket-id] commit -m "feat([ticket-id]): [ticket-title]
 
 [First sentence of implementation summary from agent report]
 
@@ -961,9 +953,8 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 - If any Gate FAILS (especially Gate #0 — existing test remediation): ticket is PAUSED by the 3.2.4 pipeline
 - After testing completes successfully, commit test files:
   ```bash
-  cd .swarm/worktrees/[ticket-id]
-  git add -A
-  git commit -m "test([ticket-id]): add test suite
+  git -C .swarm/worktrees/[ticket-id] add -A
+  git -C .swarm/worktrees/[ticket-id] commit -m "test([ticket-id]): add test suite
 
   [Brief summary of test coverage from agent report]
 
@@ -974,9 +965,8 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 **After Documentation phase:**
 - Commit documentation changes:
   ```bash
-  cd .swarm/worktrees/[ticket-id]
-  git add -A
-  git commit -m "docs([ticket-id]): add documentation
+  git -C .swarm/worktrees/[ticket-id] add -A
+  git -C .swarm/worktrees/[ticket-id] commit -m "docs([ticket-id]): add documentation
 
   [Brief summary from agent report]
 
@@ -989,9 +979,8 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 - If DONE with over-building/under-building flags: pause for user decision
 - If code review agent made fixes (e.g., linting, formatting), commit them:
   ```bash
-  cd .swarm/worktrees/[ticket-id]
-  git add -A
-  git commit -m "refactor([ticket-id]): apply code review fixes
+  git -C .swarm/worktrees/[ticket-id] add -A
+  git -C .swarm/worktrees/[ticket-id] commit -m "refactor([ticket-id]): apply code review fixes
 
   Linear: [ticket-id]
   Co-Authored-By: Claude <noreply@anthropic.com>"
@@ -1005,8 +994,7 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 - Ensure all changes are committed in the ticket's worktree
 - Push the feature branch:
   ```bash
-  cd .swarm/worktrees/[ticket-id]
-  git push origin feature/[ticket-id]-[slug]
+  git -C .swarm/worktrees/[ticket-id] push origin feature/[ticket-id]-[slug]
   ```
 
 #### State Persistence Protocol
