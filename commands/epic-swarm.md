@@ -300,7 +300,7 @@ fi
 echo "Epic branch '$epic_branch' created and active."
 ```
 
-**Do NOT proceed to Phase 2 until this verification passes.** Return to the project root after branch setup — worktrees are created from this branch in Phase 3.
+**Do NOT proceed to Phase 2 until this verification passes.** The orchestrator should remain on the epic branch — worktrees are created from it in Phase 3, and after each wave's merges land on it, subsequent waves will branch from the updated epic branch (which includes all prior wave work).
 
 ### 1.7 Create Swarm State File
 
@@ -435,7 +435,12 @@ if ! git branch --list "$epic_branch" | grep -q "$epic_branch"; then
   exit 1
 fi
 
+# Pull latest epic branch — for wave 2+ this includes all prior wave merges
+git checkout "$epic_branch"
+git pull origin "$epic_branch"
+
 # Worktrees branch from the epic branch, NOT from main
+# For wave 2+, this means worktrees start with all prior wave work included
 git worktree add .swarm/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "$epic_branch"
 ```
 
