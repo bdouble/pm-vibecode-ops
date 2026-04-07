@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.2] - 2026-04-07
+
+### Changed
+- **Move swarm operational files from `.claude/` to `.swarm/`** — Claude Code treats `.claude/` as a protected settings directory, triggering permission prompts on every write. Swarm state, context bundles, and worktrees now live under `.swarm/` (`.swarm/state/`, `.swarm/context/`, `.swarm/worktrees/`), which Claude Code can write to freely. Simplified gitignore to a single `.swarm/` entry.
+
+---
+
 ## [3.3.1] - 2026-04-07
 
 ### Fixed
@@ -1576,6 +1583,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.2
 [3.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.1
 [3.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.0
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0

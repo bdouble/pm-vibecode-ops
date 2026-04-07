@@ -39,7 +39,7 @@ Use mcp__linear-server__list_issues with parentId filter to get all sub-tickets
 ### 1.2 Check for Existing Swarm State
 
 ```bash
-state_file=".claude/swarm-state/[epic-id].json"
+state_file=".swarm/state/[epic-id].json"
 if [ -f "$state_file" ]; then
   echo "Existing swarm state found for [epic-id]."
   echo "Current wave: N, Completed tickets: X/Y"
@@ -140,7 +140,7 @@ Every ticket agent must have full, verbatim access to all research, requirements
 
 **1.5.5 Write the epic context bundle:**
 
-Write ALL gathered context to `.claude/swarm-context/{epic-id}/epic-context.md`:
+Write ALL gathered context to `.swarm/context/{epic-id}/epic-context.md`:
 
 ```markdown
 # Epic Context Bundle: [epic-id]
@@ -169,7 +169,7 @@ Source: [file path or URL]
 [any URLs or files that could not be read, with error details]
 ```
 
-**Also write per-ticket context files** to `.claude/swarm-context/{epic-id}/{ticket-id}.md`:
+**Also write per-ticket context files** to `.swarm/context/{epic-id}/{ticket-id}.md`:
 
 ```markdown
 # Ticket Context: [ticket-id] — [title]
@@ -220,14 +220,14 @@ If the total context bundle for a ticket exceeds practical limits:
    ```
    Context bundle for [ticket-id] is [size] tokens.
    [N] contextual documents were truncated. Prescriptive documents included in full.
-   Review .claude/swarm-context/[epic-id]/[ticket-id].md to verify critical content.
+   Review .swarm/context/[epic-id]/[ticket-id].md to verify critical content.
    ```
 
 The distinction: prescriptive documents contain specific implementable items (IDs, schemas, field names). Contextual documents provide background. When budget is tight, prescriptive content is never sacrificed.
 
-Ensure `.claude/swarm-context/` is gitignored:
+Ensure `.swarm/` is gitignored:
 ```bash
-git check-ignore .claude/swarm-context/ || echo ".claude/swarm-context/" >> .gitignore
+git check-ignore .swarm/ || echo ".swarm/" >> .gitignore
 ```
 
 ### 1.6 Create Epic Branch
@@ -258,8 +258,8 @@ Return to the project root after branch setup — worktrees are created from thi
 ### 1.7 Create Swarm State File
 
 ```bash
-mkdir -p .claude/swarm-state
-git check-ignore .claude/swarm-state || echo ".claude/" >> .gitignore
+mkdir -p .swarm/state
+git check-ignore .swarm/ || echo ".swarm/" >> .gitignore
 ```
 
 Initialize state:
@@ -272,7 +272,7 @@ Initialize state:
   "currentPhase": "adaptation",
   "waves": [],
   "pendingCodexReviews": [],
-  "contextBundlePath": ".claude/swarm-context/[epic-id]/",
+  "contextBundlePath": ".swarm/context/[epic-id]/",
   "config": {
     "maxParallel": 4,
     "autoMerge": false,
@@ -378,17 +378,17 @@ For each ticket in the current wave:
 
 **3.1.1 Create worktree:**
 ```bash
-git check-ignore .claude/worktrees/ || echo ".claude/worktrees/" >> .gitignore
+git check-ignore .swarm/ || echo ".swarm/" >> .gitignore
 
 epic_branch="epic/[epic-id]"
 
 # Worktrees branch from the epic branch, not from main
-git worktree add .claude/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "$epic_branch"
+git worktree add .swarm/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "$epic_branch"
 ```
 
 **3.1.2 Install dependencies:**
 ```bash
-cd .claude/worktrees/[ticket-id]
+cd .swarm/worktrees/[ticket-id]
 [ -f package.json ] && npm ci
 [ -f requirements.txt ] && pip install -r requirements.txt
 [ -f Cargo.toml ] && cargo build
@@ -400,7 +400,7 @@ cd .claude/worktrees/[ticket-id]
 For each worktree, run the project's test suite and WAIT for results. Do NOT proceed to Phase 3.2 until ALL worktrees have passing baseline tests.
 
 ```bash
-cd .claude/worktrees/[ticket-id]
+cd .swarm/worktrees/[ticket-id]
 npm test  # or appropriate test command detected from package.json / Makefile
 ```
 
@@ -417,8 +417,8 @@ Do NOT start baseline tests in the background and "check later." Baseline verifi
 **3.1.4 Copy context bundles into worktrees:**
 ```bash
 # Copy epic context bundle and ticket-specific context into each worktree
-cp .claude/swarm-context/[epic-id]/epic-context.md .claude/worktrees/[ticket-id]/.epic-context.md
-cp .claude/swarm-context/[epic-id]/[ticket-id].md .claude/worktrees/[ticket-id]/.ticket-context.md
+cp .swarm/context/[epic-id]/epic-context.md .swarm/worktrees/[ticket-id]/.epic-context.md
+cp .swarm/context/[epic-id]/[ticket-id].md .swarm/worktrees/[ticket-id]/.ticket-context.md
 ```
 
 Also copy interface contracts if shared interfaces exist.
@@ -539,25 +539,25 @@ The agent prompt MUST include ALL of the following, VERBATIM and UNABRIDGED:
    Include these exact instructions at the TOP of the agent prompt, before any other content:
 
    ```
-   WORKING DIRECTORY: /absolute/path/to/.claude/worktrees/[ticket-id]
+   WORKING DIRECTORY: /absolute/path/to/.swarm/worktrees/[ticket-id]
 
    You MUST operate exclusively within this directory:
    - Use ABSOLUTE paths for ALL file operations, prefixed with the path above
    - Before creating or modifying ANY file, verify the path starts with
-     /absolute/path/to/.claude/worktrees/[ticket-id]/
+     /absolute/path/to/.swarm/worktrees/[ticket-id]/
    - Do NOT use relative paths from the repo root
    - Do NOT write to any directory outside your assigned worktree
    - If you find yourself writing to a path that does not start with your
      assigned worktree, STOP and correct immediately
    ```
 
-   Replace `/absolute/path/to/.claude/worktrees/[ticket-id]` with the actual resolved absolute path for each ticket.
+   Replace `/absolute/path/to/.swarm/worktrees/[ticket-id]` with the actual resolved absolute path for each ticket.
 
 8. **Explicit file scope (for read-only phases: Code Review, Security Scan):**
    Include an explicit file manifest generated from git diff so the agent knows exactly which files to review:
 
    ```bash
-   cd .claude/worktrees/[ticket-id]
+   cd .swarm/worktrees/[ticket-id]
    git diff --name-only epic/[epic-id]...HEAD
    ```
 
@@ -565,7 +565,7 @@ The agent prompt MUST include ALL of the following, VERBATIM and UNABRIDGED:
    ```
    ## Review Scope
 
-   Review ONLY the following files in /absolute/path/to/.claude/worktrees/[ticket-id]/:
+   Review ONLY the following files in /absolute/path/to/.swarm/worktrees/[ticket-id]/:
 
    [list of files from git diff]
 
@@ -587,7 +587,7 @@ Dispatch mode depends on the phase (see Dispatch column in the phase table above
 
 ```
 For each ticket in the wave (one at a time):
-  1. cd to /absolute/path/to/.claude/worktrees/[ticket-id]
+  1. cd to /absolute/path/to/.swarm/worktrees/[ticket-id]
   2. Spawn Agent with:
      - The agent definition matching this phase
      - model: [ticket's Model Override, or session default]
@@ -626,14 +626,14 @@ For each ticket that just had an agent dispatched:
 
 1. **Check target worktree:**
    ```bash
-   cd .claude/worktrees/[ticket-id]
+   cd .swarm/worktrees/[ticket-id]
    git status --short
    ```
    Verify that changed files are relevant to THIS ticket (match against the ticket's predicted files from the adaptation report or description).
 
 2. **Check OTHER worktrees for contamination:**
    ```bash
-   for dir in .claude/worktrees/*/; do
+   for dir in .swarm/worktrees/*/; do
      other_id=$(basename "$dir")
      if [ "$other_id" != "[ticket-id]" ]; then
        cd "$dir"
@@ -668,7 +668,7 @@ For each ticket that just had an agent dispatched:
    After confirming no cross-worktree contamination, verify that file changes are relevant to the ticket's scope. This mirrors `/execute-ticket` Step 3.3.1:
 
    ```bash
-   cd .claude/worktrees/[ticket-id]
+   cd .swarm/worktrees/[ticket-id]
    changed_files=$(git status --short | awk '{print $2}')
    ```
 
@@ -749,7 +749,7 @@ If ANY required field is missing or empty:
 After the implementation agent reports DONE, verify that file changes actually exist. This mirrors `/execute-ticket` Step 3.6.0.
 
 ```bash
-cd .claude/worktrees/[ticket-id]
+cd .swarm/worktrees/[ticket-id]
 changes=$(git status --porcelain | wc -l)
 ```
 
@@ -779,7 +779,7 @@ Extract each acceptance criterion from the ticket context file and classify:
 For each STRUCTURAL and REMOVAL AC, generate a verification command and run it in the ticket's worktree:
 
 ```bash
-cd .claude/worktrees/[ticket-id]
+cd .swarm/worktrees/[ticket-id]
 # Example: AC "All renderers import from schema files"
 grep -rn "import.*from.*schema" [renderer-dir] | wc -l
 # Expect: count >= [number of renderers]
@@ -823,7 +823,7 @@ For each prescriptive document's conformance checklist:
 1. **Extract verifiable specifications:** Named items, specific values, enumerated lists, interface fields
 2. **Generate verification queries** in the ticket's worktree:
    ```bash
-   cd .claude/worktrees/[ticket-id]
+   cd .swarm/worktrees/[ticket-id]
    grep -rn '"[item-name]"\|[item-name]' [target-file-or-directory]
    ```
 3. **Report results:**
@@ -919,7 +919,7 @@ Labels for security phases are handled in Phase 5.2 (post-merge security review)
 After posting the implementation report to Linear, commit all changes in the ticket's worktree. This mirrors `/execute-ticket` Step 3.6.1 (worktree-mode steps 1-2 only — no push, no PR).
 
 ```bash
-cd .claude/worktrees/[ticket-id]
+cd .swarm/worktrees/[ticket-id]
 git add -A
 git commit -m "feat([ticket-id]): [ticket-title]
 
@@ -935,7 +935,7 @@ Subsequent phases (testing, documentation, code review) will make additional fil
 
 ##### 3.2.4.10 Update Swarm State
 
-Update `.claude/swarm-state/[epic-id].json` with:
+Update `.swarm/state/[epic-id].json` with:
 - Phase completion status for this ticket
 - Whether the report was posted to Linear (true/false)
 - Any quality labels added
@@ -948,7 +948,7 @@ See State Persistence Protocol below for the full state schema.
 The following post-processing runs AFTER the Section 3.2.4 pipeline completes for each phase. These are additional phase-specific steps beyond the standard pipeline.
 
 **After Adaptation phase:**
-- Update the ticket-specific context file (`.claude/swarm-context/[epic-id]/[ticket-id].md`) with:
+- Update the ticket-specific context file (`.swarm/context/[epic-id]/[ticket-id].md`) with:
   - Adaptation decisions (target files, approach, trade-offs)
   - Service reuse mandates identified
   - Deferred/descoped items from adaptation
@@ -964,7 +964,7 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 - If any Gate FAILS (especially Gate #0 — existing test remediation): ticket is PAUSED by the 3.2.4 pipeline
 - After testing completes successfully, commit test files:
   ```bash
-  cd .claude/worktrees/[ticket-id]
+  cd .swarm/worktrees/[ticket-id]
   git add -A
   git commit -m "test([ticket-id]): add test suite
 
@@ -977,7 +977,7 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 **After Documentation phase:**
 - Commit documentation changes:
   ```bash
-  cd .claude/worktrees/[ticket-id]
+  cd .swarm/worktrees/[ticket-id]
   git add -A
   git commit -m "docs([ticket-id]): add documentation
 
@@ -992,7 +992,7 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 - If DONE with over-building/under-building flags: pause for user decision
 - If code review agent made fixes (e.g., linting, formatting), commit them:
   ```bash
-  cd .claude/worktrees/[ticket-id]
+  cd .swarm/worktrees/[ticket-id]
   git add -A
   git commit -m "refactor([ticket-id]): apply code review fixes
 
@@ -1008,13 +1008,13 @@ The following post-processing runs AFTER the Section 3.2.4 pipeline completes fo
 - Ensure all changes are committed in the ticket's worktree
 - Push the feature branch:
   ```bash
-  cd .claude/worktrees/[ticket-id]
+  cd .swarm/worktrees/[ticket-id]
   git push origin feature/[ticket-id]-[slug]
   ```
 
 #### State Persistence Protocol
 
-After EVERY significant event, update `.claude/swarm-state/[epic-id].json`:
+After EVERY significant event, update `.swarm/state/[epic-id].json`:
 
 **Events that trigger state update:**
 - Phase starts for a ticket
@@ -1049,7 +1049,7 @@ After EVERY significant event, update `.claude/swarm-state/[epic-id].json`:
           "startedAt": "[timestamp]"
         }
       },
-      "worktreePath": ".claude/worktrees/[ticket-id]",
+      "worktreePath": ".swarm/worktrees/[ticket-id]",
       "branchName": "feature/[ticket-id]-[slug]",
       "mergeCommit": null,
       "codexReview": null
@@ -1379,7 +1379,7 @@ Merge this PR when ready to deploy.
 ### 7.3 Clean Up Worktrees
 
 ```bash
-for dir in .claude/worktrees/*/; do
+for dir in .swarm/worktrees/*/; do
   ticket_id=$(basename "$dir")
   # Only remove worktrees for closed tickets
   git worktree remove "$dir" --force 2>/dev/null || true
@@ -1392,7 +1392,7 @@ Worktrees for blocked/pending tickets are preserved for manual intervention.
 
 "All waves complete. Run `/close-epic [epic-id]` for retrofit analysis, follow-up tickets, and to clean up swarm state."
 
-`/close-epic` deletes `.claude/swarm-state/[epic-id].json` as its final step.
+`/close-epic` deletes `.swarm/state/[epic-id].json` as its final step.
 
 ---
 
