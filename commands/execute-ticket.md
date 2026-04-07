@@ -61,10 +61,11 @@ fi
 **When `WORKTREE_MODE=true`:**
 - The swarm orchestrator has already created the worktree and branch
 - **SKIP** Step 1.3 (branch creation) — the branch already exists
-- **SKIP** PR creation in post-implementation steps — the swarm handles merge and PR
-- **SKIP** `git push` after each phase — the swarm handles pushing during integration
+- **SKIP** PR creation in post-implementation steps — the swarm handles merge to the epic branch and creates a single epic PR
+- **SKIP** `git push` after each phase — the swarm handles pushing the epic branch during integration
 - **DO** post all phase reports to Linear (the ticket's comment thread is the coordination record)
 - **DO** return structured status codes to the orchestrator (DONE / BLOCKED / etc.)
+- **NOTE:** The swarm merges ticket branches to an epic branch (`epic/[epic-id]`), not to main. The default branch is only updated when the epic PR is reviewed and merged by a human.
 
 ### Step 1.3: Create Feature Branch
 

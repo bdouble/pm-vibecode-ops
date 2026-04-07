@@ -8,7 +8,7 @@ closes-ticket: false
 
 # Epic Swarm Orchestrator
 
-Execute multiple tickets from an epic concurrently. The orchestrator (this command, running in the main Claude Code session) drives all phases directly, dispatching specialized agents in parallel across tickets within each phase. Each ticket works in its own git worktree.
+Execute multiple tickets from an epic concurrently. The orchestrator (this command, running in the main Claude Code session) drives all phases directly, dispatching specialized agents in parallel across tickets within each phase. Each ticket works in its own git worktree, and all work merges to an **epic-level branch** (not main) to prevent partial deployments and enable human review before code reaches the default branch.
 
 **Architecture constraint:** Claude Code subagents cannot spawn other subagents. Therefore this command orchestrates every phase for every ticket directly — it does NOT delegate to `/execute-ticket`. Instead, it follows the same phase sequence but manages all tickets and all phases from the main session, dispatching the same specialized agents (architect-agent, backend-engineer-agent, etc.) that execute-ticket uses.
 
@@ -230,7 +230,32 @@ Ensure `.claude/swarm-context/` is gitignored:
 git check-ignore .claude/swarm-context/ || echo ".claude/swarm-context/" >> .gitignore
 ```
 
-### 1.6 Create Swarm State File
+### 1.6 Create Epic Branch
+
+All ticket work merges to an epic-level branch — never directly to the default branch. This prevents partially completed epics from triggering staging deployments and gives the team a single PR to review when the epic is complete.
+
+```bash
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+default_branch=${default_branch:-main}
+
+epic_branch="epic/[epic-id]"
+
+git fetch origin
+git checkout -b "$epic_branch" "origin/$default_branch"
+git push -u origin "$epic_branch"
+```
+
+If the epic branch already exists (e.g., resuming a swarm):
+```bash
+if git branch -a | grep -q "remotes/origin/$epic_branch"; then
+  git checkout "$epic_branch"
+  git pull origin "$epic_branch"
+fi
+```
+
+Return to the project root after branch setup — worktrees are created from this branch in Phase 3.
+
+### 1.7 Create Swarm State File
 
 ```bash
 mkdir -p .claude/swarm-state
@@ -241,6 +266,7 @@ Initialize state:
 ```json
 {
   "epicId": "[epic-id]",
+  "epicBranch": "epic/[epic-id]",
   "startedAt": "[timestamp]",
   "currentWave": 1,
   "currentPhase": "adaptation",
@@ -341,10 +367,10 @@ Main Session (this command)
   │
   │   ... (documentation, code review, codex review, security)
   │
-  └─ Integration: merge all worktrees to main
+  └─ Integration: merge all worktrees to epic branch (NOT main)
 ```
 
-This preserves ticket-level parallelism (N tickets run concurrently) while using the same specialized agents as `/execute-ticket`. Phases are synchronized across the wave — all tickets complete adaptation before any starts implementation. This ensures interface contracts and shared decisions propagate correctly.
+This preserves ticket-level parallelism (N tickets run concurrently) while using the same specialized agents as `/execute-ticket`. Phases are synchronized across the wave — all tickets complete adaptation before any starts implementation. This ensures interface contracts and shared decisions propagate correctly. All merges target the **epic branch** (`epic/[epic-id]`), not the default branch — preventing partial deployments to staging and enabling a single human-reviewed PR when the epic is complete.
 
 ### 3.1 Pre-Wave Setup
 
@@ -354,10 +380,10 @@ For each ticket in the current wave:
 ```bash
 git check-ignore .claude/worktrees/ || echo ".claude/worktrees/" >> .gitignore
 
-default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-default_branch=${default_branch:-main}
+epic_branch="epic/[epic-id]"
 
-git worktree add .claude/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "origin/$default_branch"
+# Worktrees branch from the epic branch, not from main
+git worktree add .claude/worktrees/[ticket-id] -b feature/[ticket-id]-[slug] "$epic_branch"
 ```
 
 **3.1.2 Install dependencies:**
@@ -454,8 +480,8 @@ When in doubt, run the phase — a redundant pass costs minutes; a missing pass 
 
 | Aspect | Phase 3: Security Scan | Phase 5: Security Review |
 |--------|----------------------|------------------------|
-| Timing | Per-ticket, in worktree | Post-merge, on integrated branch |
-| Scope | Only this ticket's changed files | Full integrated codebase |
+| Timing | Per-ticket, in worktree | Post-merge, on epic branch |
+| Scope | Only this ticket's changed files | Full integrated epic branch |
 | Purpose | Catch per-ticket vulnerabilities | Catch cross-ticket security issues |
 | Dispatch | PARALLEL (read-only) | PARALLEL (read-only) |
 | Blocking | CRITICAL/HIGH → pause ticket | CRITICAL/HIGH → pause, do not close |
@@ -532,7 +558,7 @@ The agent prompt MUST include ALL of the following, VERBATIM and UNABRIDGED:
 
    ```bash
    cd .claude/worktrees/[ticket-id]
-   git diff --name-only origin/[default-branch]...HEAD
+   git diff --name-only epic/[epic-id]...HEAD
    ```
 
    Include in the agent prompt:
@@ -1002,6 +1028,7 @@ After EVERY significant event, update `.claude/swarm-state/[epic-id].json`:
 ```json
 {
   "epicId": "[epic-id]",
+  "epicBranch": "epic/[epic-id]",
   "startedAt": "[timestamp]",
   "lastUpdated": "[timestamp]",
   "currentWave": 1,
@@ -1089,16 +1116,17 @@ Before merging ANY branches, present the integration plan to the user and WAIT f
 ```
 ## Ready to Merge
 
-Merging [N] branches to [default_branch]:
+Merging [N] branches to epic branch (epic/[epic-id]):
 
 | Order | Branch | Ticket | Files Changed | Test Status |
 |-------|--------|--------|---------------|-------------|
 | 1 | feature/PRO-304-... | PRO-304 | 12 files | Passing |
 | 2 | feature/PRO-305-... | PRO-305 | 8 files | Passing |
 
+Target: epic/[epic-id] (NOT main — main is untouched until epic PR)
 Merge strategy: --no-ff (sequential, one at a time)
 Integration tests will run after each merge.
-Push to remote after all merges succeed.
+Push epic branch to remote after all merges succeed.
 
 Proceed? [Yes / No / Review branches first]
 ```
@@ -1111,13 +1139,12 @@ Proceed? [Yes / No / Review branches first]
 
 ### 4.1 Sequential Merge
 
-Merge tickets to the default branch one at a time (fewest dependencies first, then fewest files):
+Merge tickets to the **epic branch** one at a time (fewest dependencies first, then fewest files):
 
 ```bash
-default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-default_branch=${default_branch:-main}
-git checkout "$default_branch"
-git pull origin "$default_branch"
+epic_branch="epic/[epic-id]"
+git checkout "$epic_branch"
+git pull origin "$epic_branch"
 
 git merge feature/[ticket-id]-[slug] --no-ff -m "merge: [ticket-id] — [ticket title]"
 ```
@@ -1133,18 +1160,18 @@ npm test  # or appropriate test command
 - If tests fail: identify which merge introduced the failure, report to user
 - Do NOT auto-revert — the user decides
 
-**Push after all wave merges succeed:**
+**Push epic branch after all wave merges succeed:**
 
 **Before pushing (if `SWARM_AUTO_MERGE=false`):**
 ```
 All [N] merges succeeded. Integration tests passing.
 
-Push to origin/[default_branch]? [Yes / No]
+Push to origin/epic/[epic-id]? [Yes / No]
 ```
 WAIT for user approval.
 
 ```bash
-git push origin "$default_branch"
+git push origin "$epic_branch"
 ```
 
 ### 4.2 Update Swarm State
@@ -1159,26 +1186,26 @@ git push origin "$default_branch"
 
 ### 5.1 Post-Merge Security Review (Comprehensive)
 
-This is the COMPREHENSIVE security review on the integrated codebase. It runs AFTER all wave merges succeed. Unlike the per-ticket security scan in Phase 3 (which reviews isolated ticket changes in worktrees), this review:
+This is the COMPREHENSIVE security review on the integrated epic branch. It runs AFTER all wave merges to the epic branch succeed. Unlike the per-ticket security scan in Phase 3 (which reviews isolated ticket changes in worktrees), this review:
 
-- Sees ALL merged code from the wave together
+- Sees ALL merged code from the wave together on the epic branch
 - Checks cross-ticket auth and trust boundary interactions
 - Validates that combined data flows don't introduce new vulnerabilities
 - Reviews integration test results for security implications
 
 Include ALL prior security scan reports (from Phase 3) in the agent prompt so it can focus on integration-level concerns rather than re-checking per-ticket issues.
 
-For each merged ticket, run security review on the integrated codebase. Security reviews CAN run in parallel (they are read-only assessments on the same branch).
+For each merged ticket, run security review on the integrated epic branch. Security reviews CAN run in parallel (they are read-only assessments on the same branch).
 
 ```
 For each merged ticket (parallel):
   Spawn Agent:
     - agent: security-engineer-agent
-    - prompt: [ticket context + full codebase access on merged main]
+    - prompt: [ticket context + full codebase access on epic branch (epic/[epic-id])]
     - Include: the epic context bundle, ticket context, all prior phase reports
 ```
 
-The security agent reviews against the MERGED codebase — it sees all integrated code, not just the ticket's isolated changes.
+The security agent reviews against the epic branch — it sees all integrated code from this epic, not just the ticket's isolated changes.
 
 ### 5.2 Handle Security Results and Close Tickets
 
@@ -1277,6 +1304,7 @@ Post to the epic in Linear:
 ## Swarm Complete
 
 **Epic**: [epic-id] — [title]
+**Epic Branch**: epic/[epic-id]
 **Duration**: [total time]
 **Waves**: N
 **Tickets**: X completed, Y blocked, Z deferred
@@ -1303,11 +1331,52 @@ Post to the epic in Linear:
 [List any blocked tickets and their blocking reasons]
 
 ### Next Steps
+- **Review and merge the epic PR** — all work is on branch `epic/[epic-id]`, ready for human review
 - Run `/close-epic [epic-id]` for retrofit analysis and follow-up ticket creation
 - [If Codex reviews were skipped] Run `/codex-review [ticket-id]` for tickets missing cross-model review
 ```
 
-### 7.2 Clean Up Worktrees
+### 7.2 Create Epic PR
+
+Create a pull request from the epic branch to the default branch. This is the **single point of human review** for all work in the epic — no code reaches the default branch until this PR is approved and merged.
+
+```bash
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+default_branch=${default_branch:-main}
+epic_branch="epic/[epic-id]"
+
+gh pr create \
+  --base "$default_branch" \
+  --head "$epic_branch" \
+  --title "Epic: [epic-id] — [epic title]" \
+  --body "## Epic Summary
+
+[epic description summary]
+
+## Tickets Included
+| Ticket | Title | Status |
+|--------|-------|--------|
+[table of all tickets with completion status]
+
+## Review Notes
+- All tickets passed per-ticket security scan and post-merge security review
+- [N] tickets received cross-model Codex review
+- Integration tests passing on epic branch
+
+---
+*Created by /epic-swarm*"
+```
+
+Present the PR URL to the user:
+```
+Epic PR created: [PR URL]
+
+All epic work is on branch epic/[epic-id].
+The default branch (main) has NOT been modified.
+Merge this PR when ready to deploy.
+```
+
+### 7.3 Clean Up Worktrees
 
 ```bash
 for dir in .claude/worktrees/*/; do
@@ -1319,7 +1388,7 @@ done
 
 Worktrees for blocked/pending tickets are preserved for manual intervention.
 
-### 7.3 Transition to /close-epic
+### 7.4 Transition to /close-epic
 
 "All waves complete. Run `/close-epic [epic-id]` for retrofit analysis, follow-up tickets, and to clean up swarm state."
 

@@ -5,6 +5,27 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-04-07
+
+### Changed
+
+#### Epic Branch Isolation for `/epic-swarm`
+
+Previously, each wave of the epic swarm merged completed worktrees directly to the default branch (main), which triggered staging deployments of partially completed epics and provided no opportunity for human review before code reached staging.
+
+Now, `/epic-swarm` creates a dedicated **epic branch** (`epic/[epic-id]`) at the start of execution. All ticket worktrees branch from this epic branch, and all wave merges target it — the default branch is never modified during swarm execution. At epic completion, a single pull request is created from the epic branch to main, giving the team a clear review point before deployment.
+
+**Key changes:**
+- **New Phase 1.6 (Create Epic Branch)** — Creates `epic/[epic-id]` from the default branch before any work begins. Handles resume by detecting existing epic branches.
+- **Worktree creation branches from epic branch** — Phase 3.1.1 now creates worktrees from the epic branch instead of `origin/main`.
+- **Phase 4 merges to epic branch** — Integration merges target the epic branch. Approval gate messaging updated to make target clear.
+- **Phase 5 security review runs on epic branch** — Post-merge security review operates on the integrated epic branch, not main.
+- **New Phase 7.2 (Create Epic PR)** — Creates a GitHub PR from the epic branch to main with a summary of all included tickets and their status.
+- **State schema updated** — `epicBranch` field added to swarm state for resume support.
+- **`execute-ticket.md` worktree mode** — Updated to document that swarm merges target the epic branch, not main.
+
+---
+
 ## [3.2.0] - 2026-04-06
 
 ### Added
@@ -1548,6 +1569,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.0
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
