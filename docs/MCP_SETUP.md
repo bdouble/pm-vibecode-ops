@@ -570,7 +570,7 @@ Add to your `.claude/settings.json` (optional — defaults are sensible):
 {
   "env": {
     "CODEX_REVIEW_MODEL": "gpt-5.4",
-    "CODEX_REVIEW_REASONING": "extra-high",
+    "CODEX_REVIEW_REASONING": "xhigh",
     "CODEX_REVIEW_TIMEOUT": "4500"
   }
 }

@@ -175,7 +175,7 @@ Parse Codex's output and present to the user in three sections:
 ```
 ## Codex Cross-Model Review Results
 
-Model: gpt-5.4 | Reasoning: extra-high
+Model: gpt-5.4 | Reasoning: xhigh
 
 ### Auto-Fixed (P0-P2, clear-cut)
 | # | Priority | Category | File | What was fixed |
@@ -250,7 +250,7 @@ Use mcp__linear-server__create_comment with:
 ```markdown
 ## Cross-Model Review Report
 
-**Model**: gpt-5.4 | **Reasoning**: extra-high | **Date**: [date]
+**Model**: gpt-5.4 | **Reasoning**: xhigh | **Date**: [date]
 
 ### Summary
 - **Total findings**: N (P0: X, P1: Y, P2: Z, P3: W)
@@ -297,6 +297,6 @@ All configurable via environment variables:
 |----------|---------|-------------|
 | `CODEX_REVIEW_HOME` | `~/.codex` | Codex CLI home directory (config.toml + credentials) |
 | `CODEX_REVIEW_MODEL` | `gpt-5.4` | OpenAI model ID (must start with `gpt-` or `o`) |
-| `CODEX_REVIEW_REASONING` | `extra-high` | Reasoning effort: none, low, medium, high, extra-high |
+| `CODEX_REVIEW_REASONING` | `xhigh` | Reasoning effort: none, low, medium, high, xhigh |
 | `CODEX_REVIEW_TIMEOUT` | `4500` | Timeout in seconds per call (75 min default — repo-aware reviews are thorough) |
 | `CODEX_REVIEW_FOCUS` | `all` | Focus area: bugs, security, performance, all |
