@@ -201,6 +201,22 @@ For each phase that needs to run:
 - Labels (for agent type selection)
 - Parent epic (if any)
 
+**From ticket comments (ALL — do not filter to phase reports only):**
+
+The `list_comments` call in Step 2 fetched all comments. In addition to using phase report comments for resume detection, include ALL non-phase-report comments in the agent prompt. These are human discussion, PM clarifications, requirement updates, and other context that may override or refine the ticket description.
+
+Present them to the agent as:
+```
+## Ticket Comments (non-phase-report, chronological)
+
+[comment author] — [timestamp]:
+[full comment body]
+
+[next comment...]
+```
+
+**Why this matters:** A PM might comment "actually, use the v2 API instead of v1" or "the acceptance criteria for X have changed — see updated description." If these comments are not passed to agents, they will implement against stale requirements.
+
 **From prior phase reports (extract substantive sections):**
 - Adaptation: Implementation approach, technical decisions, file targets, trade-off reasoning, constraints, deferred/descoped items
 - Implementation: Files changed, patterns used, edge cases noted, concerns flagged, integration points
@@ -1216,8 +1232,9 @@ With 1M token context windows, typical ticket workflows use ~25% of available co
 **For each phase agent prompt, include:**
 
 1. **Full ticket description, acceptance criteria, and Technical Notes** — verbatim, never summarized
-2. **Complete prior phase reports** — copy each report in full from Linear comments, do not extract or condense
-3. **Git context** — branch, PR number, files changed
+2. **All non-phase-report ticket comments** — human discussion, PM clarifications, requirement updates (chronological, verbatim)
+3. **Complete prior phase reports** — copy each report in full from Linear comments, do not extract or condense
+4. **Git context** — branch, PR number, files changed
 
 **Do NOT:**
 - Summarize or condense prior phase reports

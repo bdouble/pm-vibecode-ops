@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] - 2026-04-07
+
+### Fixed
+- **execute-ticket: pass all ticket comments to agents** — Non-phase-report comments (human discussion, PM clarifications, requirement updates) were silently dropped during agent context gathering. Agents now receive all ticket comments chronologically, preventing stale requirements when PMs post updates in comments. Updated Step 3.1 context gathering and Full Context Inclusion Policy.
+
+---
+
 ## [3.3.0] - 2026-04-07
 
 ### Changed
@@ -1569,6 +1576,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.1
 [3.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.0
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
