@@ -5,6 +5,40 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-04-07
+
+### Added
+
+#### Phase Reporting and Codex Finding Resolution Skills
+
+Two new auto-activated skills enforce discipline that the epic-swarm orchestrator was silently skipping — posting phase reports to Linear and resolving Codex findings.
+
+**Problem:** PRO-310 epic swarm completed 11 tickets but most had zero phase reports posted to Linear. Codex review findings (P1-P3) were silently dropped. The instructions existed in epic-swarm.md but the orchestrator skipped them under cognitive load.
+
+**Solution:** Skills with anti-rationalization, gold-standard examples, and explicit invocation from both workflows.
+
+**`swarm-phase-reporting` skill:**
+- Enforces posting structured reports to Linear after every phase for every ticket
+- Includes PRO-269 comment thread as gold-standard examples (`examples/pro-269-phase-reports.md`)
+- Full report templates for all 8 phases (`references/report-templates.md`)
+- Report validation — required fields per phase, retry logic for missing fields
+- Anti-rationalization table addressing specific excuses observed in production
+- Quality label application rules (tests-complete, docs-complete, code-reviewed, security-approved)
+
+**`codex-finding-resolution` skill:**
+- Enforces resolving ALL P1-P3 Codex findings — fix, dismiss with reasoning, or defer with user approval
+- 6-step process: run review → parse findings → present to user → wait for decisions → apply fixes → post full report
+- Templates for skip/error cases (server unavailable, rate limited, timeout)
+- Anti-rationalization table for common excuses about skipping findings
+
+**Workflow integration:**
+- Both epic-swarm.md and execute-ticket.md now explicitly invoke these skills via `Invoke Skill:` at the critical decision points
+- Epic-swarm hard constraints expanded: #4 (every phase posts report) and #5 (codex findings must be resolved)
+- Phase result processing (Section 3.2.4) now starts with mandatory skill invocation (3.2.4.0)
+- Codex review (Section 3.3) restructured around the skill's resolution process
+
+---
+
 ## [3.3.5] - 2026-04-07
 
 ### Fixed
@@ -1604,6 +1638,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [2.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.4.0
 [2.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.2
 [2.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.1
+[3.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.4.0
 [3.3.5]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.5
 [3.3.4]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.4
 [3.3.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.3

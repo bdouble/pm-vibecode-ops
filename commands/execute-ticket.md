@@ -593,6 +593,16 @@ After every agent returns, verify that file changes are as expected:
    ```
    If unexpected changes found in the parent repo, report to the user before proceeding.
 
+#### 3.3.2 Invoke Phase Reporting Skill (MANDATORY)
+
+**Before processing any agent results, invoke the `swarm-phase-reporting` skill:**
+
+```
+Invoke Skill: swarm-phase-reporting
+```
+
+This skill enforces report posting discipline — every phase must post a full structured report to Linear. The skill provides report templates, validation rules, and gold-standard examples. Follow its instructions for all subsequent steps.
+
 #### 3.4 Parse Agent Report
 
 Agent must return a structured report. Parse for:
@@ -999,6 +1009,14 @@ If not blocked, proceed to the next phase in sequence.
 ## Step 3.8: Phase 5.5 — Cross-Model Review (Codex)
 
 **This phase runs between codereview and security-review.** It is handled directly by the orchestrator using MCP tool calls, not via an agent.
+
+**Before processing Codex results, invoke the `codex-finding-resolution` skill:**
+
+```
+Invoke Skill: codex-finding-resolution
+```
+
+This skill defines the complete process for handling Codex findings — presenting P1-P3 items to the user, getting decisions, applying fixes, and posting full reports to Linear. Follow the skill's instructions. Do NOT silently skip or auto-dismiss findings.
 
 ### Prerequisites Check
 

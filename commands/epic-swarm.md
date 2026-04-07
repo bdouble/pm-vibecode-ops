@@ -45,6 +45,14 @@ Claude Code blocks compound commands combining `cd` with `git`. All git operatio
 
 The orchestrator dispatches all agents directly — it does NOT delegate to `/execute-ticket`.
 
+### 4. Every phase MUST post a report to Linear
+
+After every phase completes for every ticket, post the full structured report as a Linear comment via `mcp__linear-server__create_comment`. A phase without a posted report is a phase that never happened. **Invoke the `swarm-phase-reporting` skill at every phase completion point** — it provides templates, validation, and anti-rationalization guidance.
+
+### 5. Codex findings MUST be resolved, not ignored
+
+When Codex review returns P1-P3 findings, present them to the user, get decisions, and apply fixes. **Invoke the `codex-finding-resolution` skill before processing any Codex results** — it defines the full resolution process.
+
 ---
 
 ## Input
@@ -743,6 +751,18 @@ For each ticket that just had an agent dispatched:
 
 For each returned agent, execute the following steps IN ORDER. This pipeline mirrors `/execute-ticket` Steps 3.4 through 3.6 to ensure every ticket receives the same post-processing regardless of whether it runs standalone or within a swarm.
 
+##### 3.2.4.0 Invoke Phase Reporting Skill (MANDATORY — before any result processing)
+
+**Before processing results, invoke the `swarm-phase-reporting` skill.** This skill enforces report posting discipline and provides report templates. Invoke it using the Skill tool:
+
+```
+Invoke Skill: swarm-phase-reporting
+```
+
+The skill will load the report format requirements, validation rules, and gold-standard examples. Follow its instructions for every subsequent step in this pipeline. The skill's anti-rationalization guidance applies — do not skip report posting for any reason.
+
+**This invocation is non-negotiable.** If you are processing phase results and have not invoked `swarm-phase-reporting`, STOP and invoke it now.
+
 ##### 3.2.4.1 Parse Status Code
 
 Parse the agent's structured report for:
@@ -1112,20 +1132,34 @@ Write the state file IMMEDIATELY after each event. This is the persistence mecha
 
 The Codex review runs differently from agent phases — it uses MCP tools, not agent dispatch.
 
+**Before processing Codex results, invoke the `codex-finding-resolution` skill:**
+
+```
+Invoke Skill: codex-finding-resolution
+```
+
+**This invocation is mandatory.** The skill defines the complete process for handling Codex findings — presenting them to the user, getting decisions on P1-P3 items, applying fixes, and posting reports to Linear. Follow the skill's instructions exactly. Do NOT silently skip findings or auto-dismiss P1-P3 items.
+
 For each ticket that completed code review:
 
 ```
 Call mcp__codex-review-server__codex_review_and_fix with:
   - project_dir: [absolute path to ticket's worktree]
   - base_branch: [the worktree's base branch]
-  - context: [ticket description + AC summary]
+  - context: [ticket description + AC + implementation summary + all prior phase reports]
 ```
 
-**Track the outcome for each ticket:**
-- **Success:** Post Codex review report to Linear. Commit any fixes.
-- **MCP server not available:** Mark ticket as `codex-review-skipped` with reason `server_unavailable`. Post to Linear: "Cross-model review skipped — Codex MCP server not configured."
-- **Rate limited:** Retry once (60s). If still limited, mark as `codex-review-skipped` with reason `rate_limit`. Post to Linear: "Cross-model review deferred — rate limit reached."
-- **Error (auth, timeout, other):** Mark as `codex-review-skipped` with reason from error. Post to Linear: "Cross-model review failed — [error message]."
+**After Codex returns, follow the `codex-finding-resolution` skill process:**
+
+1. **Parse findings** into Auto-Fixed, Needs Decision, and For Awareness categories
+2. **Present ALL findings to the user** — do not skip this step
+3. **Wait for user decisions** on every Needs Decision item
+4. **Apply fixes** (via `codex_fix` or manually) for approved items
+5. **Commit fixes** in the ticket's worktree
+6. **Post the full Cross-Model Review Report to Linear** with all findings and their resolutions
+7. **Add `codex-reviewed` label** to the ticket
+
+**If Codex review fails or is unavailable:** The `codex-finding-resolution` skill provides templates for skip/error reports. Post the appropriate skip report to Linear — even a "review skipped" comment is required so the absence of a comment always means the step was forgotten.
 
 In ALL skip/failure cases, the ticket continues to security review. Codex review is valuable but never a hard gate.
 
