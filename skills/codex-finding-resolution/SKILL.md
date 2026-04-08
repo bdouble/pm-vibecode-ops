@@ -115,42 +115,64 @@ mcp__linear-server__create_comment:
 
 **Report template:**
 
+The report MUST capture the full audit trail: what Codex found, what it fixed, what it asked the user, what the user decided, and why. This enables `/close-epic` to extract deferred items and gives the team a complete review history.
+
 ```markdown
 ## Cross-Model Review Report
 
-**Model**: [model] | **Date**: [date]
+**Model**: [model] | **Reasoning**: [reasoning level] | **Date**: [date]
 
 ### Summary
 - **Total findings**: N (P0: X, P1: Y, P2: Z, P3: W)
-- **Auto-fixed**: N (clear-cut P0-P2)
-- **Fixed after review**: N (P1-P2 with user guidance)
-- **Dismissed**: N (with reasoning)
+- **Auto-fixed by Codex**: N (unambiguous P0-P3 — applied and committed)
+- **Fixed after user review**: N (ambiguous items user chose to fix)
+- **Dismissed by user**: N (with reasoning)
 - **Deferred**: N (to follow-up tickets)
-- **For awareness**: N (P3)
+- **Declined by Codex**: N (identified but not auto-fixed, with reasoning)
+- **For awareness**: N (P3 informational)
 
 ### Auto-Fixed Items
-| Priority | File | Change | Reasoning |
-|----------|------|--------|-----------|
-| [P-level] | [file:line] | [what changed] | [why] |
+Items Codex fixed automatically because the correct fix was unambiguous.
 
-### Human-Decided Items
-| Priority | File | Decision | Reasoning |
-|----------|------|----------|-----------|
-| [P-level] | [file:line] | Fixed / Dismissed / Deferred | [user's reasoning] |
+| # | Priority | Category | File | What Changed | Codex Reasoning |
+|---|----------|----------|------|-------------|-----------------|
+| [n] | [P-level] | [bug/security/logic/style] | [file:line] | [what changed] | [why this was fixed] |
+
+### User-Reviewed Items
+Items Codex identified but could not auto-fix due to ambiguity. Each was presented to the user with Codex's question and recommendation. The user's decision and reasoning are recorded.
+
+| # | Priority | File | Issue | Codex Question | Codex Recommendation | User Decision | User Reasoning |
+|---|----------|------|-------|---------------|---------------------|--------------|----------------|
+| [n] | [P-level] | [file:line] | [issue description] | [what Codex was uncertain about] | [what Codex would suggest] | Fixed / Dismissed / Deferred | [user's stated reasoning] |
+
+### Declined by Codex
+Items Codex identified but chose not to auto-fix because the fix would require broader changes, the risk of the fix outweighs the issue, or the item is outside the scope of a surgical review.
+
+| # | Priority | Category | File | Issue | Why Not Auto-Fixed |
+|---|----------|----------|------|-------|-------------------|
+| [n] | [P-level] | [category] | [file:line] | [issue description] | [Codex's reasoning for declining] |
 
 ### For Awareness (P3)
-| Description | File | Why Low Priority |
-|-------------|------|-----------------|
-| [observation] | [file:line] | [reasoning] |
+Low-priority observations that don't require action but are worth noting.
+
+| # | Category | File | Observation |
+|---|----------|------|-------------|
+| [n] | [category] | [file:line] | [observation] |
 
 ### Deferred Items
 | Classification | Severity | Location | Issue | Reason |
 |---------------|----------|----------|-------|--------|
-| DISCOVERED | [severity] | [file:line] | [finding] | [why deferred] |
+| DISCOVERED | [severity] | [file:line] | [finding] | [why deferred — include user's reasoning if user chose to defer] |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
+
+**Key rules for this report:**
+- The "User-Reviewed Items" section preserves the FULL context chain: issue → Codex's uncertainty → Codex's recommendation → user's decision → user's reasoning. Do NOT collapse this into just "decision + reasoning" — the Codex question and recommendation are critical for understanding WHY the item needed human judgment.
+- Items the user chose to DEFER in the User-Reviewed section MUST also appear in the Deferred Items table with classification `DISCOVERED`.
+- Items in "Declined by Codex" that the user later identifies as needing fixes should be addressed in a follow-up — they are NOT retroactively fixed during this phase.
+- For `/execute-ticket` standalone mode, use footer: `*Automated by /execute-ticket*`
 
 ### Step 6: Add Label
 
@@ -169,7 +191,7 @@ mcp__linear-server__update_issue:
 | "The user is busy, I'll skip the decision step" | Finding resolution is the whole point. WAIT for the user. |
 | "These findings aren't critical" | Past projects fixed ALL P1-P3. The user decides criticality, not you. |
 | "Codex review timed out, nothing to do" | Post a skip note to Linear. Document WHY it was skipped. |
-| "The wave is waiting, I'll defer all findings" | Present findings. User can choose to defer, but that's their call. |
+| "The tier is waiting, I'll defer all findings" | Present findings. User can choose to defer, but that's their call. |
 | "I already posted the phase reports" | Codex report is a SEPARATE report. It gets its own comment. |
 | "The report would be mostly empty" | "0 findings" IS a report. Post it — it proves the review ran. |
 
@@ -186,7 +208,7 @@ Even when Codex review doesn't complete, post a record to Linear:
 No cross-model review was performed. Install from: [server URL]
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 **Rate limited:**
@@ -198,7 +220,7 @@ No cross-model review was performed. Install from: [server URL]
 Run `/codex-review [ticket-id]` independently to complete cross-model review.
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 **Error/timeout:**
@@ -211,7 +233,7 @@ Cross-model review did not complete. Error: [details]
 Run `/codex-review [ticket-id]` independently to retry.
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 **In ALL cases, a comment is posted.** The absence of a Cross-Model Review Report comment means the step was forgotten, not that it was skipped for a good reason.

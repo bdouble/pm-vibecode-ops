@@ -170,34 +170,41 @@ This runs in read-only mode. No files are modified.
 
 ## Step 3: Present Results
 
-Parse Codex's output and present to the user in three sections:
+Parse Codex's output and present to the user in four sections:
 
 ```
 ## Codex Cross-Model Review Results
 
 Model: gpt-5.4 | Reasoning: xhigh
 
-### Auto-Fixed (P0-P2, clear-cut)
-| # | Priority | Category | File | What was fixed |
-|---|----------|----------|------|---------------|
-| 1 | P0 | security | src/auth.ts:42 | Parameterized SQL query |
-| 2 | P1 | bug | src/api.ts:89 | Added null check on response |
+### Auto-Fixed (P0-P3, unambiguous)
+| # | Priority | Category | File | What Changed | Codex Reasoning |
+|---|----------|----------|------|-------------|-----------------|
+| 1 | P0 | security | src/auth.ts:42 | Parameterized SQL query | Raw string interpolation — SQL injection risk |
+| 2 | P1 | bug | src/api.ts:89 | Added null check on response | Optional field accessed without guard |
 
-### Needs Your Decision (P0-P2, has questions)
-| # | Priority | Category | File | Issue | Codex's Question |
-|---|----------|----------|------|-------|-----------------|
-| 3 | P1 | logic | src/util.ts:15 | Off-by-one in pagination | "Should this be 0-indexed or 1-indexed? The API docs are ambiguous." |
+### Needs Your Decision (has questions or ambiguity)
+| # | Priority | Category | File | Issue | Codex's Question | Codex Recommendation |
+|---|----------|----------|------|-------|-----------------|---------------------|
+| 3 | P1 | logic | src/util.ts:15 | Off-by-one in pagination | "0-indexed or 1-indexed? API returns 1-indexed but frontend sends 0-indexed." | Align to API convention (1-indexed) |
+
+### Declined by Codex (identified but not auto-fixed)
+| # | Priority | Category | File | Issue | Why Not Fixed |
+|---|----------|----------|------|-------|--------------|
+| 4 | P2 | perf | src/routes/search.ts:120 | N+1 query in loop | Fix requires restructuring data loader — too broad for auto-fix |
 
 ### For Awareness (P3)
-| # | Category | File | Description |
+| # | Category | File | Observation |
 |---|----------|------|-------------|
-| 4 | style | src/config.ts:8 | Magic number could be a named constant |
+| 5 | style | src/config.ts:8 | Magic number could be a named constant |
 ```
 
-**For "Needs Your Decision" items, ask the user:**
-- **FIX** — provide guidance, then run second pass
-- **DISMISS** — skip (note the reason)
-- **DEFER** — add to technical debt
+**For "Needs Your Decision" items, ask the user for each:**
+- **FIX** — provide guidance, then run second pass via `codex_fix`
+- **DISMISS** — skip (record the reason — it goes in the Linear report)
+- **DEFER** — add to deferred items for follow-up ticket
+
+**Record the user's decision and reasoning for each item.** These are included in the Linear report (Step 6) as the "User-Reviewed Items" section with the full context chain: issue → Codex question → Codex recommendation → user decision → user reasoning.
 
 ---
 
@@ -247,6 +254,8 @@ Use mcp__linear-server__create_comment with:
 
 **Report format:**
 
+The report captures the full audit trail: what Codex found, what it fixed, what was ambiguous, what the user decided, and why. This serves both as documentation and as input for `/close-epic` deferred item extraction.
+
 ```markdown
 ## Cross-Model Review Report
 
@@ -254,26 +263,44 @@ Use mcp__linear-server__create_comment with:
 
 ### Summary
 - **Total findings**: N (P0: X, P1: Y, P2: Z, P3: W)
-- **Auto-fixed**: N (clear-cut P0-P2)
-- **Fixed after review**: N (P0-P2 with user guidance)
-- **Dismissed**: N
-- **Deferred**: N
-- **For awareness**: N (P3)
+- **Auto-fixed by Codex**: N (unambiguous P0-P3 — applied and committed)
+- **Fixed after user review**: N (ambiguous items user chose to fix)
+- **Dismissed by user**: N (with reasoning)
+- **Deferred**: N (to follow-up tickets)
+- **Declined by Codex**: N (identified but not auto-fixed, with reasoning)
+- **For awareness**: N (P3 informational)
 
 ### Auto-Fixed Items
-[For each: priority, file, what was changed and why]
+| # | Priority | Category | File | What Changed | Codex Reasoning |
+|---|----------|----------|------|-------------|-----------------|
+| [n] | [P-level] | [category] | [file:line] | [change description] | [why fixed] |
 
-### Human-Decided Items
-[For each: priority, file, decision (fixed/dismissed/deferred), reasoning]
+### User-Reviewed Items
+Items Codex could not auto-fix due to ambiguity — presented to user with Codex's question and recommendation.
+
+| # | Priority | File | Issue | Codex Question | Codex Recommendation | User Decision | User Reasoning |
+|---|----------|------|-------|---------------|---------------------|--------------|----------------|
+| [n] | [P-level] | [file:line] | [issue] | [uncertainty] | [suggestion] | Fixed/Dismissed/Deferred | [reasoning] |
+
+### Declined by Codex
+Items identified but not auto-fixed (broader refactoring needed, risk outweighs benefit, etc.).
+
+| # | Priority | Category | File | Issue | Why Not Auto-Fixed |
+|---|----------|----------|------|-------|-------------------|
+| [n] | [P-level] | [category] | [file:line] | [issue] | [Codex reasoning] |
 
 ### For Awareness (P3)
-[For each: description, file, why it's low priority]
+| # | Category | File | Observation |
+|---|----------|------|-------------|
+| [n] | [category] | [file:line] | [observation] |
 
 ### Deferred Items
-[List items for follow-up tickets]
+| Classification | Severity | Location | Issue | Reason |
+|---------------|----------|----------|-------|--------|
+| DISCOVERED | [severity] | [file:line] | [finding] | [why deferred] |
 ```
 
-**If this is running as part of `/execute-ticket`:** the report becomes part of the context passed to the Security Review phase.
+**If this is running as part of `/execute-ticket` or `/epic-swarm`:** the report becomes part of the context passed to the Security Review phase. The "User-Reviewed Items" and "Declined by Codex" sections are critical for security review — they may reveal issues the security agent should assess.
 
 ---
 

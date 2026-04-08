@@ -459,57 +459,55 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 
 #### `/epic-swarm`
 
-**Purpose**: Orchestrate concurrent execution of an epic's sub-tickets using dependency-aware wave scheduling with worktree isolation, phase-synchronized dispatch, and dual-layer security review.
+**Purpose**: Orchestrate sequential execution of an epic's sub-tickets, running each ticket through the full 7-phase pipeline with dependency-aware tier scheduling, worktree isolation, hard checkpoint enforcement, and dual-layer security review.
 
-**Usage**: `/epic-swarm <epic-id> [--max-parallel N] [--dry-run] [--wave N]`
+**Usage**: `/epic-swarm <epic-id> [--dry-run] [--tier N] [--parallel]`
 
 **Examples**:
 ```bash
-# Execute all tickets in an epic concurrently
+# Execute all tickets in an epic (sequential, recommended)
 /epic-swarm EPIC-123
 
-# Limit to 2 concurrent tickets
-/epic-swarm EPIC-123 --max-parallel 2
-
-# Preview the wave plan without executing
+# Preview the tier plan without executing
 /epic-swarm EPIC-123 --dry-run
 
-# Resume from wave 2
-/epic-swarm EPIC-123 --wave 2
+# Resume from tier 2
+/epic-swarm EPIC-123 --tier 2
+
+# Enable parallel execution for independent tickets (opt-in)
+/epic-swarm EPIC-123 --parallel
 ```
 
 **Key Features**:
-- **Dependency-Aware Wave Scheduling**: Topological sort assigns tickets to waves based on dependency depth. File overlap detection prevents conflicts within waves.
-- **Sequential Write Dispatch**: Write phases (implementation, testing, documentation) dispatch agents one at a time with `cd` to each worktree, guaranteeing isolation. Read-only phases (adaptation, code review, security scan) run in parallel.
-- **Worktree Integrity Verification**: Mandatory post-dispatch check after every agent — verifies changes landed in the correct worktree, checks for cross-contamination, catches stray files in project root.
-- **Approval Gates**: User confirmation required before merge-to-main, push-to-remote, and ticket closure (configurable via `SWARM_AUTO_MERGE`).
+- **Ticket-Sequential Full Pipeline**: Each ticket runs ALL 7 phases (adaptation → implementation → testing → documentation → code review → codex review → security scan) before the next ticket starts. This ensures every ticket's adaptation examines code built by all prior tickets.
+- **Hard Checkpoint Before Merge**: After all 7 phases complete, the orchestrator fetches all Linear comments and verifies all 7 required report headers exist. Missing reports = HARD STOP. This prevents the phase-skipping failure observed in PRO-310 and PRO-311.
+- **Dependency-Aware Tier Scheduling**: Topological sort assigns tickets to tiers based on dependency depth. Tickets in later tiers see all prior tier code in their worktrees.
+- **Orchestrator Notes**: Persistent `.swarm/orchestrator-log.md` records files created, interfaces defined, and patterns used per ticket. Read during subsequent tickets' adaptation phases for cross-ticket context.
+- **Generic Worktree Setup**: Auto-detects build system from lockfiles (npm/pnpm/yarn/bun/pip/cargo/go/bundler), runs install + generate commands. No hardcoded tech-stack references.
+- **Per-Ticket Merge**: Each ticket merges to the epic branch immediately after passing the hard checkpoint, so the next ticket's worktree includes all prior work.
 - **Dual Security Review**: Pre-merge per-ticket scan catches individual vulnerabilities; post-merge comprehensive review on the integrated codebase catches cross-ticket security issues.
-- **Persistent Swarm State**: State file updated after every significant event enables resume after interruption.
-- **Context Bundles**: Epic-level and per-ticket context written to disk; agents read from files for full-fidelity context without token limits.
-- **Graceful Degradation**: Works with or without parallelization metadata from `/planning`; falls back to heuristic dependency analysis with user confirmation.
+- **Persistent Swarm State**: State file updated after every phase event enables resume after interruption.
+- **Parallelism Opt-In**: `--parallel` flag enables concurrent execution for independent tickets. Default is fully sequential. User must confirm parallel execution at tier planning.
 
 **Configuration**:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SWARM_MAX_PARALLEL` | `4` | Max concurrent tickets per wave |
-| `SWARM_AUTO_MERGE` | `false` | Auto-merge without user approval |
+| `SWARM_AUTO_MERGE` | `false` | Auto-merge without user approval at each ticket checkpoint |
 | `SWARM_BASELINE_TESTS` | `true` | Run baseline tests (blocking) before starting |
 | `SWARM_CONFLICT_STRATEGY` | `stop` | Merge conflict handling: `stop` or `auto-trivial` |
-| `SWARM_PARALLEL_WRITES` | `false` | Allow parallel dispatch for write phases (opt-in) |
 
-**Seven-Phase Workflow**:
-1. Analysis & Context Gathering - Fetch epic/tickets, build dependency DAG, gather context bundles
-2. Wave Planning - Topological sort, file overlap check, present wave plan for approval
-3. Wave Execution - Phase-by-phase dispatch across all tickets in the wave (adaptation → implementation → testing → documentation → code review → codex review → security scan)
-4. Integration - Sequential merge with approval gate, integration tests, push with approval
-5. Security Gate - Comprehensive post-merge security review on integrated codebase
-6. Wave Transition - Update dependency graph, plan next wave
-7. Epic Completion - Final report, worktree cleanup
+**Six-Phase Workflow**:
+1. Analysis & Context Gathering — Fetch epic/tickets, build dependency DAG, gather context bundles, initialize orchestrator notes
+2. Tier Planning — Topological sort, file overlap check, present tier plan for approval
+3. Tier Execution — For each ticket: setup worktree → run all 7 phases → hard checkpoint → merge → update notes
+4. Tier Transition — Update dependency graph, plan next tier
+5. Security Gate — Comprehensive post-merge security review on integrated codebase, ticket closure
+6. Epic Completion — Final report, epic PR creation, worktree cleanup
 
-**Output**: Phase reports posted to each ticket in Linear, wave summaries posted to epic, swarm state file for resume, all tickets closed after post-merge security passes.
+**Output**: All 7 phase reports posted to each ticket in Linear, tier summaries posted to epic, swarm state file for resume, all tickets closed after post-merge security passes, single epic PR for human review.
 
-**Time**: Varies by epic size. A 2-ticket single-wave epic takes ~45-60 minutes.
+**Time**: Varies by epic size. Each ticket takes ~1-2 hours for the full 7-phase pipeline.
 
 ---
 

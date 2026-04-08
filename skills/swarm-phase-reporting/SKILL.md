@@ -49,7 +49,7 @@ Every report comment MUST use this exact structure:
 [Agent's full structured report — verbatim, unmodified, no summarization]
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 Or for execute-ticket:
@@ -89,7 +89,7 @@ Before posting, validate the report contains these fields. If ANY required field
 | Testing | Status, Gate #0 result, Gate #1 result, Gate #2 result, Gate #3 result |
 | Documentation | Status, Summary, Documentation Updated or Docs Created |
 | Code Review | Review Status, Requirements Checklist, Files Reviewed |
-| Codex Review | Summary with finding counts by priority, items auto-fixed, items needing decision |
+| Codex Review | Summary with finding counts by priority, Auto-Fixed Items section, User-Reviewed Items section, Declined by Codex section |
 | Security Scan | Status, Security Checklist or OWASP assessment |
 | Security Review | Status, Security Checklist, OWASP assessment, Remediation Summary |
 
@@ -123,7 +123,7 @@ After posting the report, add the appropriate label:
 | "This phase didn't produce anything interesting" | Every phase produces a report. Even "no issues found" is a report. |
 | "I'll post a summary at the end" | Summaries lose deferred items, AC verification details, and finding specifics. Post full reports. |
 | "The ticket is already Done, no need to post" | Reports are the audit trail. Post them even for Done tickets. |
-| "Posting would slow down the wave" | One API call takes < 1 second. Skipping it breaks /close-epic. |
+| "Posting would slow down the tier" | One API call takes < 1 second. Skipping it breaks /close-epic. |
 | "The report didn't have the right format" | Fix the format and post. Don't skip posting because format was imperfect. |
 
 ## Gold Standard: PRO-269

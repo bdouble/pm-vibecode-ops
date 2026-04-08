@@ -43,7 +43,7 @@ mcp__linear-server__create_comment:
 | Classification | Severity | Location | Issue | Reason |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 ---
@@ -77,7 +77,7 @@ mcp__linear-server__create_comment:
 | Classification | Severity | Location | Issue | Reason |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 ---
@@ -111,7 +111,7 @@ mcp__linear-server__create_comment:
 | Classification | Severity | Location | Issue | Reason |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 ---
@@ -133,7 +133,7 @@ mcp__linear-server__create_comment:
 | Classification | Severity | Location | Issue | Reason |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 ---
@@ -168,7 +168,7 @@ mcp__linear-server__create_comment:
 | Classification | Severity | Location | Issue | Reason |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 ---
@@ -178,29 +178,34 @@ mcp__linear-server__create_comment:
 ```markdown
 ## Cross-Model Review Report
 
-**Model**: [model] | **Date**: [date]
+**Model**: [model] | **Reasoning**: [level] | **Date**: [date]
 
 ### Summary                                    <!-- REQUIRED -->
 - **Total findings**: N (P0: X, P1: Y, P2: Z, P3: W)
-- **Auto-fixed**: N
-- **Fixed after review**: N
-- **Dismissed**: N
+- **Auto-fixed by Codex**: N
+- **Fixed after user review**: N
+- **Dismissed by user**: N
 - **Deferred**: N
+- **Declined by Codex**: N
+- **For awareness**: N
 
-### Auto-Fixed Items                           <!-- REQUIRED if any -->
-| Priority | File | Change | Reasoning |
+### Auto-Fixed Items                           <!-- REQUIRED (even if "0 items") -->
+| # | Priority | Category | File | What Changed | Codex Reasoning |
 
-### Human-Decided Items                        <!-- REQUIRED if any -->
-| Priority | File | Decision | Reasoning |
+### User-Reviewed Items                        <!-- REQUIRED (even if "0 items") -->
+| # | Priority | File | Issue | Codex Question | Codex Recommendation | User Decision | User Reasoning |
+
+### Declined by Codex                          <!-- REQUIRED (even if "0 items") -->
+| # | Priority | Category | File | Issue | Why Not Auto-Fixed |
 
 ### For Awareness (P3)                         <!-- include all -->
-| Description | File | Why Low Priority |
+| # | Category | File | Observation |
 
 ### Deferred Items                             <!-- REQUIRED -->
 | Classification | Severity | Location | Issue | Reason |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 ---
@@ -225,7 +230,7 @@ mcp__linear-server__create_comment:
 | Classification | Severity | Location | Issue | Reason |
 
 ---
-*Automated by /epic-swarm — Wave [N]*
+*Automated by /epic-swarm — Tier [N]*
 ```
 
 ---

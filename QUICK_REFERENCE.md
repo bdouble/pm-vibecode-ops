@@ -47,13 +47,13 @@ Use individual phases when debugging a specific phase or needing manual interven
 |---|---------|---------|-------------|
 | 11 | `/close-epic [epic-id]` | **Final epic gate** | Review report |
 
-### Concurrent Execution (New in 3.0)
+### Epic Execution (Redesigned in 4.0)
 
 | Command | Purpose | Your Action |
 |---------|---------|-------------|
-| `/epic-swarm [epic-id]` | **Run tickets in parallel** | Approve wave plan, resolve conflicts |
+| `/epic-swarm [epic-id]` | **Run all tickets through full pipeline** | Approve tier plan, review Codex findings, resolve conflicts |
 
-Requires dependency annotations from `/planning` (gracefully degrades with heuristic analysis if missing). Write phases dispatch sequentially to guarantee worktree isolation; read-only phases run in parallel. Approval gates before merge and push. Dual security review: per-ticket pre-merge scan + comprehensive post-merge review on integrated codebase. Persistent swarm state enables resume after interruption.
+Processes each ticket through ALL 7 phases (adaptation → security scan) before starting the next. Every ticket's adaptation examines code built by prior tickets. Hard checkpoint verifies all 7 phase reports exist before merge. Dual security review. Persistent swarm state enables resume. Parallelism available via `--parallel` flag (opt-in, user confirms).
 
 ---
 
@@ -164,4 +164,4 @@ Your PRD must include:
 
 ---
 
-**Version 3.4.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 4.0.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

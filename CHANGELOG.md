@@ -5,6 +5,56 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-04-08
+
+### Changed
+
+#### Epic-Swarm: Ticket-Sequential Architecture (Breaking)
+
+Complete rewrite of the epic-swarm orchestration model based on PRO-310 and PRO-311 post-mortem analysis. Both runs skipped 5 of 7 workflow phases for all tickets — only adaptation (Wave 1) and implementation were executed. Testing, documentation, code review, codex review, and security review were never dispatched. All tickets were marked Done without security review.
+
+**Root cause:** The phase-parallel-across-wave architecture relied on the LLM orchestrator to follow a 1,628-line specification through 280+ pipeline steps. Under cognitive load, it optimized for throughput by skipping phases. No enforcement mechanism existed.
+
+**Architecture change — phase-parallel → ticket-sequential:**
+
+Previously: `[adapt ALL tickets] → [implement ALL] → [test ALL] → ... → merge ALL`
+Now: `Ticket A [all 7 phases → merge] → Ticket B [all 7 phases → merge] → ...`
+
+Each ticket runs the complete pipeline (adaptation → implementation → testing → documentation → code review → codex review → security scan) before the next ticket starts. This means every ticket's adaptation phase can examine code built by all prior tickets in the epic — maximizing reuse and integration quality.
+
+**Key additions:**
+
+- **Hard Constraint #6**: ALL tickets run ALL phases — no exceptions, no skipping. Explicit anti-rationalization language for common excuses ("already handled by implementation," "redundant," etc.)
+- **Hard checkpoint before merge (Section 3.3)**: Before any ticket merges to the epic branch, the orchestrator fetches all Linear comments and verifies all 7 required report headers exist. Missing reports = HARD STOP. This is the enforcement mechanism that was missing.
+- **Orchestrator notes (.swarm/orchestrator-log.md)**: Persistent log updated after each ticket completes — records files created, interfaces defined, patterns used, cross-ticket observations. Read during subsequent tickets' adaptation phases.
+- **Generic worktree setup (Section 3.0.2)**: Detects build system from lockfiles and config files (npm/pnpm/yarn/bun/pip/cargo/go/bundler). Runs appropriate install + generate commands. No hardcoded tech-stack references.
+- **Per-ticket merge (Section 3.5)**: Each ticket merges to the epic branch immediately after passing the hard checkpoint, so subsequent tickets' worktrees include all prior work.
+
+**Terminology change:** "Waves" renamed to "Tiers" (dependency tiers) throughout to reflect the sequential-first model.
+
+**Parallelism is opt-in:** `--parallel` flag replaces `--max-parallel N`. Default is fully sequential. User must explicitly confirm parallel execution for independent tickets.
+
+#### Codex Review Report Restructured
+
+Expanded the Cross-Model Review Report from 3 sections to 5, with full audit trail for every finding:
+
+| Section | Purpose |
+|---------|---------|
+| **Auto-Fixed Items** | What Codex fixed automatically, with reasoning |
+| **User-Reviewed Items** | Full context chain: issue → Codex question → Codex recommendation → user decision → user reasoning |
+| **Declined by Codex** | Issues Codex found but chose not to auto-fix, with reasoning |
+| **For Awareness (P3)** | Low-priority observations |
+| **Deferred Items** | Standard deferred items table for /close-epic |
+
+The previous "Human-Decided Items" section lost context about why items needed decisions. The new "User-Reviewed Items" preserves Codex's original question and recommendation alongside the user's decision.
+
+Updated in: `codex-finding-resolution` skill, `swarm-phase-reporting` report templates, `/codex-review` command (Steps 3 and 6).
+
+### Added
+- Post-mortem analysis document: `context/epic-swarm-pro311-postmortem.md` — full root cause analysis, platform constraints, and Option B (external shell orchestration) fallback plan
+
+---
+
 ## [3.4.0] - 2026-04-07
 
 ### Added
@@ -1648,6 +1698,18 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.0.0
+[3.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.4.0
+[3.3.5]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.5
+[3.3.4]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.4
+[3.3.3]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.3
+[3.3.2]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.2
+[3.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.1
+[3.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.0
+[3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
+[3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
+[3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[3.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.0.0
 [2.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.3.0
 [2.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.2.0
 [2.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v2.1.0

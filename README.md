@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-3.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)
 
 **A production development workflow for Product Managers who build with AI.**
 
@@ -88,7 +88,7 @@ AI loves temporary solutions. This workflow forbids them through **auto-activate
 
 One command, `/execute-ticket`, orchestrates the full ticket lifecycle: adaptation, implementation, testing, documentation, two-stage code review, cross-model Codex review, and security review. It creates a PR, pauses only for blocking issues, and marks tickets done when security passes.
 
-For epics with independent tickets, `/epic-swarm` runs multiple tickets concurrently with automatic dependency management, isolated git worktrees, and phase-synchronized execution. Write phases dispatch sequentially to guarantee worktree isolation; read-only phases (adaptation, code review) run in parallel. Mandatory approval gates before merge and push, dual-layer security review (per-ticket pre-merge + comprehensive post-merge), and persistent swarm state for resume.
+For epics with multiple tickets, `/epic-swarm` orchestrates the full workflow across all tickets with dependency-aware sequencing. Each ticket runs the complete 7-phase pipeline (adaptation through security scan) before the next ticket starts — so every ticket's adaptation examines code built by prior tickets. A hard checkpoint verifies all 7 phase reports exist in Linear before any ticket can merge. Dual-layer security review (per-ticket pre-merge + comprehensive post-merge), persistent swarm state for resume, and orchestrator notes for cross-ticket context.
 
 ---
 
@@ -200,7 +200,7 @@ For cases requiring phase-by-phase control:
 | Command | Purpose |
 |---------|---------|
 | `/close-epic` | Close completed epic with deferred work recovery and retrofit analysis |
-| `/epic-swarm [epic-id]` | Execute multiple tickets concurrently with dependency management, approval gates, and dual security review |
+| `/epic-swarm [epic-id]` | Execute all tickets in an epic sequentially through the full 7-phase pipeline with dependency ordering, hard checkpoints, and dual security review |
 
 **Best practice:** Run each command in a fresh Claude Code session to prevent context overflow.
 
