@@ -5,6 +5,69 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-04-11
+
+### Added
+
+#### Epic-Swarm: Hard Constraints #7, #8, #9 — Mid-Flow Discipline
+
+Three new hard constraints in `commands/epic-swarm.md`, each backed by evidence from the PRO-312 swarm session (4 tickets, full pipeline):
+
+- **HC #7 — Do NOT pause to re-confirm execution mode mid-flow.** Prohibits the orchestrator from interrupting setup-to-dispatch transitions with "should I proceed continuously?" or "pause after each ticket?" questions. The execution model is established by the command itself; the user already opted in by invoking it. The PRO-312 session lost a round-trip to a redundant `AskUserQuestion` after setup completed.
+- **HC #8 — LSP/IDE diagnostics are non-authoritative during the swarm.** When worktrees are created or removed, sibling worktrees' LSP caches go stale for 30–60 seconds. Treats LSP output as advisory only — ground truth is `tsc --noEmit`, `pnpm lint`, `pnpm test`. The PRO-312 orchestrator wasted 6+ tool calls re-verifying PRO-427's already-passing TypeScript gates because LSP showed false errors.
+- **HC #9 — Quote bracket paths in Bash (zsh glob hazard).** Paths containing `[id]`, `[slug]`, `[...slug]` are interpreted as zsh glob patterns and fail with `(eval):1: no matches found`. Worse, the failure cancels parallel tool calls in the same batch. 8 of 24 PRO-312 subagents hit this. Rule applies to orchestrator AND every dispatched subagent.
+
+#### Epic-Swarm: Ticket Closure (HC #4 expansion + §3.5.6)
+
+The orchestrator now marks each completed ticket as **Done** in Linear after the merge succeeds. Previously the orchestrator only set tickets to "In Progress" — every swarm-completed ticket was left stuck mid-state because `/security-review` (the only command that closes tickets) is not invoked by the swarm. The PRO-312 session merged 4 tickets cleanly but left all 4 in "In Progress."
+
+- Hard Constraint #4 expanded to cover both **(a)** phase reports and **(b)** ticket closure
+- New step §3.5.6 "Mark ticket as Done in Linear" with explicit precondition checklist (hard checkpoint passed, security PASS, merge succeeded, integration tests passed, branch pushed)
+
+#### Architect-Agent: Mandatory Call-Site Enumeration
+
+New "MANDATORY: Call-Site Enumeration for Service-Layer Changes" section in `agents/architect-agent.md`, plus a new required `### Call-Site Enumeration` table in the Adaptation Report format.
+
+Whenever an adaptation plan modifies a service-layer function or shared utility, the architect MUST grep for ALL call sites — not just the primary user-facing route — and classify each as Updated, Unaffected, or MISSED. Particular emphasis on async/background entry points (Inngest, queues, cron, server actions, CLI scripts) which are the most common blind spots.
+
+**Evidence:** PRO-429 shipped with a P1 correctness bug because the adaptation plan covered the API route but missed an Inngest worker that built replay plans via a parallel call path. Codex caught it; the human-equivalent code reviewer also missed it.
+
+#### Code-Reviewer-Agent: Cross-Call-Site Verification
+
+Mirror requirement added to `agents/code-reviewer-agent.md`: when reviewing a service-layer change, grep for all call sites and flag any uncovered caller as a blocker. Do not approve a route-level diff while async workers silently bypass the new logic.
+
+#### Tooling Notes — Bracket Paths and Stale LSP
+
+Per-agent "Tooling Notes" sections added to:
+
+- `agents/architect-agent.md` — bracket-path quoting
+- `agents/backend-engineer-agent.md` — bracket-path quoting + stale LSP rule
+- `agents/code-reviewer-agent.md` — bracket-path quoting + cross-call-site rule
+- `agents/qa-engineer-agent.md` — bracket-path quoting + Read-tool offset/limit guidance for large test files
+- `agents/security-engineer-agent.md` — bracket-path quoting
+- `agents/technical-writer-agent.md` — bracket-path quoting + Python-yaml validation recipe (replaces failing `node -e "require('js-yaml')"` pattern)
+
+These are also embedded in the swarm subagent prompt template (epic-swarm.md §3.2.1) so every dispatched agent inherits them in-flight.
+
+### Changed
+
+#### Epic-Swarm §3.2.2: Canonical Phase-Description Naming
+
+Agent dispatches now MUST use the canonical `<ticket-id> <phase> phase` description format (e.g., `PRO-425 testing phase`, never `PRO-425 testing audit`). Scope adjustments belong in the prompt body, not the description. Drift in the description string breaks downstream tooling that parses transcripts to identify phase identity.
+
+### Fixed
+
+#### Technical-Writer-Agent: YAML Validation Recipe
+
+Replaced the implicit `node -e "require('js-yaml').load(...)"` pattern (which fails with `Cannot find module 'js-yaml'` in projects that don't include it as a dev dependency) with `python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))"`. PyYAML ships by default on macOS and most Linux distros. Two PRO-312 subagents wasted tool calls on the broken node recipe before working around it.
+
+### Notes
+
+- All fixes in this release are derived from analysis of the PRO-312 epic-swarm session (4-ticket, full-pipeline run). Each rule names the specific session evidence in its rationale.
+- Backwards compatible. No command signatures or argument shapes changed.
+
+---
+
 ## [4.0.0] - 2026-04-08
 
 ### Changed
@@ -1698,6 +1761,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.1.0
 [4.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.0.0
 [3.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.4.0
 [3.3.5]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.3.5

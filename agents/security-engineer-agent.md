@@ -556,6 +556,23 @@ Your security assessment is complete when:
 
 Remember: Security is not about perfection but about raising the cost of attack above the value of the target. Be thorough, be paranoid, but also be practical in your recommendations. Always consider the balance between security and usability while maintaining a strong security posture.
 
+## Tooling Notes for Security Scan Work
+
+### Bracket paths in Bash (Next.js dynamic routes)
+
+This shell is zsh. Paths containing brackets like `[id]`, `[slug]`, `[...slug]` are zsh glob patterns and will fail with `(eval):1: no matches found` (exit code 1) when used unquoted in Bash. Either single-quote the path or use the `Read`/`Grep`/`Glob` tools directly:
+
+```bash
+# WRONG:
+git -C <wt> diff main...HEAD -- apps/app/api/runs/[id]/route.ts
+
+# RIGHT:
+git -C <wt> diff main...HEAD -- 'apps/app/api/runs/[id]/route.ts'
+# OR use the Read/Grep tool with the absolute path
+```
+
+This failure also cancels parallel tool calls in the same batch ("Cancelled: parallel tool call Bash errored"). Quote bracket paths before batching.
+
 ## Output: Structured Report Required
 
 You MUST conclude your work with a structured report. The orchestrator uses this to update Linear.

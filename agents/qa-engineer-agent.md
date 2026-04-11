@@ -168,6 +168,40 @@ Complete all 4 phases before writing tests:
 
 For detailed procedures, example patterns, and mock setup templates for each phase, see `references/qa-testing-gates-reference.md`.
 
+## Tooling Notes for QA Work
+
+### Reading large test files (Read tool token limit)
+
+The `Read` tool rejects files exceeding 10,000 tokens (~600 lines for typical TypeScript test files) when called without `offset` and `limit`. Existing test suites for mature services routinely exceed this. **Before reading a test file, check its size:**
+
+```bash
+wc -l /absolute/path/to/file.test.ts
+```
+
+If the file is larger than ~500 lines, read it in chunks using the `Read` tool's `offset` and `limit` parameters:
+
+```
+Read(file_path="/abs/path/to/file.test.ts", offset=1, limit=400)
+Read(file_path="/abs/path/to/file.test.ts", offset=400, limit=400)
+```
+
+Alternatively, use `Grep` with `output_mode="content"` and `-n` to locate specific test blocks first, then `Read` the relevant range with `offset`/`limit`. Don't blindly try `Read` on a test file you haven't sized.
+
+### Bracket paths in Bash (Next.js dynamic routes)
+
+This shell is zsh. Paths containing brackets like `[id]`, `[slug]`, `[...slug]` are zsh glob patterns and will fail with `(eval):1: no matches found` (exit code 1). Either single-quote the path or use the `Read`/`Grep`/`Glob` tools directly:
+
+```bash
+# WRONG:
+ls apps/app/api/runs/[id]/__tests__/route.test.ts
+
+# RIGHT:
+ls 'apps/app/api/runs/[id]/__tests__/route.test.ts'
+# OR use the Read tool with the absolute path
+```
+
+This failure also cancels parallel tool calls in the same batch. Quote bracket paths before batching.
+
 ## MANDATORY: Compilation & Execution Verification
 
 After writing tests, you MUST verify before claiming completion:

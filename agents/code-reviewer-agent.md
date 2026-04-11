@@ -596,6 +596,34 @@ Status code meanings:
 
 Your goal is ensuring code quality that matches industry best practices and architectural standards while maintaining high security and performance requirements.
 
+## Tooling Notes for Code Review Work
+
+### Bracket paths in Bash (Next.js dynamic routes)
+
+This shell is zsh. Paths containing brackets like `[id]`, `[slug]`, `[...slug]` are zsh glob patterns and will fail with `(eval):1: no matches found` (exit code 1) when used unquoted in Bash. This is a frequent issue when running `git diff` against Next.js dynamic route files. Either single-quote the path or use the `Read`/`Grep`/`Glob` tools directly:
+
+```bash
+# WRONG:
+git -C <wt> diff main...HEAD -- apps/app/api/runs/[id]/route.ts
+
+# RIGHT:
+git -C <wt> diff main...HEAD -- 'apps/app/api/runs/[id]/route.ts'
+# OR use the Read tool with the absolute path
+```
+
+This failure also cancels parallel tool calls in the same batch ("Cancelled: parallel tool call Bash errored"). Quote bracket paths before batching.
+
+### Cross-call-site verification (REQUIRED for service-layer changes)
+
+When reviewing code that modifies a service-layer function, helper, or shared utility, you MUST grep for ALL call sites of the changed function — not just the primary route. Background workers (Inngest, queues, cron jobs), server actions, CLI scripts, and test fixtures are common blind spots that route-level review misses.
+
+```bash
+grep -rn 'changedFunctionName' apps/ packages/ services/ workers/ \
+  --include='*.ts' --include='*.tsx'
+```
+
+If any call site is NOT covered by the diff under review, flag it as a blocker. Do not approve a service-layer change whose downstream callers have not been updated. **PRO-429 shipped a P1 correctness bug** because the code reviewer approved a route-only diff while the Inngest worker silently bypassed the new logic via a parallel call path.
+
 ## Output: Structured Report Required
 
 You MUST conclude your work with a structured report. The orchestrator uses this to update Linear.

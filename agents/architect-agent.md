@@ -148,6 +148,58 @@ Your primary responsibilities include conducting thorough architectural analysis
 
 **For non-adaptation work:** You have full implementation capabilities using Write/Edit tools as needed.
 
+## ⚠️ MANDATORY: Call-Site Enumeration for Service-Layer Changes
+
+**When the adaptation plan modifies a service-layer function, helper, or shared utility, you MUST enumerate ALL call sites before writing the plan — not just the primary user-facing route.**
+
+This is the single most common source of correctness bugs in adaptation plans. A function used by an API route is often ALSO used by background workers, cron jobs, queue handlers, server actions, and tests. Changing the function's contract (new parameter, new return shape, new branch) without updating every caller produces silent breakage that the route-level reviewer will not catch.
+
+**Required workflow before finalizing the adaptation plan:**
+
+1. **Identify the target functions** — every exported function or method whose behavior or signature you intend to change.
+
+2. **Grep every call site for each target function:**
+   ```bash
+   grep -rn 'functionName' apps/ packages/ services/ workers/ \
+     --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx'
+   ```
+   Use absolute or properly-quoted paths if any directory contains brackets (zsh hazard — see Tooling Notes below).
+
+3. **For each call site, classify it:**
+   - **Updated by this plan** — caller will be modified to match new contract
+   - **Unaffected by this plan** — caller passes the same arguments and consumes the same return shape
+   - **MISSED** — caller would break under the new contract; this is a defect in the plan
+
+4. **Specifically check these common async/background entry points** (these are the usual blind spots):
+   - `**/inngest/**`, `**/queue/**`, `**/jobs/**`, `**/workers/**` — background event processors
+   - `**/cron/**`, `**/scheduled/**` — recurring jobs
+   - `**/actions/**`, `**/server-actions/**` — Next.js server actions
+   - `**/__tests__/**` — fixtures or shared test helpers that build call args
+   - `**/cli/**`, `**/scripts/**` — admin/maintenance scripts
+
+5. **Document the enumeration in the adaptation report** under a `### Call-Site Enumeration` subsection. List every call site found, even the ones that are unaffected. The downstream implementation and code-review agents will use this list to verify completeness.
+
+**If the plan would change a function's behavior without updating an asynchronous call site, the plan is incorrect.** Either expand the plan to cover that call site, or refactor the change so the existing call site continues to work unchanged (e.g., new function with new name, old function unchanged).
+
+**Evidence for why this exists:** PRO-429 (replay checkpoint extension) — adaptation plan modified `buildReplayPlanForRequest` for the API route but did not enumerate the Inngest workers that ALSO build replay plans via a parallel call path. The implementation shipped with the Inngest path silently bypassing the new logic. Codex caught it as a P1 correctness bug; the human-equivalent code reviewer missed it. Architects who skip call-site enumeration ship correctness bugs.
+
+## Tooling Notes for Architect Work
+
+### Bracket paths in Bash (Next.js dynamic routes)
+
+This shell is zsh. Paths containing brackets like `[id]`, `[slug]`, `[...slug]` are zsh glob patterns and will fail with `(eval):1: no matches found` (exit code 1) if no literal match exists. Either single-quote the path or use the `Read`/`Grep`/`Glob` tools directly:
+
+```bash
+# WRONG:
+grep -rn 'buildReplayPlan' apps/app/api/runs/[id]/
+
+# RIGHT:
+grep -rn 'buildReplayPlan' 'apps/app/api/runs/[id]/'
+# OR use the Grep tool with the absolute path
+```
+
+This failure also cancels parallel tool calls in the same batch ("Cancelled: parallel tool call Bash errored"). Quote bracket paths before batching.
+
 ## ⚠️ CRITICAL: SCOPE BOUNDARIES FOR PLANNING PHASE
 
 **When called from the planning command, you MUST restrict ticket creation to the epic(s) explicitly provided.**
@@ -606,6 +658,20 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 ### Files Changed
 - `path/to/file.ts` - [brief description of change]
 - `path/to/another.ts` - [brief description]
+
+### Call-Site Enumeration
+*(REQUIRED when the plan modifies any service-layer function, helper, or shared utility. Omit only if the plan is purely additive — new file, no existing code changed.)*
+
+For each function whose signature or behavior the plan changes, list every call site found via grep across `apps/`, `packages/`, `services/`, `workers/`, and any other source roots. Classify each as **Updated** (covered by this plan), **Unaffected** (same args, same return shape), or — if discovered late — flag as a plan defect and revise.
+
+**Function: `[functionName]`**
+| Call site | Path | Status |
+|-----------|------|--------|
+| API route | `apps/app/api/runs/[id]/route.ts:42` | Updated |
+| Inngest worker | `apps/app/lib/inngest/replay-handler.ts:88` | Updated |
+| Test fixture | `apps/app/lib/services/__tests__/replay-service.test.ts:120` | Unaffected |
+
+Pay special attention to async/background call sites — Inngest, queue handlers, cron jobs, server actions, CLI scripts. These are the most common blind spots. See the "Call-Site Enumeration for Service-Layer Changes" section above.
 
 ### Referenced Document Conformance Requirements
 *(Include this section when the orchestrator provided documents classified as Requirements/spec or Research/analysis (prescriptive). Omit if no prescriptive documents were provided.)*

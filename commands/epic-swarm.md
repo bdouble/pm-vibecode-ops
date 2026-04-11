@@ -65,9 +65,11 @@ Claude Code blocks compound commands combining `cd` with `git`. All git operatio
 
 The orchestrator dispatches all agents directly — it does NOT delegate to `/execute-ticket`. This is a Claude Code platform constraint: the Agent tool is not available to subagents.
 
-### 4. Every phase MUST post a report to Linear
+### 4. Every phase MUST post a report to Linear AND every completed ticket MUST be closed
 
-After every phase completes for every ticket, post the full structured report as a Linear comment via `mcp__linear-server__create_comment`. A phase without a posted report is a phase that never happened. **Invoke the `swarm-phase-reporting` skill at every phase completion point** — it provides templates, validation, and anti-rationalization guidance.
+**(a) Phase reports.** After every phase completes for every ticket, post the full structured report as a Linear comment via `mcp__linear-server__create_comment`. A phase without a posted report is a phase that never happened. **Invoke the `swarm-phase-reporting` skill at every phase completion point** — it provides templates, validation, and anti-rationalization guidance.
+
+**(b) Ticket closure.** After a ticket clears the hard checkpoint, merges to the epic branch, passes post-merge integration tests, and the epic branch is pushed, the orchestrator MUST mark the Linear ticket as **Done** via `mcp__linear-server__update_issue` (see §3.5.6 for the exact step). The orchestrator inherits this responsibility from `/security-review`, which is the only OTHER command in this workflow that closes tickets — and which is NOT invoked by the swarm. A ticket that completes all 7 phases and merges successfully but is left in "In Progress" is a workflow defect.
 
 ### 5. Codex findings MUST be resolved, not ignored
 
@@ -85,6 +87,60 @@ The ONLY ways a phase does not run for a ticket are:
 **If you find yourself reasoning that a phase is "unnecessary," "already handled," "redundant," or "covered by implementation" — STOP. You are violating this constraint.** Tests written during implementation do NOT substitute for the testing phase. Implementation-generated docs do NOT substitute for the documentation phase. Run every phase. Post every report.
 
 **Evidence for why this exists:** PRO-310 and PRO-311 both had the orchestrator skip 5 of 7 phases, marking all tickets Done after implementation alone. The fix is not better prompting — it is this hard constraint plus the hard checkpoint in Phase 3.3 that enforces it.
+
+### 7. Do NOT pause to re-confirm execution mode mid-flow
+
+After Phase 1 scope confirmation, the orchestrator MUST proceed continuously through all selected tickets without asking the user "should I pause between tickets?" or "should I proceed continuously?" The execution model is **already established by this command**: dispatch all tickets sequentially, pausing ONLY for the explicit blocking conditions defined in §3.2.7 (BLOCKED, NEEDS_CONTEXT, security CRITICAL/HIGH, codex P1/P2 questions, hard checkpoint failure, AC-DEFERRED).
+
+**Prohibited mid-flow questions:**
+- "How should I proceed with the long-running execution?"
+- "Should I pause after each ticket merges?"
+- "Should I pause after each phase?"
+- Any "are you sure you want me to continue?" check after setup is complete
+
+These waste a round-trip and invite premature halts. A status update like "Setup complete, dispatching PRO-X adaptation — will run continuously, pausing only on blocking conditions" is fine. A question that requires user input is not.
+
+The user already opted into the swarm by invoking the command. Trust the contract.
+
+### 8. LSP/IDE diagnostics are non-authoritative during the swarm
+
+When worktrees are created or removed, IDE/LSP diagnostics for the remaining worktrees become stale for 30–60 seconds (cached symbol tables, regenerated Prisma clients, deleted directories). Treat any LSP output you see during a swarm run as **advisory only**, never as ground truth.
+
+**Ground truth for quality gates is always:**
+- `npx tsc --noEmit` (or project equivalent) run by the subagent or orchestrator
+- `pnpm lint` / `pnpm biome check` (or project equivalent)
+- `pnpm test` / `pnpm vitest` (or project equivalent)
+
+**Specifically: do NOT re-verify a subagent's reported passing gates based solely on stale LSP diagnostics.** If the subagent reported `tsc clean, lint clean, N/N tests passing`, trust that report unless you have a concrete reason to doubt it (the subagent's own bash output contradicted itself, the file diff doesn't match the report, etc.). Re-running gates "just to be sure" because LSP shows red squiggles wastes ~6–10 tool calls per ticket.
+
+**Evidence for why this exists:** PRO-312 swarm session — orchestrator re-ran `tsc --noEmit` four times for PRO-427 chasing stale LSP diagnostics that were already invalidated by the worktree teardown. Every check came back clean.
+
+### 9. Quote bracket paths in Bash (zsh glob hazard)
+
+Next.js / React Router / file-based routing projects use bracket-named directories like `[id]`, `[slug]`, `[...slug]`. Zsh interprets `[...]` as a glob pattern and aborts the command with `(eval):1: no matches found` (exit code 1) when no file literally named `[id]` exists.
+
+**Wrong (will fail in zsh):**
+```bash
+git -C .swarm/worktrees/PRO-X diff main...HEAD -- apps/app/app/api/runs/[id]/replay/route.ts
+ls apps/app/app/api/runs/[id]/replay/
+```
+
+**Right (single-quote the path or use Read/Grep tools directly):**
+```bash
+git -C .swarm/worktrees/PRO-X diff main...HEAD -- 'apps/app/app/api/runs/[id]/replay/route.ts'
+ls 'apps/app/app/api/runs/[id]/replay/'
+```
+
+Or skip Bash entirely and use the dedicated tools:
+- File contents: `Read` tool
+- Searching content: `Grep` tool
+- Listing files: `Glob` tool
+
+These tools do not invoke the shell and never trigger glob expansion.
+
+**Cascade hazard:** When a Bash call with an unquoted bracket path is batched with parallel `Grep` calls, the failure cancels ALL parallel calls in the batch ("Cancelled: parallel tool call Bash errored"). This wastes the parallelization. If you must batch a bracket-path Bash call with other tool uses, **quote the path first**.
+
+This rule applies to the orchestrator AND to every dispatched subagent. The agent prompt template in §3.2.1 enforces it for subagents.
 
 ---
 
@@ -696,6 +752,20 @@ For each phase of the current ticket:
    - Do NOT use relative paths from the repo root
    - Do NOT write to any directory outside your assigned worktree
    - All git operations MUST use: git -C /absolute/path/to/.swarm/worktrees/[ticket-id]/
+
+   SHELL HAZARD — Bracket paths (Next.js dynamic routes, etc.):
+   This shell is zsh. Paths containing brackets like [id], [slug], [...slug]
+   are glob patterns to zsh and will fail with "(eval):1: no matches found"
+   (exit code 1) if no literal match exists. When a Bash command needs to
+   reference such a path, single-quote it OR use the Read/Grep/Glob tools
+   directly (they do not invoke the shell).
+
+     WRONG:  git -C <wt> diff main...HEAD -- apps/app/api/runs/[id]/route.ts
+     RIGHT:  git -C <wt> diff main...HEAD -- 'apps/app/api/runs/[id]/route.ts'
+     RIGHT:  use the Read tool with the absolute path
+
+   This failure also CANCELS parallel tool calls in the same batch
+   ("Cancelled: parallel tool call Bash errored"). Quote first, batch second.
    ```
 
 2. **Instruction to read context files:**
@@ -755,7 +825,27 @@ For each phase of the current ticket:
 Spawn Agent with:
   - The agent definition matching this phase (from 3.2.1 agent selection table)
   - The full prompt built in 3.2.1
+  - description: "[ticket-id] [phase] phase"
+    e.g., "PRO-425 adaptation phase", "PRO-425 implementation phase",
+          "PRO-425 testing phase", "PRO-425 documentation phase",
+          "PRO-425 code review phase", "PRO-425 security scan"
 ```
+
+**Description naming rule (mandatory):**
+
+The Agent dispatch `description` field MUST follow the canonical pattern `"<ticket-id> <phase> phase"` (or `"<ticket-id> security scan"` for the security phase, since "scan" reads better than "phase"). Do not vary the description based on scope ("audit", "focused review", "quick check") — those scope adjustments belong in the agent prompt body, not the description.
+
+**Why:** The description is parsed by downstream tooling (state file scans, transcript analysis, hard checkpoint verification) to identify which phase ran for which ticket. Drift in the description ("PRO-429 testing audit" vs "PRO-429 testing phase") breaks parsing and obscures phase identity.
+
+**Canonical descriptions:**
+| Phase | Description |
+|-------|-------------|
+| adaptation | `<ticket-id> adaptation phase` |
+| implementation | `<ticket-id> implementation phase` |
+| testing | `<ticket-id> testing phase` |
+| documentation | `<ticket-id> documentation phase` |
+| code review | `<ticket-id> code review phase` |
+| security scan | `<ticket-id> security scan` |
 
 **For codex-review phase:**
 Build the Codex context string (same pattern as `/codex-review` Step 2):
@@ -1124,7 +1214,30 @@ git push origin "$epic_branch"
 
 **3.5.5 Update swarm state:** Mark ticket as `merged`, record merge commit SHA.
 
-**3.5.6 Clean up worktree:**
+**3.5.6 Mark ticket as Done in Linear (MANDATORY):**
+
+After the merge succeeds, the integration test passes, and the epic branch is pushed, the ticket has completed the full quality pipeline (all 7 phases passed, hard checkpoint passed, security scan returned PASS, code is integrated). **The orchestrator MUST now close the ticket in Linear.**
+
+```
+Use mcp__linear-server__update_issue with:
+  - id: [ticket-id]
+  - state: "Done"
+```
+
+**Preconditions (all must be true before closing):**
+- Hard checkpoint (Section 3.3) returned all 7 reports FOUND
+- Security scan report posted with `Status: PASS` (no CRITICAL/HIGH findings)
+- Per-ticket merge to epic branch succeeded
+- Post-merge integration tests passed
+- Epic branch pushed successfully
+
+If ANY precondition is not met, the ticket should NOT be closed — it should remain `In Progress` (or transition to a blocked state per §3.2.7) until the issue is resolved.
+
+**Why this exists:** In the standalone workflow, `/security-review` is the only command that closes tickets. Inside the swarm, the orchestrator runs the security-engineer-agent inline rather than invoking `/security-review` as a subcommand, so the orchestrator inherits the responsibility for closing the ticket. **Without this step, every swarm-completed ticket remains stuck in "In Progress" forever**, requiring manual cleanup.
+
+**Evidence for why this exists:** PRO-312 swarm session — all 4 tickets (PRO-425/426/427/429) merged cleanly with full phase reports posted, but none were marked Done. The user had to close them manually.
+
+**3.5.7 Clean up worktree:**
 ```bash
 git worktree remove .swarm/worktrees/[ticket-id] --force 2>/dev/null || true
 ```

@@ -129,6 +129,35 @@ You are a technical writer responsible for creating clear, comprehensive documen
 - All examples must be production-ready code
 - Document the actual behavior, not the intended behavior if different
 
+## Tooling Notes for Documentation Work
+
+### YAML validation (service-inventory.yaml, openapi.yaml, etc.)
+
+When validating YAML files you've edited, **do NOT use** `node -e "require('js-yaml').load(...)"` unless you've already verified `js-yaml` is a dev dependency of the target project. Most application repos do not include it, and the command will fail with `Cannot find module 'js-yaml'`.
+
+**Use Python's built-in PyYAML instead** (available by default on macOS and most Linux distros):
+
+```bash
+python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1])); print('YAML OK')" path/to/service-inventory.yaml
+```
+
+If Python is not available, fall back to the Edit tool's built-in syntax feedback (the Edit tool will reject malformed inserts) or skip programmatic validation entirely — visual inspection of the diff is acceptable for small documentation edits.
+
+### Bracket paths in Bash (Next.js dynamic routes)
+
+Paths containing brackets like `[id]`, `[slug]`, `[...slug]` are zsh glob patterns and will fail with `(eval):1: no matches found` (exit code 1) when used unquoted in Bash. Either single-quote the path or use the `Read`/`Grep`/`Glob` tools directly:
+
+```bash
+# WRONG (zsh fails):
+ls apps/app/api/runs/[id]/route.ts
+
+# RIGHT:
+ls 'apps/app/api/runs/[id]/route.ts'
+# OR use the Read tool with the absolute path
+```
+
+This failure also cancels parallel tool calls in the same batch, so quote bracket paths before batching.
+
 ## Your Documentation Strategy Framework
 
 ### Documentation Hierarchy

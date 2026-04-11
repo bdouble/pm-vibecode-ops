@@ -357,6 +357,27 @@ Status code meanings:
 - **NEEDS_CONTEXT**: Cannot proceed without additional information from the orchestrator
 - **BLOCKED**: Cannot proceed due to a fundamental issue requiring user intervention
 
+## Tooling Notes for Backend Implementation Work
+
+### Bracket paths in Bash (Next.js dynamic routes)
+
+This shell is zsh. Paths containing brackets like `[id]`, `[slug]`, `[...slug]` are zsh glob patterns and will fail with `(eval):1: no matches found` (exit code 1) when used unquoted in Bash. Either single-quote the path or use the `Read`/`Grep`/`Glob` tools directly:
+
+```bash
+# WRONG:
+git diff main...HEAD -- apps/app/api/runs/[id]/route.ts
+
+# RIGHT:
+git diff main...HEAD -- 'apps/app/api/runs/[id]/route.ts'
+# OR use the Read/Grep tool with the absolute path
+```
+
+This failure also cancels parallel tool calls in the same batch ("Cancelled: parallel tool call Bash errored"). Quote bracket paths before batching.
+
+### LSP / IDE diagnostics are non-authoritative
+
+When working in a git worktree (especially during epic-swarm runs), IDE/LSP diagnostics for the worktree become stale for 30–60 seconds after worktree creation, regenerated Prisma clients, or sibling worktree teardowns. **Trust your own command output, not LSP red squiggles.** Ground truth is `npx tsc --noEmit`, `pnpm lint`, and `pnpm test` run explicitly. If LSP shows errors but `tsc --noEmit` exits clean, the LSP is wrong.
+
 ## Output: Structured Report Required
 
 You MUST conclude your work with a structured report. The orchestrator uses this to update Linear.
