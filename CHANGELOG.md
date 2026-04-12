@@ -5,6 +5,57 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-04-12
+
+### Fixed
+
+#### Security-Engineer-Agent: Remove Ticket-Closing Instructions (Critical)
+
+The `security-engineer-agent.md` contained contradictory instructions — line 40 said "You do NOT have access to Linear" while lines 52-58 said "Mark ticket as Done and CLOSE it." Because MCP tools are session-wide (available to subagents regardless of the agent's `tools` frontmatter), the security agent actually succeeded in calling `mcp__linear-server__save_issue` to close tickets, causing every ticket to be closed twice — once by the agent, once by the orchestrator.
+
+**Fix:** Removed all ticket-closing instructions from the security agent. Added explicit "Do NOT call any `mcp__linear-server__*` or `mcp__claude_ai_Linear__*` tools" instruction. Ticket closure is always the orchestrator's responsibility.
+
+**Evidence:** PRO-312 session (PRO-432 and PRO-433) — security agent called `save_issue(state=Done)` before the orchestrator did.
+
+### Added
+
+#### Epic-Swarm: Resume Auto-Close for Prior-Session Tickets (§1.2)
+
+When resuming an epic, tickets that completed all 7 phases in a prior session but weren't closed (e.g., because the session predated HC #4b) are now closed automatically. The orchestrator verifies all 7 report headers exist + security PASS, then marks Done — no `AskUserQuestion` needed.
+
+**Evidence:** PRO-312 session — orchestrator asked "How should I handle the 4 completed-but-not-closed tickets?" with 3 options. User had to choose "Skip." This question should not have been asked.
+
+#### Epic-Swarm: Existing-PR Detection (§6.2)
+
+Before calling `gh pr create`, the orchestrator now checks `gh pr list --head epic/[epic-id]` for an existing PR. If found, updates it with `gh pr edit` instead of failing with exit code 1.
+
+**Evidence:** PRO-312 session — `gh pr create` failed because PR #213 already existed from the prior session. Orchestrator recovered by detecting the error, but the pre-check prevents the error entirely.
+
+#### Subagent Prompt: Universal Large-File and Linear-Isolation Notes (§3.2.1)
+
+Two new blocks added to the epic-swarm subagent prompt template, inherited by every dispatched agent:
+
+- **Large file handling:** Read tool rejects files >10K tokens. Agents must check file size with `wc -l` first and use `offset`/`limit` for files >500 lines. Previously only in `qa-engineer-agent.md`; now all agents get it.
+- **Linear MCP isolation:** Explicit "Do NOT call any `mcp__linear-server__*` tools" instruction. Prevents subagents from making Linear state changes that conflict with the orchestrator.
+
+**Evidence:** PRO-312 session — 8+ subagents across all agent types hit the Read-tool token limit. Security agents called Linear tools directly.
+
+#### Project Permissions: `Bash(cp:*)` and Codex Review Tools
+
+Added to ProductLobster project settings to prevent potential mid-flow permission prompts:
+- `Bash(cp:*)` — used by orchestrator to copy context bundles into worktrees
+- `mcp__codex-review-server__codex_review`, `mcp__codex-review-server__codex_review_and_fix`, `mcp__codex-review-server__codex_fix`
+
+### Changed
+
+#### Epic-Swarm HC #2: Broadened to Cover All Commands (Not Just Git)
+
+Previously: "No compound cd + git commands." Now: "Use absolute paths for all commands — no relative paths, no cd persistence." Clarifies that `cd` does not persist across Bash tool calls, all paths should be absolute, and tool-native paths (Read, Grep, Glob) are preferred over shell paths.
+
+**Evidence:** PRO-312 session — `cd .swarm/worktrees/PRO-430 && pnpm generate` left the conceptual directory in the worktree, causing the next relative-path command to fail (2 wasted tool calls).
+
+---
+
 ## [4.1.0] - 2026-04-11
 
 ### Added
@@ -1761,6 +1812,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.2.0
 [4.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.1.0
 [4.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.0.0
 [3.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.4.0

@@ -57,9 +57,16 @@ fi
 
 If you find yourself about to merge to or push to main/master: **STOP. You are violating this constraint.** Check out the epic branch and merge there instead.
 
-### 2. No compound cd + git commands
+### 2. Use absolute paths for all commands — no relative paths, no cd persistence
 
-Claude Code blocks compound commands combining `cd` with `git`. All git operations on worktrees MUST use `git -C <path>`. This applies to the orchestrator AND to agents.
+Claude Code blocks compound commands combining `cd` with `git`. All git operations on worktrees MUST use `git -C <absolute-path>`.
+
+**Broader principle:** The Bash tool does NOT persist the working directory across calls. Each Bash invocation starts at the project root. Using `cd X && Y` within a single call works, but the NEXT Bash call resets to the root. Relative paths like `.swarm/worktrees/PRO-430` will fail if a prior `cd` left the conceptual working directory elsewhere.
+
+**Rules for the orchestrator AND agents:**
+- Use absolute paths for ALL Bash commands, not just git. Example: `/Users/brian/ProductLobster/.swarm/worktrees/PRO-430/...`, not `.swarm/worktrees/PRO-430/...`
+- When `cd X && Y` is necessary (e.g., `cd /abs/path && pnpm test`), the next Bash call MUST NOT assume it's still at `X`
+- Prefer tool-native paths (Read, Grep, Glob) which don't depend on the shell working directory
 
 ### 3. Subagents cannot spawn subagents
 
@@ -179,6 +186,23 @@ fi
 ```
 
 If state exists, ask user: **Resume from where it left off?** or **Start fresh?**
+
+**When resuming: auto-close prior-session tickets that completed but weren't closed.**
+
+Some tickets may be in "In Progress" in Linear despite having completed all 7 phases in a prior session (e.g., because the session ended before ticket-closure logic was added). Do NOT ask the user what to do with these — close them automatically:
+
+1. For each ticket marked as `merged` in the swarm state file but still "In Progress" in Linear:
+   a. Fetch the ticket's Linear comments (`mcp__linear-server__list_comments`)
+   b. Verify all 7 required report headers exist (same check as hard checkpoint §3.3)
+   c. Verify the security scan report contains `Status: PASS`
+   d. If all reports present + security PASS → mark Done: `mcp__linear-server__save_issue(id=ticket-id, state="Done")`
+   e. Log: "Auto-closed [ticket-id] from prior session (all 7 reports verified)"
+2. If any report is missing or security didn't PASS, leave the ticket as-is and log a warning.
+3. Do NOT use `AskUserQuestion` for this — the hard checkpoint verification is sufficient.
+
+**When resuming: Read existing state files before writing.**
+
+The `.swarm/orchestrator-log.md` and `.swarm/state/[epic-id].json` files already exist from the prior session. Read them first before writing updates. The Write tool rejects writes to files that haven't been read.
 
 ### 1.3 Build Dependency DAG
 
@@ -766,6 +790,22 @@ For each phase of the current ticket:
 
    This failure also CANCELS parallel tool calls in the same batch
    ("Cancelled: parallel tool call Bash errored"). Quote first, batch second.
+
+   LARGE FILE HANDLING:
+   The Read tool rejects files exceeding 10,000 tokens (~500-600 lines).
+   Many component files, test suites, and service files exceed this limit.
+   Before reading any file you haven't sized, check with: wc -l <path>
+   If the file is >500 lines, read it in chunks using offset and limit:
+     Read(file_path="...", offset=1, limit=400)
+     Read(file_path="...", offset=400, limit=400)
+   Or use Grep with output_mode="content" to find the specific section first.
+
+   LINEAR MCP TOOLS — DO NOT USE:
+   You do NOT have access to Linear. Do not call any mcp__linear-server__*
+   or mcp__claude_ai_Linear__* tools, even if they appear available in your
+   session. All Linear state changes (posting reports, closing tickets,
+   updating statuses) are handled by the orchestrator that dispatched you.
+   Calling these tools causes double-close and double-post bugs.
    ```
 
 2. **Instruction to read context files:**
@@ -1401,18 +1441,39 @@ Post to the epic in Linear:
 - [If Codex reviews were skipped] Run `/codex-review [ticket-id]` for tickets missing cross-model review
 ```
 
-### 6.2 Create Epic PR
+### 6.2 Create or Update Epic PR
+
+**First, check if a PR already exists** (common when resuming a swarm that ran across multiple sessions):
+
+```bash
+epic_branch="epic/[epic-id]"
+existing_pr=$(gh pr list --head "$epic_branch" --json number --jq '.[0].number' 2>/dev/null)
+```
+
+**If a PR exists (`$existing_pr` is non-empty):** Update it instead of creating:
+
+```bash
+gh pr edit "$existing_pr" \
+  --title "Epic: [epic-id] — [epic title]" \
+  --body "[full PR body — see template below]"
+```
+
+**If no PR exists:** Create one:
 
 ```bash
 default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 default_branch=${default_branch:-main}
-epic_branch="epic/[epic-id]"
 
 gh pr create \
   --base "$default_branch" \
   --head "$epic_branch" \
   --title "Epic: [epic-id] — [epic title]" \
-  --body "## Epic Summary
+  --body "[full PR body — see template below]"
+```
+
+**PR body template:**
+```
+## Epic Summary
 
 [epic description summary]
 
@@ -1428,12 +1489,12 @@ gh pr create \
 - Integration tests passing on epic branch
 
 ---
-*Created by /epic-swarm*"
+*Created by /epic-swarm*
 ```
 
 Present the PR URL to the user:
 ```
-Epic PR created: [PR URL]
+Epic PR created/updated: [PR URL]
 
 All epic work is on branch epic/[epic-id].
 The default branch (main) has NOT been modified.
