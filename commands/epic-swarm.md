@@ -175,6 +175,14 @@ Use mcp__linear-server__list_issues with parentId filter to get all sub-tickets
 - Sub-tickets have dependency annotations (from `/planning` phase)
   - If annotations are missing, report: "Sub-tickets lack parallelization metadata. Run `/planning` with the updated planning command to add dependency annotations."
 
+**Mark epic as In Progress:**
+```
+Use mcp__linear-server__update_issue:
+  - issue_id: [epic-id]
+  - state: "In Progress"
+```
+Skip if the epic is already "In Progress."
+
 ### 1.2 Check for Existing Swarm State
 
 ```bash
