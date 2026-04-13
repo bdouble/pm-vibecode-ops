@@ -271,10 +271,14 @@ Swarm scope for EPIC-123:
 
 Every ticket agent must have full, verbatim access to all research, requirements, and reference materials. The orchestrator gathers this context ONCE, writes it to disk, and every agent reads it directly. This eliminates context loss through summarization hops.
 
+**Model requirement:** This step MUST be performed by the orchestrator session itself (Opus or Sonnet). Do NOT delegate context bundle generation to a sub-agent — weaker models are MORE likely to summarize content instead of copying it. If the epic has many tickets, batch the Linear API calls but keep the orchestrator as the writer of all context files. The context bundle is the single highest-leverage artifact in the workflow; a summarized bundle produces wrong implementations across every ticket in the epic.
+
 **1.5.1 Gather epic-level context from Linear:**
 - Epic description (full, verbatim — do NOT summarize)
 - ALL epic comments (full, verbatim, chronological)
 - Extract every referenced document path and URL from the epic body and comments
+- Extract ALL acceptance scenarios (GIVEN/WHEN/THEN blocks), numbered acceptance criteria, and "Definition of Done" sections from the epic description — these are epic-level requirements that agents need
+- Extract business context: product positioning, competitive analysis, user impact, risk assessments, and strategic rationale from the epic description and comments — these inform implementation judgment calls (e.g., performance targets, UX tone, scope boundaries)
 
 **1.5.2 Read ALL local referenced documents:**
 - Research briefs, requirements documents, design specs, ADRs, implementation references
@@ -295,66 +299,139 @@ Every ticket agent must have full, verbatim access to all research, requirements
 
 **1.5.5 Write the epic context bundle:**
 
-Write ALL gathered context to `.swarm/context/{epic-id}/epic-context.md`:
+Write ALL gathered context to `.swarm/context/{epic-id}/epic-context.md` using the following **procedural copy steps**. Each step is a discrete copy operation — paste the source text directly, do NOT rewrite or rephrase it.
 
-```markdown
+**Epic context file — procedural copy steps:**
+
+**Step E1: Header**
+Write to `.swarm/context/{epic-id}/epic-context.md`:
+```
 # Epic Context Bundle: [epic-id]
 Generated: [timestamp]
-
-## Epic Description (VERBATIM — do NOT summarize when passing to agents)
-[full epic description, completely unmodified]
-
-## Epic Comments (VERBATIM, chronological)
-[all epic comments, completely unmodified]
-
-## Referenced Documents
-
-### [document-name] — PRESCRIPTIVE
-Source: [file path or URL]
-[FULL document content, completely unmodified]
-
-### [next document...] — CONTEXTUAL
-Source: [file path or URL]
-[FULL document content, completely unmodified]
-
-## Interface Contracts
-[all shared interface contracts from planning]
-
-## Fetch Failures
-[any URLs or files that could not be read, with error details]
 ```
 
-**Also write per-ticket context files** to `.swarm/context/{epic-id}/{ticket-id}.md`:
+**Step E2: Copy epic description**
+- Source: The FULL `description` field returned by `mcp__linear-server__get_issue` for the epic
+- Target section header: `## Epic Description`
+- Copy rule: Paste the ENTIRE description field as-is. Do NOT read it and rewrite it in your own words. Do NOT summarize. Copy the raw string character-for-character. If the description is 60 lines, this section must be 60 lines.
 
-```markdown
+**Step E3: Copy epic comments**
+- Source: ALL comments returned by `mcp__linear-server__list_comments` for the epic
+- Target section header: `## Epic Comments (chronological)`
+- Copy rule: For each comment, write the author, timestamp, and FULL body text. Do NOT condense multiple comments into a summary paragraph.
+
+**Step E4: Copy epic acceptance scenarios**
+- Source: Extract from the epic description — ALL GIVEN/WHEN/THEN blocks, ALL numbered acceptance criteria, ALL "Definition of Done" or "Success Criteria" sections
+- Target section header: `## Epic Acceptance Scenarios`
+- Copy rule: Copy every scenario block exactly as written in the description. These are epic-level requirements that agents use to verify end-to-end behavior. If no acceptance scenarios exist, write: "No epic-level acceptance scenarios found in description."
+
+**Step E5: Copy business context**
+- Source: Extract from epic description, comments, or referenced documents — product positioning, competitive analysis, user impact, risk assessments, strategic rationale, performance targets, UX constraints
+- Target section header: `## Business Context`
+- Copy rule: Copy relevant sections verbatim. If business context appears in a referenced document, copy the specific sections (not the whole document — that goes in Step E6). If no business context found, write: "No business context in epic description or references."
+
+**Step E6: Copy referenced documents**
+- Target section header: `## Referenced Documents`
+- For EACH document path or URL found in the epic body and comments:
+  ```
+  ### [document-name] — [PRESCRIPTIVE|CONTEXTUAL]
+  Source: [file path or URL]
+  
+  [FULL document content pasted here]
+  ```
+- Copy rule: Paste the ENTIRE file/page content. Do NOT excerpt or summarize. For files over 500 lines: include the FULL content (the Write tool has no practical limit). PRESCRIPTIVE documents (requirements, specs, schemas) are NEVER truncated under any circumstances.
+
+**Step E7: Copy interface contracts**
+- Target section header: `## Interface Contracts`
+- Copy rule: Include full interface/type definitions from planning metadata, not prose descriptions of them.
+
+**Step E8: Log fetch failures**
+- Target section header: `## Fetch Failures`
+- For each URL or file that could not be read: log path, error message, timestamp.
+
+---
+
+**Per-ticket context files — procedural copy steps:**
+
+For EACH ticket in the swarm scope, create `.swarm/context/{epic-id}/{ticket-id}.md` using these steps:
+
+**Step T1: Header**
+```
 # Ticket Context: [ticket-id] — [title]
-
-## Ticket Description (VERBATIM)
-[full ticket description]
-
-## Acceptance Criteria (VERBATIM)
-[extracted from description, each criterion on its own line]
-
-## Technical Notes (VERBATIM)
-[extracted from description]
-
-## Ticket Comments (VERBATIM, chronological)
-[all comments]
-
-## Ticket-Specific References
-[any documents or URLs referenced only by this ticket, full content]
-
-## Adaptation Scope Decisions
-[if resuming and adaptation is complete, include any deferred items]
 ```
 
-**ABSOLUTE RULES for context bundles:**
-- Every document is included VERBATIM — no summarization, no excerpting, no paraphrasing
-- If a research brief says "copy the implementation pattern from [source]", the source content MUST be in the bundle
-- If a ticket says "follow the approach in [document]", the document MUST be in the bundle
-- If a brief contains a table of IDs, field names, or schemas — include the ENTIRE table, not a summary
-- Missing context produces wrong implementations. When in doubt, include MORE context, not less
-- These bundles are the single source of truth that all agents read directly from disk
+**Step T2: Copy ticket description**
+- Source: The `description` field from `mcp__linear-server__get_issue` for this ticket
+- Target section: `## Ticket Description`
+- Copy rule: Paste the ENTIRE description. Every line. Every table. Every code block. Every bullet point. Nothing omitted. If the source description is 60 lines, this section is 60 lines.
+- ANTI-PATTERN: Writing "This ticket implements X by doing Y" is summarization. The section must contain the raw description text from Linear, not your interpretation of it.
+
+**Step T3: Copy acceptance criteria**
+- Source: Extract from the ticket description — look for sections labeled "Acceptance Criteria", "AC", "Definition of Done", "Requirements", or numbered/bulleted lists that define what "done" means
+- Target section: `## Acceptance Criteria`
+- Copy rule: Copy EVERY criterion on its own line, preserving original numbering or bullet format. Include ALL criteria — do not filter by perceived importance. If the source has 16 acceptance criteria, this section has 16 items.
+
+**Step T4: Copy warnings and anti-patterns**
+- Source: Extract from the ticket description — scan for sections or lines containing: "Do NOT", "DO NOT", "MUST NOT", "Never", "Warning", "Anti-pattern", "Anti-duplication", "Gotcha", "Pitfall", "Important:", "CRITICAL:", "NOTE:"
+- Target section: `## Warnings & Anti-Patterns`
+- Copy rule: Copy each warning/constraint VERBATIM with its surrounding context. These are the most important guardrails for agent behavior — they prevent the exact mistakes agents are most likely to make. Omitting them causes the errors they were written to prevent.
+- If no explicit warnings found, write: "No explicit warnings or anti-patterns in ticket description."
+
+**Step T5: Copy technical notes**
+- Source: Extract from the ticket description — implementation notes, architecture decisions, technical constraints, suggested approaches, reuse strategy
+- Target section: `## Technical Notes`
+- Copy rule: Copy full text of technical sections including any reuse strategy, anti-duplication strategy, or architectural guidance.
+
+**Step T6: Copy implementation steps**
+- Source: Extract from the ticket description — numbered implementation steps, task lists, ordered work items
+- Target section: `## Implementation Steps`
+- Copy rule: Copy every step with its FULL description. Do NOT reduce "1. Create the service with methods X, Y, Z supporting parameters A, B, C" to "1. Create the service." Each step's detail is implementation guidance that prevents ambiguity.
+- If no implementation steps found, write: "No explicit implementation steps in ticket description."
+
+**Step T7: Copy ticket comments**
+- Source: ALL comments from `mcp__linear-server__list_comments` for this ticket
+- Target section: `## Ticket Comments (chronological)`
+- Copy rule: Each comment with author, timestamp, full body. Include revision history comments — these explain WHY decisions changed.
+
+**Step T8: Copy ticket-specific references**
+- Source: Any documents or URLs referenced in this ticket's description or comments that were not already included in the epic-level context
+- Target section: `## Ticket-Specific References`
+- Copy rule: Full content, same rules as epic-level Step E6.
+
+**Step T9: Copy referenced code patterns**
+- Source: If the ticket description references existing code patterns, files, or implementations (e.g., "follow the pattern in src/services/auth.ts", "similar to the UserProfile component", "reuse X from Y"), read those files
+- Target section: `## Referenced Code Patterns`
+- For each referenced file:
+  ```
+  ### [file-path]
+  Referenced as: "[quote from ticket describing how to use this pattern]"
+  ```[language]
+  [file content or relevant section]
+  ```
+  ```
+- Copy rule: Include enough of the referenced file to understand the pattern — minimum: the function/class/component being referenced. If the reference is vague ("follow existing patterns"), include the closest matching file from the ticket's predicted Files Touched list.
+- If no code patterns referenced, write: "No code patterns referenced in ticket description."
+
+**Step T10: Adaptation scope**
+- Target section: `## Adaptation Scope Decisions`
+- If resuming and adaptation is complete, include deferred items from the adaptation report.
+- Otherwise: "Pending — populated after adaptation phase."
+
+---
+
+**CONTEXT BUNDLE ANTI-SUMMARIZATION RULES:**
+
+These rules exist because adversarial analysis of real context bundles proved that writing "VERBATIM" 12 times in the instructions did not prevent the orchestrator from summarizing. The procedural steps above are designed to make summarization structurally difficult, but these rules provide additional guardrails:
+
+1. **NEVER** write a section that starts with "This ticket..." or "The epic..." followed by your interpretation. Those are summaries. Paste the source text directly.
+2. **NEVER** reduce a multi-line list to a shorter list. If the source has 16 acceptance criteria, the target has 16 acceptance criteria.
+3. **NEVER** replace a table with prose. If the source has a table of IDs, the target has the same table.
+4. **NEVER** omit sections because they seem "obvious" or "standard." The agent reading this file has zero prior context.
+5. **NEVER** write "see [document] for details" without ALSO including the document content. Pointers without content are context holes.
+6. **Line count check**: After writing each per-ticket file, compare the line count of the ticket's Linear description against the `## Ticket Description` section in the file. If the target has fewer than 80% of the source lines, you have summarized — re-copy from source.
+7. If a research brief says "copy the implementation pattern from [source]", the source content MUST be in the bundle.
+8. If a ticket says "follow the approach in [document]", the document MUST be in the bundle.
+9. These context bundles are read by FRESH agent instances that have never seen the epic, the tickets, or any prior conversation. Everything they need must be in the file. There is no "they'll figure it out" — there is only "it's in the file or it's lost."
 
 **Token Budget Strategy (when full verbatim inclusion is impractical):**
 
@@ -379,6 +456,51 @@ If the total context bundle for a ticket exceeds practical limits:
    ```
 
 The distinction: prescriptive documents contain specific implementable items (IDs, schemas, field names). Contextual documents provide background. When budget is tight, prescriptive content is never sacrificed.
+
+**1.5.6 Context Bundle Fidelity Verification (MANDATORY)**
+
+After writing all context files, verify that the bundles are faithful copies, not summaries. This step is the context equivalent of the Hard Checkpoint (§3.3) — it catches the most common orchestrator failure mode (summarization) before agents consume the bundles.
+
+**Epic context verification:**
+1. Re-fetch the epic description from Linear (fresh `mcp__linear-server__get_issue` call — do not reuse cached data)
+2. Read the `## Epic Description` section from `epic-context.md`
+3. Compare line counts:
+   - Source lines (from Linear API): [N]
+   - Bundle lines: [M]
+   - Ratio: M/N
+4. If ratio < 0.8: **FAIL** — the description was summarized. Re-copy from source using Step E2.
+5. Spot-check: Read the LAST 5 lines of the source description. Verify they appear in the bundle. If missing: **FAIL** — content was truncated.
+
+**Per-ticket context verification (for each ticket):**
+1. Re-fetch the ticket description from Linear (fresh API call)
+2. Read the `## Ticket Description` section from `{ticket-id}.md`
+3. Line count comparison (same threshold: 0.8 ratio minimum)
+4. Spot-check: Find any "Do NOT" or "MUST NOT" phrases in the source description. Verify each appears in the bundle's `## Warnings & Anti-Patterns` section.
+5. If the ticket description contains numbered acceptance criteria: count them in the source vs. the `## Acceptance Criteria` section. All must be present.
+
+**Referenced document verification:**
+1. For each PRESCRIPTIVE document in the bundle:
+   - Read the original file (re-read, fresh)
+   - Compare line count of original vs. bundle copy
+   - If ratio < 0.8: **FAIL** — document was summarized. Re-copy in full.
+2. For any document over 200 lines where the bundle copy is under 50 lines: **AUTOMATIC FAIL** — a 200+ line document cannot be faithfully represented in 50 lines.
+
+**Verification report (display to orchestrator log):**
+```
+Context Bundle Fidelity Check: [epic-id]
+
+| Source | Source Lines | Bundle Lines | Ratio | Status |
+|--------|-------------|-------------|-------|--------|
+| Epic description | 45 | 44 | 0.98 | PASS |
+| [ticket-id] description | 62 | 60 | 0.97 | PASS |
+| [ticket-id] description | 38 | 35 | 0.92 | PASS |
+| [spec-document.md] | 457 | 455 | 1.00 | PASS |
+| Warnings extracted | 8 found | 8 in bundle | 1.00 | PASS |
+
+Result: ALL PASS — context bundles verified
+```
+
+If ANY check fails: re-copy the failed source using the procedural steps above. Do not ask the user — this is automated self-correction. Only surface failures to the user if re-copying also fails (indicating a tool or API error).
 
 Ensure `.swarm/` is gitignored:
 ```bash
@@ -817,6 +939,16 @@ For each phase of the current ticket:
    These files contain the FULL verbatim research briefs, requirements documents,
    and reference materials for this work. Read them IN FULL. Do not skim.
    Do not summarize. The specific details in these documents ARE your requirements.
+
+   PAY SPECIAL ATTENTION to these sections in .ticket-context.md:
+   - "## Warnings & Anti-Patterns" — these are constraints that prevent wrong
+     implementations. Violating any "Do NOT" instruction is a defect.
+   - "## Acceptance Criteria" — every criterion must be met. If you defer any,
+     classify as AC-DEFERRED in your Deferred Items table with justification.
+   - "## Implementation Steps" — if present, follow the prescribed sequence
+     unless your adaptation analysis identifies a better approach (document why).
+   - "## Referenced Code Patterns" — if present, follow the referenced patterns.
+     Import and extend existing code; do NOT duplicate it.
    ```
 
 3. **Ticket identity:** ticket ID, title

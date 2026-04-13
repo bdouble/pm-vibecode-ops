@@ -5,6 +5,48 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2026-04-13
+
+### Changed
+
+#### Epic-Swarm: Context Bundle Fidelity Overhaul (Phase 1.5)
+
+Adversarial analysis of the PRO-386 context bundle revealed that despite 12 uses of "VERBATIM" in the instructions, the orchestrator was summarizing ticket content instead of copying it — reducing 60-line descriptions to 20-line summaries, stripping anti-duplication warnings, and dropping acceptance criteria.
+
+**Root cause:** LLMs naturally summarize regardless of rhetorical emphasis. The fix replaces rhetorical instructions with mechanical enforcement.
+
+**Changes to Phase 1.5.5 (context bundle generation):**
+- Replaced template-with-VERBATIM-labels with 18 discrete procedural copy steps (E1-E8 for epic context, T1-T10 for per-ticket context) where each step is an explicit source-to-target copy operation
+- Added `## Epic Acceptance Scenarios` section — captures all GIVEN/WHEN/THEN blocks from epic description
+- Added `## Business Context` section — positioning, competitive analysis, risk assessments that inform implementation decisions
+- Added `## Warnings & Anti-Patterns` section to per-ticket template — scans for "Do NOT", "MUST NOT", "Warning", "Anti-pattern" and copies verbatim
+- Added `## Implementation Steps` section — preserves numbered steps with full descriptions instead of condensing
+- Added `## Referenced Code Patterns` section — when tickets reference existing code, includes file excerpts
+- Added anti-summarization rules with explicit anti-patterns ("NEVER write a section starting with 'This ticket...'")
+- Added line count check: after writing each file, compare source vs target lines; re-copy if < 80% ratio
+
+**New Step 1.5.6 (Context Bundle Fidelity Verification):**
+- Automated post-generation verification modeled on the Hard Checkpoint (Section 3.3)
+- Re-fetches source from Linear and compares line counts (80% threshold)
+- Spot-checks that last 5 lines of source appear in bundle
+- Verifies all "Do NOT" phrases appear in Warnings section
+- Verifies all acceptance criteria counts match source
+- Verifies prescriptive documents have < 20% line reduction
+- Self-correcting: re-copies on failure without blocking the user
+
+**Model specification:**
+- Phase 1.5 now explicitly requires orchestrator-level model (Opus/Sonnet) — context bundle generation must not be delegated to sub-agents
+
+**Enhanced agent prompt construction:**
+- Agents are now instructed to pay special attention to Warnings & Anti-Patterns, Acceptance Criteria, Implementation Steps, and Referenced Code Patterns sections
+
+#### Ticket-Context-Agent: Model Upgrade + Role Boundary
+
+- Upgraded model from `haiku` to `sonnet` for better quality within the 100-token-per-ticket budget
+- Added Role Boundary section clarifying this agent is for epic closure context gathering only, NOT for Phase 1.5 bundle generation
+
+---
+
 ## [4.2.0] - 2026-04-12
 
 ### Fixed
@@ -1812,6 +1854,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.0
 [4.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.2.0
 [4.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.1.0
 [4.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.0.0
