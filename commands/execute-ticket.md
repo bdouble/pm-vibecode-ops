@@ -23,7 +23,7 @@ Execute all 6 ticket-level workflow phases automatically for the specified ticke
 | 3. testing | qa-engineer-agent | Gate #0 fail (existing tests broken) OR Gates #1-3 fail (new test issues) |
 | 4. documentation | technical-writer-agent | Status: BLOCKED |
 | 5. codereview | code-reviewer-agent | Status: CHANGES_REQUESTED |
-| 5.5 codex-review | *(MCP tool, no agent)* | Rate limit (deferred, not blocking) |
+| 5.5 codex-review | *(MCP tool, no agent)* | JSON `"error": "rate_limit"` (deferred, not blocking) — "rate limit" in review *findings* is NOT an error |
 | 6. security-review | security-engineer-agent | CRITICAL/HIGH severity findings |
 
 **Note:** Only `security-review` closes the ticket when no critical/high issues are found.
@@ -1020,10 +1020,7 @@ This skill defines the complete process for handling Codex findings — presenti
 
 ### Prerequisites Check
 
-Before running this phase, check if the Codex MCP server is available:
-- Attempt to call `mcp__codex-review-server__codex_review` with a minimal probe
-- **If NOT available:** Skip this phase entirely. Post a note to Linear: "Cross-model review skipped — Codex MCP server not configured. Install from: https://github.com/bdouble/codex-review-server"
-- **If available:** Proceed with the review
+Do NOT probe the Codex MCP server with a test call. Instead, proceed directly to the real review call. If the server is unavailable, the MCP tool call will fail with a connection error — handle that as a skip (post skip note to Linear). Probing wastes a full Codex invocation and can produce false errors.
 
 ### Execution
 
@@ -1067,9 +1064,21 @@ Follow the `/codex-review` command workflow (see `commands/codex-review.md`):
 6. **Commit fixes:** Single commit for all fixes. Push only when `WORKTREE_MODE=false`.
 7. **Post report to Linear:** Cross-Model Review Report as ticket comment
 
+### Interpreting Codex MCP Responses
+
+The Codex MCP tool returns a JSON string. **You MUST parse the JSON and check the `"status"` field to determine the outcome** — do NOT pattern-match on the raw text for keywords like "rate limit."
+
+**Success:** `"status": "complete"` — the review ran. The `"output"` field contains Codex's findings. Findings may mention "rate limit" as a *code quality issue* (e.g., "Missing rate limit on auth endpoint") — this is a **review finding, NOT a rate limit error.** Process normally.
+
+**Rate limit error:** `"error": "rate_limit"` — the Codex CLI was rate-limited by OpenAI. This is the ONLY condition that constitutes a rate limit error.
+
+**Other errors:** `"error": "codex_not_found"` or `"error": "codex_error"` — handle as server unavailable or general error.
+
+**CRITICAL:** The word "rate limit" appearing ANYWHERE in the `"output"` field of a successful response (`"status": "complete"`) is Codex reporting a code finding, NOT an error. Do NOT treat it as a rate limit. Only `"error": "rate_limit"` at the top level of the JSON response is a rate limit error.
+
 ### Rate Limit Handling
 
-If the Codex MCP tool returns a rate limit error:
+If and ONLY if the parsed JSON contains `"error": "rate_limit"` (not `"status": "complete"`):
 1. Retry once after 60 seconds
 2. If still limited: mark as `codex-review-pending`, post note to Linear
 3. **Continue to security-review** — Codex review is valuable but NOT a hard gate

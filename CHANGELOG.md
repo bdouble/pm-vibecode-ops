@@ -5,6 +5,26 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2026-04-15
+
+### Fixed
+
+#### Codex Review False-Positive Rate Limit Detection
+
+All Codex review steps in `/epic-swarm` and `/execute-ticket` were failing with rate limit errors despite accounts having ample capacity. Two compounding issues:
+
+1. **Workflow commands lacked JSON response parsing.** The orchestrator pattern-matched raw response text for "rate limit" instead of checking the JSON `"status"` field. When Codex reported a code finding like "Missing rate limit on auth endpoint" in a successful review (`"status": "complete"`), the orchestrator misinterpreted the finding text as a rate limit error and skipped the phase.
+
+2. **Wasteful prerequisite probe.** `/execute-ticket` called `codex_review` with a "minimal probe" to check availability before the real review — this empty call was prone to producing errors that cascaded into false rate limit detection.
+
+**Changes:**
+- `commands/execute-ticket.md` — Removed minimal probe prerequisite check; added explicit JSON parsing instructions distinguishing `"status": "complete"` (success, process findings) from `"error": "rate_limit"` (actual rate limit); updated blocking conditions table
+- `commands/epic-swarm.md` — Added JSON response interpretation block after `codex_review_and_fix` call; updated blocking conditions table to specify JSON field check
+- `commands/codex-review.md` — Added JSON parsing guidance before rate limit handling
+- `skills/codex-finding-resolution/SKILL.md` — Added response parsing step between MCP call and findings categorization
+
+---
+
 ## [4.3.0] - 2026-04-13
 
 ### Changed
@@ -1854,6 +1874,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.1
 [4.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.0
 [4.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.2.0
 [4.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.1.0

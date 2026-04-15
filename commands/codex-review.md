@@ -160,7 +160,14 @@ Use mcp__codex-review-server__codex_review with:
 
 This runs in read-only mode. No files are modified.
 
-**If the MCP tool returns a rate limit error:**
+**Interpreting the MCP response:** The tool returns a JSON string. Parse it and check the structure:
+- `"status": "complete"` → success. Process the `"output"` field for findings. **Findings may mention "rate limit" as a code quality issue** (e.g., "Missing rate limit on auth endpoint") — this is a review finding about the code, NOT a rate limit error. Process normally.
+- `"error": "rate_limit"` → actual rate limit from OpenAI. Handle as below.
+- `"error": "codex_not_found"` or `"error": "codex_error"` → server/CLI issue.
+
+**CRITICAL:** Only `"error": "rate_limit"` at the top level of the JSON is a rate limit error. The phrase "rate limit" appearing in successful review output is a code finding.
+
+**If and ONLY if the JSON contains `"error": "rate_limit"`:**
 1. Wait 60 seconds, retry once
 2. If still rate-limited: report to user that Codex review is queued
 3. Post a note to Linear: "Cross-model review deferred due to rate limiting. Run `/codex-review $ARGUMENTS` to complete."

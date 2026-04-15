@@ -38,9 +38,16 @@ Call mcp__codex-review-server__codex_review_and_fix with:
   - context: [ticket description + AC + implementation summary]
 ```
 
+**Parse the JSON response first.** The tool returns a JSON string:
+- If `"status": "complete"` → the review succeeded. Proceed to Step 2 with the `"output"` field.
+- If `"error": "rate_limit"` → actual rate limit. Handle per the skip templates below.
+- If `"error": "codex_not_found"` or `"error": "codex_error"` → handle per skip templates.
+
+**CRITICAL:** The `"output"` field of a successful response may contain the phrase "rate limit" as a **code review finding** (e.g., "Missing rate limit on auth endpoint"). This is Codex reporting a code quality issue, NOT a rate limit error. Only `"error": "rate_limit"` at the JSON top level is a rate limit error.
+
 ### Step 2: Parse Results into Three Categories
 
-After `codex_review_and_fix` returns:
+After `codex_review_and_fix` returns with `"status": "complete"`:
 
 **Category A — Auto-Fixed (P1-P3 unambiguous):**
 Items Codex fixed automatically because the fix was clear. Review these for correctness — verify Codex didn't introduce regressions or misunderstand the intent.

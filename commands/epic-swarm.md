@@ -1074,6 +1074,13 @@ Call mcp__codex-review-server__codex_review_and_fix with:
   - context: [the structured context string built above]
 ```
 
+**Interpreting the response — CRITICAL:** The MCP tool returns a JSON string. Parse it and check the `"status"` field:
+- `"status": "complete"` → success. The `"output"` field contains Codex's findings. **Findings may mention "rate limit" as a code quality issue** (e.g., "Missing rate limit on auth endpoint") — this is a review finding, NOT a rate limit error.
+- `"error": "rate_limit"` → actual rate limit from OpenAI. Handle per §3.2.7 (post skip report, continue).
+- `"error": "codex_not_found"` or `"error": "codex_error"` → server/CLI issue.
+
+**The word "rate limit" in the `"output"` field of a `"status": "complete"` response is NEVER a rate limit error.** Only `"error": "rate_limit"` at the JSON top level is a rate limit.
+
 **Invoke the `codex-finding-resolution` skill** before processing results. Follow its full resolution process: parse findings, present to user, get decisions, apply fixes, commit.
 
 **After every dispatch — Worktree Integrity Verification:**
@@ -1243,7 +1250,7 @@ Do NOT push or create PRs — the swarm handles merge during Phase 4 (Integratio
 | testing | Any Gate FAILS | Pause ticket, break |
 | documentation | BLOCKED | Pause ticket, break |
 | codereview | CHANGES_REQUESTED | Pause ticket, break |
-| codex-review | Rate limit or server unavailable | Post skip report (satisfies checkpoint), CONTINUE |
+| codex-review | JSON response contains `"error": "rate_limit"` or server unavailable (NOT "rate limit" appearing in successful review findings) | Post skip report (satisfies checkpoint), CONTINUE |
 | security-scan | CRITICAL/HIGH findings | Pause ticket, break |
 
 **When a ticket is paused:**
