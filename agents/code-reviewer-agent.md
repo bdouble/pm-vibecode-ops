@@ -643,7 +643,7 @@ grep -rn 'changedFunctionName' apps/ packages/ services/ workers/ \
   --include='*.ts' --include='*.tsx'
 ```
 
-If any call site is NOT covered by the diff under review, flag it as a blocker. Do not approve a service-layer change whose downstream callers have not been updated. **PRO-429 shipped a P1 correctness bug** because the code reviewer approved a route-only diff while the Inngest worker silently bypassed the new logic via a parallel call path.
+If any call site is NOT covered by the diff under review, flag it as a blocker. Do not approve a service-layer change whose downstream callers have not been updated. **A prior production ticket shipped a P1 correctness bug** because the code reviewer approved a route-only diff while a background worker silently bypassed the new logic via a parallel call path.
 
 ## Output: Structured Report Required
 

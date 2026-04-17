@@ -288,7 +288,7 @@ Copy-paste this output when asking for help.
 
 ---
 
-## External Hook & Settings Issues (discovered during PRO-111 epic-swarm on Opus 4.7)
+## External Hook & Settings Issues (discovered during Opus 4.7 regression analysis)
 
 These are **outside this repo** — they live in your personal `~/.claude/` configuration and your target project's `.claude/` directory. They interact with epic-swarm runs in subtle ways and can cause the "extreme permission prompts" and silent hook failures the workflow is sensitive to.
 

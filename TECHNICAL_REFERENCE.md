@@ -480,7 +480,7 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 
 **Key Features**:
 - **Ticket-Sequential Full Pipeline**: Each ticket runs ALL 7 phases (adaptation → implementation → testing → documentation → code review → codex review → security scan) before the next ticket starts. This ensures every ticket's adaptation examines code built by all prior tickets.
-- **Hard Checkpoint Before Merge**: After all 7 phases complete, the orchestrator fetches all Linear comments and verifies all 7 required report headers exist. Missing reports = HARD STOP. This prevents the phase-skipping failure observed in PRO-310 and PRO-311.
+- **Hard Checkpoint Before Merge**: After all 7 phases complete, the orchestrator fetches all Linear comments and verifies all 7 required report headers exist. Missing reports = HARD STOP. This prevents the phase-skipping failure observed in prior production runs.
 - **Dependency-Aware Tier Scheduling**: Topological sort assigns tickets to tiers based on dependency depth. Tickets in later tiers see all prior tier code in their worktrees.
 - **Orchestrator Notes**: Persistent `.swarm/orchestrator-log.md` records files created, interfaces defined, and patterns used per ticket. Read during subsequent tickets' adaptation phases for cross-ticket context.
 - **Generic Worktree Setup**: Auto-detects build system from lockfiles (npm/pnpm/yarn/bun/pip/cargo/go/bundler), runs install + generate commands. No hardcoded tech-stack references.

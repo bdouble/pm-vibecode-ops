@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Opus 4.7 Workflow Tuning — system-card-driven overhaul
 
-Anthropic released Opus 4.7 on 2026-04-16. A full epic-swarm run on PRO-111 under the new model showed significant degradation versus the prior Opus 4.6 baseline (PRO-389): 6 of 10 tickets completed instead of 7/7, ~80% orchestrator context usage instead of ~47%, and frequent permission-prompt interruptions. Forensic analysis of both session transcripts plus a meticulous read of the Opus 4.7 system card produced this release.
+Anthropic released Opus 4.7 on 2026-04-16. A full epic-swarm run on a 10-ticket epic under the new model showed significant degradation versus the prior Opus 4.6 baseline on a comparable workload: 6 of 10 tickets completed instead of 7/7, ~80% orchestrator context usage instead of ~47%, and frequent permission-prompt interruptions. Forensic analysis of both session transcripts plus a meticulous read of the Opus 4.7 system card produced this release.
 
 **Skill activation overhaul (all 11 enforcement skills):**
 - Rewrote every skill `description` field from author-voice ("Enforces X") to trigger-voice ("Use when..."). Per Jesse Vincent's empirically A/B-tested writing-skills guidance (superpowers repo), author-voice descriptions cause the model to absorb the gist and skip invoking the skill body. Both epic-swarm runs showed **zero `Skill` tool invocations** across 50+ subagent dispatches — this fix targets that root cause.
@@ -22,12 +22,12 @@ Anthropic released Opus 4.7 on 2026-04-16. A full epic-swarm run on PRO-111 unde
 **Agent prompt overhaul (all 10 agent templates):**
 - Added an `## Opus 4.7 Operating Constraints` section to every agent (architect, backend-engineer, frontend-engineer, qa-engineer, technical-writer, code-reviewer, design-reviewer, security-engineer, epic-closure, ticket-context). Directly targets the three 4.7 regressions documented in the system card: "declaring sufficiency without acting" (§6.2.2.2), "downgrades action requests into advice" (§6.2.2.2), and "response verbosity" (§2.2.5.1, §4.4.2).
 - Hard prohibition on compound shell commands (`&&`, `||`, `;`). Use tool-native working-dir flags: `pnpm -C`, `git -C`, `npx --prefix`, `docker compose --project-directory`.
-- Report-size cap: 6,000 chars for phase agents, 10,000 for epic-closure. The worst PRO-111 report was 37 KB — 6× over a reasonable cap. Agents now include explicit tool-call counts in their Status block.
+- Report-size cap: 6,000 chars for phase agents, 10,000 for epic-closure. The worst report observed in the regression run was 37 KB — 6× over a reasonable cap. Agents now include explicit tool-call counts in their Status block.
 - Architect-agent gets a bounded-exploration rule: max 3 files beyond the required-reading list, each justified under a Discovery subsection.
 
 **Orchestrator workflow tightening (`commands/epic-swarm.md`):**
 - New Hard Constraint #10: "Opus 4.7 context efficiency and quality gates" with six mechanical sub-rules:
-  - **10a** Hard-checkpoint before `state=Done`: verify 7 phase agents dispatched + 7 reports posted. PRO-111 showed PRO-236/237/238 being marked Done with only 4/2/1 phases run.
+  - **10a** Hard-checkpoint before `state=Done`: verify 7 phase agents dispatched + 7 reports posted. The regression run showed three separate tickets being marked Done with only 4/2/1 phases run instead of the mandated 7.
   - **10b** Scope context-bundle generation to in-scope tickets only — eliminates wasted Phase 1.5 writes when user scopes the swarm.
   - **10c** No `list_comments` re-fetch loop — persist reports to `.swarm/context/<epic>/reports/<ticket>/<phase>.md` and pass file paths to the next phase agent. Cuts ~300 KB duplicated context per 6-ticket epic.
   - **10d** Per-phase observability logging to `.swarm/observability/<epic>/<ticket>.jsonl` with tool-call counts and report bytes.
@@ -51,11 +51,11 @@ Anthropic released Opus 4.7 on 2026-04-16. A full epic-swarm run on PRO-111 unde
 
 ### Changed
 
-- `docs/TROUBLESHOOTING.md` — Added a new "External Hook & Settings Issues" section documenting three problems discovered during the PRO-111 forensic analysis: (a) prompt-type PreToolUse Bash hooks adding 1–3s latency per shell call, (b) hook JSON outputs missing `hookEventName` causing silent bypass, (c) slash-command allowlist narrowing the session permission list. Each with remediation.
+- `docs/TROUBLESHOOTING.md` — Added a new "External Hook & Settings Issues" section documenting three problems discovered during the Opus 4.7 regression analysis: (a) prompt-type PreToolUse Bash hooks adding 1–3s latency per shell call, (b) hook JSON outputs missing `hookEventName` causing silent bypass, (c) slash-command allowlist narrowing the session permission list. Each with remediation.
 
 ### Fixed
 
-- Silent phase-dropping under context pressure. PRO-236, PRO-237, PRO-238 in the PRO-111 run were closed as `Done` after running 4/2/1 phases respectively instead of the mandated 7. The hard checkpoint in Constraint #10a now makes this mechanically impossible.
+- Silent phase-dropping under context pressure. Three tickets in the regression run were closed as `Done` after running 4/2/1 phases respectively instead of the mandated 7. The hard checkpoint in Constraint #10a now makes this mechanically impossible.
 - Zero Skill-tool invocations. The root cause combination (author-voice descriptions + catalog-in-prose session-start injection) is now addressed by Skill description rewrites + the thin session-start nudge.
 
 ---
@@ -86,7 +86,7 @@ All Codex review steps in `/epic-swarm` and `/execute-ticket` were failing with 
 
 #### Epic-Swarm: Context Bundle Fidelity Overhaul (Phase 1.5)
 
-Adversarial analysis of the PRO-386 context bundle revealed that despite 12 uses of "VERBATIM" in the instructions, the orchestrator was summarizing ticket content instead of copying it — reducing 60-line descriptions to 20-line summaries, stripping anti-duplication warnings, and dropping acceptance criteria.
+Adversarial analysis of a prior production context bundle revealed that despite 12 uses of "VERBATIM" in the instructions, the orchestrator was summarizing ticket content instead of copying it — reducing 60-line descriptions to 20-line summaries, stripping anti-duplication warnings, and dropping acceptance criteria.
 
 **Root cause:** LLMs naturally summarize regardless of rhetorical emphasis. The fix replaces rhetorical instructions with mechanical enforcement.
 
@@ -132,7 +132,7 @@ The `security-engineer-agent.md` contained contradictory instructions — line 4
 
 **Fix:** Removed all ticket-closing instructions from the security agent. Added explicit "Do NOT call any `mcp__linear-server__*` or `mcp__claude_ai_Linear__*` tools" instruction. Ticket closure is always the orchestrator's responsibility.
 
-**Evidence:** PRO-312 session (PRO-432 and PRO-433) — security agent called `save_issue(state=Done)` before the orchestrator did.
+**Evidence:** A prior swarm session (two tickets) — security agent called `save_issue(state=Done)` before the orchestrator did.
 
 ### Added
 
@@ -140,13 +140,13 @@ The `security-engineer-agent.md` contained contradictory instructions — line 4
 
 When resuming an epic, tickets that completed all 7 phases in a prior session but weren't closed (e.g., because the session predated HC #4b) are now closed automatically. The orchestrator verifies all 7 report headers exist + security PASS, then marks Done — no `AskUserQuestion` needed.
 
-**Evidence:** PRO-312 session — orchestrator asked "How should I handle the 4 completed-but-not-closed tickets?" with 3 options. User had to choose "Skip." This question should not have been asked.
+**Evidence:** A prior swarm session — orchestrator asked "How should I handle the 4 completed-but-not-closed tickets?" with 3 options. User had to choose "Skip." This question should not have been asked.
 
 #### Epic-Swarm: Existing-PR Detection (§6.2)
 
 Before calling `gh pr create`, the orchestrator now checks `gh pr list --head epic/[epic-id]` for an existing PR. If found, updates it with `gh pr edit` instead of failing with exit code 1.
 
-**Evidence:** PRO-312 session — `gh pr create` failed because PR #213 already existed from the prior session. Orchestrator recovered by detecting the error, but the pre-check prevents the error entirely.
+**Evidence:** A prior swarm session — `gh pr create` failed because a PR already existed from the prior session. Orchestrator recovered by detecting the error, but the pre-check prevents the error entirely.
 
 #### Subagent Prompt: Universal Large-File and Linear-Isolation Notes (§3.2.1)
 
@@ -155,11 +155,11 @@ Two new blocks added to the epic-swarm subagent prompt template, inherited by ev
 - **Large file handling:** Read tool rejects files >10K tokens. Agents must check file size with `wc -l` first and use `offset`/`limit` for files >500 lines. Previously only in `qa-engineer-agent.md`; now all agents get it.
 - **Linear MCP isolation:** Explicit "Do NOT call any `mcp__linear-server__*` tools" instruction. Prevents subagents from making Linear state changes that conflict with the orchestrator.
 
-**Evidence:** PRO-312 session — 8+ subagents across all agent types hit the Read-tool token limit. Security agents called Linear tools directly.
+**Evidence:** A prior swarm session — 8+ subagents across all agent types hit the Read-tool token limit. Security agents called Linear tools directly.
 
 #### Project Permissions: `Bash(cp:*)` and Codex Review Tools
 
-Added to ProductLobster project settings to prevent potential mid-flow permission prompts:
+Recommended project-level `settings.local.json` additions to prevent potential mid-flow permission prompts:
 - `Bash(cp:*)` — used by orchestrator to copy context bundles into worktrees
 - `mcp__codex-review-server__codex_review`, `mcp__codex-review-server__codex_review_and_fix`, `mcp__codex-review-server__codex_fix`
 
@@ -169,7 +169,7 @@ Added to ProductLobster project settings to prevent potential mid-flow permissio
 
 Previously: "No compound cd + git commands." Now: "Use absolute paths for all commands — no relative paths, no cd persistence." Clarifies that `cd` does not persist across Bash tool calls, all paths should be absolute, and tool-native paths (Read, Grep, Glob) are preferred over shell paths.
 
-**Evidence:** PRO-312 session — `cd .swarm/worktrees/PRO-430 && pnpm generate` left the conceptual directory in the worktree, causing the next relative-path command to fail (2 wasted tool calls).
+**Evidence:** A prior swarm session — `cd .swarm/worktrees/<ticket-id> && pnpm generate` left the conceptual directory in the worktree, causing the next relative-path command to fail (2 wasted tool calls).
 
 ---
 
@@ -179,15 +179,15 @@ Previously: "No compound cd + git commands." Now: "Use absolute paths for all co
 
 #### Epic-Swarm: Hard Constraints #7, #8, #9 — Mid-Flow Discipline
 
-Three new hard constraints in `commands/epic-swarm.md`, each backed by evidence from the PRO-312 swarm session (4 tickets, full pipeline):
+Three new hard constraints in `commands/epic-swarm.md`, each backed by evidence from a prior 4-ticket full-pipeline swarm session:
 
-- **HC #7 — Do NOT pause to re-confirm execution mode mid-flow.** Prohibits the orchestrator from interrupting setup-to-dispatch transitions with "should I proceed continuously?" or "pause after each ticket?" questions. The execution model is established by the command itself; the user already opted in by invoking it. The PRO-312 session lost a round-trip to a redundant `AskUserQuestion` after setup completed.
-- **HC #8 — LSP/IDE diagnostics are non-authoritative during the swarm.** When worktrees are created or removed, sibling worktrees' LSP caches go stale for 30–60 seconds. Treats LSP output as advisory only — ground truth is `tsc --noEmit`, `pnpm lint`, `pnpm test`. The PRO-312 orchestrator wasted 6+ tool calls re-verifying PRO-427's already-passing TypeScript gates because LSP showed false errors.
-- **HC #9 — Quote bracket paths in Bash (zsh glob hazard).** Paths containing `[id]`, `[slug]`, `[...slug]` are interpreted as zsh glob patterns and fail with `(eval):1: no matches found`. Worse, the failure cancels parallel tool calls in the same batch. 8 of 24 PRO-312 subagents hit this. Rule applies to orchestrator AND every dispatched subagent.
+- **HC #7 — Do NOT pause to re-confirm execution mode mid-flow.** Prohibits the orchestrator from interrupting setup-to-dispatch transitions with "should I proceed continuously?" or "pause after each ticket?" questions. The execution model is established by the command itself; the user already opted in by invoking it. The reference session lost a round-trip to a redundant `AskUserQuestion` after setup completed.
+- **HC #8 — LSP/IDE diagnostics are non-authoritative during the swarm.** When worktrees are created or removed, sibling worktrees' LSP caches go stale for 30–60 seconds. Treats LSP output as advisory only — ground truth is `tsc --noEmit`, `pnpm lint`, `pnpm test`. The reference session orchestrator wasted 6+ tool calls re-verifying a ticket's already-passing TypeScript gates because LSP showed false errors.
+- **HC #9 — Quote bracket paths in Bash (zsh glob hazard).** Paths containing `[id]`, `[slug]`, `[...slug]` are interpreted as zsh glob patterns and fail with `(eval):1: no matches found`. Worse, the failure cancels parallel tool calls in the same batch. A third of the subagents in the reference session hit this. Rule applies to orchestrator AND every dispatched subagent.
 
 #### Epic-Swarm: Ticket Closure (HC #4 expansion + §3.5.6)
 
-The orchestrator now marks each completed ticket as **Done** in Linear after the merge succeeds. Previously the orchestrator only set tickets to "In Progress" — every swarm-completed ticket was left stuck mid-state because `/security-review` (the only command that closes tickets) is not invoked by the swarm. The PRO-312 session merged 4 tickets cleanly but left all 4 in "In Progress."
+The orchestrator now marks each completed ticket as **Done** in Linear after the merge succeeds. Previously the orchestrator only set tickets to "In Progress" — every swarm-completed ticket was left stuck mid-state because `/security-review` (the only command that closes tickets) is not invoked by the swarm. A prior swarm session merged 4 tickets cleanly but left all 4 in "In Progress."
 
 - Hard Constraint #4 expanded to cover both **(a)** phase reports and **(b)** ticket closure
 - New step §3.5.6 "Mark ticket as Done in Linear" with explicit precondition checklist (hard checkpoint passed, security PASS, merge succeeded, integration tests passed, branch pushed)
@@ -198,7 +198,7 @@ New "MANDATORY: Call-Site Enumeration for Service-Layer Changes" section in `age
 
 Whenever an adaptation plan modifies a service-layer function or shared utility, the architect MUST grep for ALL call sites — not just the primary user-facing route — and classify each as Updated, Unaffected, or MISSED. Particular emphasis on async/background entry points (Inngest, queues, cron, server actions, CLI scripts) which are the most common blind spots.
 
-**Evidence:** PRO-429 shipped with a P1 correctness bug because the adaptation plan covered the API route but missed an Inngest worker that built replay plans via a parallel call path. Codex caught it; the human-equivalent code reviewer also missed it.
+**Evidence:** A prior production ticket shipped with a P1 correctness bug because the adaptation plan covered the API route but missed a background worker that called the same service via a parallel call path. Codex caught it; the human-equivalent code reviewer also missed it.
 
 #### Code-Reviewer-Agent: Cross-Call-Site Verification
 
@@ -221,17 +221,17 @@ These are also embedded in the swarm subagent prompt template (epic-swarm.md §3
 
 #### Epic-Swarm §3.2.2: Canonical Phase-Description Naming
 
-Agent dispatches now MUST use the canonical `<ticket-id> <phase> phase` description format (e.g., `PRO-425 testing phase`, never `PRO-425 testing audit`). Scope adjustments belong in the prompt body, not the description. Drift in the description string breaks downstream tooling that parses transcripts to identify phase identity.
+Agent dispatches now MUST use the canonical `<ticket-id> <phase> phase` description format (e.g., `PROJ-123 testing phase`, never `PROJ-123 testing audit`). Scope adjustments belong in the prompt body, not the description. Drift in the description string breaks downstream tooling that parses transcripts to identify phase identity.
 
 ### Fixed
 
 #### Technical-Writer-Agent: YAML Validation Recipe
 
-Replaced the implicit `node -e "require('js-yaml').load(...)"` pattern (which fails with `Cannot find module 'js-yaml'` in projects that don't include it as a dev dependency) with `python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))"`. PyYAML ships by default on macOS and most Linux distros. Two PRO-312 subagents wasted tool calls on the broken node recipe before working around it.
+Replaced the implicit `node -e "require('js-yaml').load(...)"` pattern (which fails with `Cannot find module 'js-yaml'` in projects that don't include it as a dev dependency) with `python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))"`. PyYAML ships by default on macOS and most Linux distros. Two subagents in the reference session wasted tool calls on the broken node recipe before working around it.
 
 ### Notes
 
-- All fixes in this release are derived from analysis of the PRO-312 epic-swarm session (4-ticket, full-pipeline run). Each rule names the specific session evidence in its rationale.
+- All fixes in this release are derived from analysis of a prior 4-ticket full-pipeline epic-swarm session. Each rule names the specific session evidence in its rationale.
 - Backwards compatible. No command signatures or argument shapes changed.
 
 ---
@@ -242,7 +242,7 @@ Replaced the implicit `node -e "require('js-yaml').load(...)"` pattern (which fa
 
 #### Epic-Swarm: Ticket-Sequential Architecture (Breaking)
 
-Complete rewrite of the epic-swarm orchestration model based on PRO-310 and PRO-311 post-mortem analysis. Both runs skipped 5 of 7 workflow phases for all tickets — only adaptation (Wave 1) and implementation were executed. Testing, documentation, code review, codex review, and security review were never dispatched. All tickets were marked Done without security review.
+Complete rewrite of the epic-swarm orchestration model based on post-mortem analysis of two production runs. Both runs skipped 5 of 7 workflow phases for all tickets — only adaptation (Wave 1) and implementation were executed. Testing, documentation, code review, codex review, and security review were never dispatched. All tickets were marked Done without security review.
 
 **Root cause:** The phase-parallel-across-wave architecture relied on the LLM orchestrator to follow a 1,628-line specification through 280+ pipeline steps. Under cognitive load, it optimized for throughput by skipping phases. No enforcement mechanism existed.
 
@@ -294,13 +294,13 @@ Updated in: `codex-finding-resolution` skill, `swarm-phase-reporting` report tem
 
 Two new auto-activated skills enforce discipline that the epic-swarm orchestrator was silently skipping — posting phase reports to Linear and resolving Codex findings.
 
-**Problem:** PRO-310 epic swarm completed 11 tickets but most had zero phase reports posted to Linear. Codex review findings (P1-P3) were silently dropped. The instructions existed in epic-swarm.md but the orchestrator skipped them under cognitive load.
+**Problem:** A prior epic swarm completed 11 tickets but most had zero phase reports posted to Linear. Codex review findings (P1-P3) were silently dropped. The instructions existed in epic-swarm.md but the orchestrator skipped them under cognitive load.
 
 **Solution:** Skills with anti-rationalization, gold-standard examples, and explicit invocation from both workflows.
 
 **`swarm-phase-reporting` skill:**
 - Enforces posting structured reports to Linear after every phase for every ticket
-- Includes PRO-269 comment thread as gold-standard examples (`examples/pro-269-phase-reports.md`)
+- Includes a reference comment thread as gold-standard examples (`examples/gold-standard-phase-reports.md`)
 - Full report templates for all 8 phases (`references/report-templates.md`)
 - Report validation — required fields per phase, retry logic for missing fields
 - Anti-rationalization table addressing specific excuses observed in production
@@ -417,7 +417,7 @@ Comprehensive overhaul of `/epic-swarm` post-phase processing to match the behav
 
 #### Epic-Swarm Reliability Overhaul (Post-Mortem Fixes)
 
-Based on the first production run of `/epic-swarm` (PRO-330), addressing all issues from the post-mortem report:
+Based on the first production run of `/epic-swarm`, addressing all issues from the post-mortem report:
 
 - **Sequential write dispatch (P0)** — Write phases (implementation, testing, documentation) now dispatch agents one at a time with explicit `cd` to each worktree, guaranteeing isolation. Read-only phases (adaptation, code review, security scan) remain parallel. Configurable via `SWARM_PARALLEL_WRITES` (default: `false`).
 - **Working directory enforcement (P0)** — Agent prompts now include absolute path instructions at the top: agents must use absolute paths for all file operations and verify they are operating in their assigned worktree. Read-only phase agents also receive an explicit file manifest from `git diff`.

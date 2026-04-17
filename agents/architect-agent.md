@@ -204,7 +204,7 @@ This is the single most common source of correctness bugs in adaptation plans. A
 
 **If the plan would change a function's behavior without updating an asynchronous call site, the plan is incorrect.** Either expand the plan to cover that call site, or refactor the change so the existing call site continues to work unchanged (e.g., new function with new name, old function unchanged).
 
-**Evidence for why this exists:** PRO-429 (replay checkpoint extension) — adaptation plan modified `buildReplayPlanForRequest` for the API route but did not enumerate the Inngest workers that ALSO build replay plans via a parallel call path. The implementation shipped with the Inngest path silently bypassing the new logic. Codex caught it as a P1 correctness bug; the human-equivalent code reviewer missed it. Architects who skip call-site enumeration ship correctness bugs.
+**Evidence for why this exists:** A prior production ticket shipped a P1 correctness bug because the adaptation plan modified a service function for the API route but did not enumerate a background worker that ALSO called the same function via a parallel call path. The implementation shipped with the worker path silently bypassing the new logic. Codex caught it; the human-equivalent code reviewer missed it. Architects who skip call-site enumeration ship correctness bugs.
 
 ## Tooling Notes for Architect Work
 

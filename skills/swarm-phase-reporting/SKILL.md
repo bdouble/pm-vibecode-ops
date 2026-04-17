@@ -15,7 +15,7 @@ This is not optional. This is not deferrable. A phase that completes without a L
 
 ## Why This Exists
 
-Production data from the PRO-310 epic swarm (2026-04-07) showed:
+Production data from a prior epic-swarm run showed:
 - 11 completed tickets
 - Only 6 had adaptation reports posted
 - **Zero** had implementation, testing, documentation, code review, or security reports
@@ -23,7 +23,7 @@ Production data from the PRO-310 epic swarm (2026-04-07) showed:
 - `/close-epic` cannot extract deferred items from missing reports
 - Codex review findings were silently lost
 
-The execute-ticket workflow (PRO-269) posted all 7 phase reports correctly. The difference: execute-ticket processes one ticket at a time; epic-swarm manages multiple tickets across waves and loses track of posting under cognitive load.
+The execute-ticket workflow posted all 7 phase reports correctly on the same workload. The difference: execute-ticket processes one ticket at a time; epic-swarm manages multiple tickets across waves and loses track of posting under cognitive load.
 
 ## Mandatory Steps After Every Phase
 
@@ -126,9 +126,9 @@ After posting the report, add the appropriate label:
 | "Posting would slow down the tier" | One API call takes < 1 second. Skipping it breaks /close-epic. |
 | "The report didn't have the right format" | Fix the format and post. Don't skip posting because format was imperfect. |
 
-## Gold Standard: PRO-269
+## Gold Standard Example
 
-See `examples/pro-269-phase-reports.md` for the complete comment thread from PRO-269, which was executed with `/execute-ticket` and has all 7 phase reports posted correctly. Every ticket processed by `/epic-swarm` should have comparable report detail and completeness.
+See `examples/gold-standard-phase-reports.md` for a complete comment thread from a ticket executed with `/execute-ticket` that has all 7 phase reports posted correctly. Every ticket processed by `/epic-swarm` should have comparable report detail and completeness.
 
 ## Report Detail Expectations
 
@@ -140,6 +140,6 @@ Reports are NOT summaries. Each report should include:
 - **Deferred items** with classification and reasoning
 - **Quality gates** with pass/fail status and details
 
-Compare against the PRO-269 examples. If your report has less detail, it's probably missing something.
+Compare against the gold-standard examples. If your report has less detail, it's probably missing something.
 
 See `references/report-templates.md` for the full expected template for each phase.

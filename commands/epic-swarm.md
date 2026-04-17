@@ -68,10 +68,10 @@ All shell commands MUST use absolute paths and tool-native working-directory fla
 - `docker compose --project-directory <abs-path> <command>` (not `cd <path> && docker compose <command>`)
 - For anything without a `-C`/`--dir`/`--prefix` flag: run two serial Bash calls, not a compound command.
 
-**Background:** The Bash tool does NOT persist the working directory across calls. Each Bash invocation starts at the project root. Relative paths like `.swarm/worktrees/PRO-430` fail when the conceptual working directory is elsewhere. Absolute paths + tool-native flags sidestep both issues while avoiding compound-command permission penalties.
+**Background:** The Bash tool does NOT persist the working directory across calls. Each Bash invocation starts at the project root. Relative paths like `.swarm/worktrees/<ticket-id>` fail when the conceptual working directory is elsewhere. Absolute paths + tool-native flags sidestep both issues while avoiding compound-command permission penalties.
 
 **Rules for the orchestrator AND agents:**
-- Use absolute paths for ALL Bash commands. Example: `/Users/brian/ProductLobster/.swarm/worktrees/PRO-430/...`, not `.swarm/worktrees/PRO-430/...`
+- Use absolute paths for ALL Bash commands. Example: `/path/to/project/.swarm/worktrees/<ticket-id>/...`, not `.swarm/worktrees/<ticket-id>/...`
 - Never use `&&`, `||`, or `;` to chain shell commands in a single Bash tool call. If you need two actions, issue two Bash calls.
 - Prefer tool-native paths (Read, Grep, Glob) which don't depend on the shell working directory at all.
 - Agent prompts dispatched by the orchestrator MUST include this rule verbatim — it is embedded in the agent prompt template in §3.2.1.
@@ -101,7 +101,7 @@ The ONLY ways a phase does not run for a ticket are:
 
 **If you find yourself reasoning that a phase is "unnecessary," "already handled," "redundant," or "covered by implementation" — STOP. You are violating this constraint.** Tests written during implementation do NOT substitute for the testing phase. Implementation-generated docs do NOT substitute for the documentation phase. Run every phase. Post every report.
 
-**Evidence for why this exists:** PRO-310 and PRO-311 both had the orchestrator skip 5 of 7 phases, marking all tickets Done after implementation alone. The fix is not better prompting — it is this hard constraint plus the hard checkpoint in Phase 3.3 that enforces it.
+**Evidence for why this exists:** Prior production epic-swarm runs had the orchestrator skip 5 of 7 phases, marking all tickets Done after implementation alone. The fix is not better prompting — it is this hard constraint plus the hard checkpoint in Phase 3.3 that enforces it.
 
 ### 7. Do NOT pause to re-confirm execution mode mid-flow
 
@@ -128,7 +128,7 @@ When worktrees are created or removed, IDE/LSP diagnostics for the remaining wor
 
 **Specifically: do NOT re-verify a subagent's reported passing gates based solely on stale LSP diagnostics.** If the subagent reported `tsc clean, lint clean, N/N tests passing`, trust that report unless you have a concrete reason to doubt it (the subagent's own bash output contradicted itself, the file diff doesn't match the report, etc.). Re-running gates "just to be sure" because LSP shows red squiggles wastes ~6–10 tool calls per ticket.
 
-**Evidence for why this exists:** PRO-312 swarm session — orchestrator re-ran `tsc --noEmit` four times for PRO-427 chasing stale LSP diagnostics that were already invalidated by the worktree teardown. Every check came back clean.
+**Evidence for why this exists:** A prior swarm session — orchestrator re-ran `tsc --noEmit` four times for a single ticket chasing stale LSP diagnostics that were already invalidated by the worktree teardown. Every check came back clean.
 
 ### 9. Quote bracket paths in Bash (zsh glob hazard)
 
@@ -165,7 +165,7 @@ You are orchestrating a swarm on Opus 4.7, which per its system card (§2.2.5.1,
 
 **10b. Scope context-bundle generation to in-scope tickets only.** When the user scopes the swarm to a specific phase or tier (e.g., "Phase 1 only", "--tier 2"), skip Phase 1.5 context-bundle writes for tickets outside the declared scope. Bundles for out-of-scope tickets waste disk and compute and leave stale context if the epic's scope changes before they are used.
 
-**10c. Do NOT re-fetch posted reports via `list_comments`.** Once you have received a phase report from a subagent, you already hold it in your context AND posted it to Linear. Do not call `mcp__linear-server__list_comments` during subsequent phase dispatches to "re-ingest" prior reports for the next agent. Instead, persist each received report to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (write the raw report content, nothing else) and include the FILE PATH in the next phase agent's prompt. The agent will Read the file if it needs the content. This pattern cut ~300 KB of duplicated context per 6-ticket epic in the PRO-111 analysis.
+**10c. Do NOT re-fetch posted reports via `list_comments`.** Once you have received a phase report from a subagent, you already hold it in your context AND posted it to Linear. Do not call `mcp__linear-server__list_comments` during subsequent phase dispatches to "re-ingest" prior reports for the next agent. Instead, persist each received report to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (write the raw report content, nothing else) and include the FILE PATH in the next phase agent's prompt. The agent will Read the file if it needs the content. Forensic analysis of a 6-ticket epic-swarm run showed this re-fetch loop accounted for ~300 KB of duplicated context.
 
 **10d. Observability logging.** For every phase agent dispatch, append one JSON line to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` with the shape `{ "ts": <iso8601>, "phase": "<name>", "agent": "<agent-name>", "tool_calls": <n>, "write_calls": <n>, "edit_calls": <n>, "status": "<DONE|BLOCKED|NEEDS_CONTEXT>", "report_bytes": <n>, "files_changed_count": <n> }`. The agent returns the counts in its Status block per its Operating Constraints; the orchestrator records the line immediately after parsing the report. This enables post-run retros and detection of the "sufficiency stall" regression.
 
@@ -1081,16 +1081,16 @@ Spawn Agent with:
   - The agent definition matching this phase (from 3.2.1 agent selection table)
   - The full prompt built in 3.2.1
   - description: "[ticket-id] [phase] phase"
-    e.g., "PRO-425 adaptation phase", "PRO-425 implementation phase",
-          "PRO-425 testing phase", "PRO-425 documentation phase",
-          "PRO-425 code review phase", "PRO-425 security scan"
+    e.g., "PROJ-123 adaptation phase", "PROJ-123 implementation phase",
+          "PROJ-123 testing phase", "PROJ-123 documentation phase",
+          "PROJ-123 code review phase", "PROJ-123 security scan"
 ```
 
 **Description naming rule (mandatory):**
 
 The Agent dispatch `description` field MUST follow the canonical pattern `"<ticket-id> <phase> phase"` (or `"<ticket-id> security scan"` for the security phase, since "scan" reads better than "phase"). Do not vary the description based on scope ("audit", "focused review", "quick check") — those scope adjustments belong in the agent prompt body, not the description.
 
-**Why:** The description is parsed by downstream tooling (state file scans, transcript analysis, hard checkpoint verification) to identify which phase ran for which ticket. Drift in the description ("PRO-429 testing audit" vs "PRO-429 testing phase") breaks parsing and obscures phase identity.
+**Why:** The description is parsed by downstream tooling (state file scans, transcript analysis, hard checkpoint verification) to identify which phase ran for which ticket. Drift in the description ("PROJ-123 testing audit" vs "PROJ-123 testing phase") breaks parsing and obscures phase identity.
 
 **Canonical descriptions:**
 | Phase | Description |
@@ -1407,7 +1407,7 @@ For each ticket that completed all phases:
   5. If ALL headers FOUND: proceed to merge (Section 3.5).
 ```
 
-**This checkpoint is non-negotiable.** It is the enforcement mechanism that prevents the phase-skipping failure from PRO-310 and PRO-311. A ticket cannot merge without all 7 reports.
+**This checkpoint is non-negotiable.** It is the enforcement mechanism that prevents the phase-skipping failure observed in prior production epic-swarm runs. A ticket cannot merge without all 7 reports.
 
 ### 3.4 Update Orchestrator Notes
 
@@ -1497,7 +1497,7 @@ If ANY precondition is not met, the ticket should NOT be closed — it should re
 
 **Why this exists:** In the standalone workflow, `/security-review` is the only command that closes tickets. Inside the swarm, the orchestrator runs the security-engineer-agent inline rather than invoking `/security-review` as a subcommand, so the orchestrator inherits the responsibility for closing the ticket. **Without this step, every swarm-completed ticket remains stuck in "In Progress" forever**, requiring manual cleanup.
 
-**Evidence for why this exists:** PRO-312 swarm session — all 4 tickets (PRO-425/426/427/429) merged cleanly with full phase reports posted, but none were marked Done. The user had to close them manually.
+**Evidence for why this exists:** A prior swarm session — all tickets merged cleanly with full phase reports posted, but none were marked Done. The user had to close them manually.
 
 **3.5.7 Clean up worktree:**
 ```bash

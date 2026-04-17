@@ -13,7 +13,7 @@ All Codex findings at P1-P3 severity MUST be resolved — fixed, explicitly dism
 
 ## Why This Exists
 
-Production data from the PRO-310 epic swarm showed Codex reviews completing with P1-P3 findings that were silently dropped — never posted to Linear, never fixed, never presented to the user. These findings are frequently more important than Codex's priority labels suggest. In past projects, all P1-P3 items were fixed. The epic-swarm workflow broke this discipline by treating Codex review as a fire-and-forget step.
+Production data from a prior epic-swarm run showed Codex reviews completing with P1-P3 findings that were silently dropped — never posted to Linear, never fixed, never presented to the user. These findings are frequently more important than Codex's priority labels suggest. In past projects, all P1-P3 items were fixed. The epic-swarm workflow broke this discipline by treating Codex review as a fire-and-forget step.
 
 ## Context Quality is Critical
 

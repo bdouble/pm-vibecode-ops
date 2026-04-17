@@ -1,8 +1,8 @@
-# Gold Standard Phase Reports: PRO-269
+# Gold Standard Phase Reports
 
-These are the actual Linear comments posted by `/execute-ticket` for PRO-269 (Prototype version history). Every ticket — whether processed by `/execute-ticket` or `/epic-swarm` — should have reports at this level of detail for every phase.
+These are representative Linear comments posted by `/execute-ticket` on a production ticket that produced all 7 phase reports correctly. Domain-specific names (prototype-version-service, etc.) come from the source project; use them as a shape reference for YOUR project's reports, not as canonical APIs. Every ticket — whether processed by `/execute-ticket` or `/epic-swarm` — should have reports at this level of detail for every phase.
 
-PRO-269 had **7 comments** posted across its lifecycle. Below are representative examples.
+The reference ticket had **7 comments** posted across its lifecycle. Below are representative examples.
 
 ---
 
@@ -14,7 +14,7 @@ PRO-269 had **7 comments** posted across its lifecycle. Below are representative
 **Status:** COMPLETE
 
 ### Summary
-Analyzed the full implementation surface for PRO-269 (prototype version history). The Prisma schema is already complete (PrototypeVersion with parentVersionId, changeDescription, versionNumber) — no migrations needed. The implementation requires: (1) a new `prototype-version-service.ts` for read/rollback/branch operations, (2) four new API routes under `/api/prototypes/[id]/versions/`, (3) a version timeline UI component integrated into the prototype viewer, (4) a version preview mechanism, and (5) modification of the refinement chat to create versions instead of updating in-place.
+Analyzed the full implementation surface for a prototype version history feature. The Prisma schema is already complete (PrototypeVersion with parentVersionId, changeDescription, versionNumber) — no migrations needed. The implementation requires: (1) a new `prototype-version-service.ts` for read/rollback/branch operations, (2) four new API routes under `/api/prototypes/[id]/versions/`, (3) a version timeline UI component integrated into the prototype viewer, (4) a version preview mechanism, and (5) modification of the refinement chat to create versions instead of updating in-place.
 
 ### Key Architecture Decisions
 
