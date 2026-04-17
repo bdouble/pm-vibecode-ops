@@ -1,6 +1,6 @@
 ---
 name: mvd-documentation
-description: Enforces minimal, decision-focused documentation that captures WHY, not WHAT. Use when adding comments, JSDoc, README content, API documentation, or any code documentation, or when user asks to "document this", "add comments", "write JSDoc", or "explain this code".
+description: Use when about to add a code comment, JSDoc block, inline explanation, or README section — especially when tempted to restate what the code does in prose rather than explaining why. Also use when documenting complex business logic, security-sensitive code, PII handling, or external API integrations, or when user says "document this", "add comments", "write JSDoc", or "explain this code".
 ---
 
 # Minimal Viable Documentation

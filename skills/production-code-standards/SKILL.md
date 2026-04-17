@@ -1,6 +1,6 @@
 ---
 name: production-code-standards
-description: Enforces production-grade code quality standards. Use when writing, editing, or reviewing production code in src/, lib/, app/, services/, or similar directories, or when user mentions "implement", "write code", "add feature", "fix bug", "quick fix", "workaround", or "review PR".
+description: Use when writing, editing, or reviewing production code — especially when tempted to add a TODO/FIXME/HACK comment, a fallback like `value || default`, an empty catch block, a `setTimeout` to mask a race condition, a `console.log`, or an `any` type. Also use when saying "quick fix", "workaround", "just a prototype", "temporary", or "I'll clean it up later".
 ---
 
 # Production Code Standards
@@ -152,6 +152,12 @@ If you think any of these, you are about to violate this skill.
 | "This fallback makes it more resilient" | Fallbacks hide bugs. Fail fast so problems surface immediately. |
 | "Tests don't need production standards" | Test code with workarounds creates false confidence. Tests must be accurate. |
 | "This is a minor change, standards don't apply" | Minor changes are where standards slip. Apply them especially here. |
+
+## Gotchas
+
+Running list of edge cases encountered. Append new entries as they come up.
+
+- _(none logged yet — add entries as they come up during use)_
 
 ## Related Skills
 - **testing-philosophy**: Test code may use mocks and fixtures; production code must not

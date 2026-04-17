@@ -5,6 +5,61 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-04-17
+
+### Added
+
+#### Opus 4.7 Workflow Tuning — system-card-driven overhaul
+
+Anthropic released Opus 4.7 on 2026-04-16. A full epic-swarm run on PRO-111 under the new model showed significant degradation versus the prior Opus 4.6 baseline (PRO-389): 6 of 10 tickets completed instead of 7/7, ~80% orchestrator context usage instead of ~47%, and frequent permission-prompt interruptions. Forensic analysis of both session transcripts plus a meticulous read of the Opus 4.7 system card produced this release.
+
+**Skill activation overhaul (all 11 enforcement skills):**
+- Rewrote every skill `description` field from author-voice ("Enforces X") to trigger-voice ("Use when..."). Per Jesse Vincent's empirically A/B-tested writing-skills guidance (superpowers repo), author-voice descriptions cause the model to absorb the gist and skip invoking the skill body. Both epic-swarm runs showed **zero `Skill` tool invocations** across 50+ subagent dispatches — this fix targets that root cause.
+- Added `## Gotchas` running-list sections to the top-5 skills for edge-case accumulation over time (per Thariq's Anthropic "Lessons from Building Claude Code" guidance that Gotchas are the highest-signal skill content).
+- Demoted `using-pm-workflow` from a catalog-in-prose meta-skill to a pure workflow router. Removed the embedded skill catalog and rationalization tables that were competing with the harness's native skill listing.
+- Shrank `scripts/session-start.sh` from ~150 lines of inlined skill-catalog prose to a 3-line nudge that tells Claude to invoke the Skill tool on match. The old script was actively suppressing auto-activation by pre-loading rule gist.
+
+**Agent prompt overhaul (all 10 agent templates):**
+- Added an `## Opus 4.7 Operating Constraints` section to every agent (architect, backend-engineer, frontend-engineer, qa-engineer, technical-writer, code-reviewer, design-reviewer, security-engineer, epic-closure, ticket-context). Directly targets the three 4.7 regressions documented in the system card: "declaring sufficiency without acting" (§6.2.2.2), "downgrades action requests into advice" (§6.2.2.2), and "response verbosity" (§2.2.5.1, §4.4.2).
+- Hard prohibition on compound shell commands (`&&`, `||`, `;`). Use tool-native working-dir flags: `pnpm -C`, `git -C`, `npx --prefix`, `docker compose --project-directory`.
+- Report-size cap: 6,000 chars for phase agents, 10,000 for epic-closure. The worst PRO-111 report was 37 KB — 6× over a reasonable cap. Agents now include explicit tool-call counts in their Status block.
+- Architect-agent gets a bounded-exploration rule: max 3 files beyond the required-reading list, each justified under a Discovery subsection.
+
+**Orchestrator workflow tightening (`commands/epic-swarm.md`):**
+- New Hard Constraint #10: "Opus 4.7 context efficiency and quality gates" with six mechanical sub-rules:
+  - **10a** Hard-checkpoint before `state=Done`: verify 7 phase agents dispatched + 7 reports posted. PRO-111 showed PRO-236/237/238 being marked Done with only 4/2/1 phases run.
+  - **10b** Scope context-bundle generation to in-scope tickets only — eliminates wasted Phase 1.5 writes when user scopes the swarm.
+  - **10c** No `list_comments` re-fetch loop — persist reports to `.swarm/context/<epic>/reports/<ticket>/<phase>.md` and pass file paths to the next phase agent. Cuts ~300 KB duplicated context per 6-ticket epic.
+  - **10d** Per-phase observability logging to `.swarm/observability/<epic>/<ticket>.jsonl` with tool-call counts and report bytes.
+  - **10e** Empty-artifact re-dispatch: if a write-phase agent returns `Status: DONE` with `write_calls + edit_calls == 0`, re-dispatch with a "write now" directive. Halt if the second dispatch also produces no artifacts.
+  - **10f** Report-size verification with soft warning.
+- Rewrote Hard Constraint #2 to prohibit `cd X && Y` outright and mandate tool-native working-dir flags.
+
+**Orchestrator workflow tightening (`commands/execute-ticket.md`):**
+- New `## Opus 4.7 Orchestrator Operating Constraints` section with five counter-measure rules: sufficiency-stall detection, reject-report-without-artifacts, no-re-fetch, observability logging, terse narration.
+- Updated the git-command constraint from "NO compound commands with cd" to a full tool-native-flag policy covering pnpm, npx, docker compose.
+
+**Slash-command permission fix (root cause of "permission prompts"):**
+- Expanded `allowed-tools` frontmatter in both `commands/epic-swarm.md` and `commands/execute-ticket.md` from the narrow `Bash, Bash(git:*), Bash(gh:*)` list to a comprehensive allowlist including pnpm, npm, npx, node, cd, mkdir, chmod, mv, cp, ln, touch, rm, test, cat, ls, find, rg, head, tail, pwd, echo, printf, which, jq, sed, awk, tr, sort, uniq, wc, xargs, docker, docker compose, tsc, vitest, jest, biome, eslint, prettier.
+- Root cause: a slash command's `allowed-tools` frontmatter REPLACES the session-scope Bash allowlist for the duration of the command. Any Bash subcommand not listed prompts interactively. The prior narrow list meant every `pnpm install`, `npx tsc`, `mkdir .swarm`, etc. required a manual approval during long runs.
+
+**Double-reinforced compound-command prohibition for subagents:**
+- Each agent template (all 10) carries the rule in its Operating Constraints section — this becomes the subagent's system prompt.
+- The orchestrator's dynamic prompt builder in `epic-swarm.md §3.2.1` and `execute-ticket.md §3.3` now ALSO emits a verbatim "SHELL COMMAND POLICY" block at the top of every dispatched agent prompt. Subagents see the rule twice (system + user), eliminating drift.
+- Updated the orchestrator's own worktree-setup bash snippets in `epic-swarm.md §3.0.2` to use tool-native working-dir flags (`pnpm -C`, `yarn --cwd`, `npm --prefix`, `make -C`) instead of `(cd X && Y)` subshells. For package managers without a cwd flag (pip/cargo/go/bundler), the orchestrator now writes a one-shot setup script and invokes it via a single `bash <script>` Bash call.
+- Replaced item 4 of the prompt builder ("ALL prior phase reports verbatim from Linear comments") with a file-path-passing pattern: reports are persisted to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` as they arrive, and next-phase agents receive the file paths. Reports under 2 KB may still be inlined. This aligns the prompt builder with Hard Constraint #10c and cuts ~300 KB of duplicated context per 6-ticket epic.
+
+### Changed
+
+- `docs/TROUBLESHOOTING.md` — Added a new "External Hook & Settings Issues" section documenting three problems discovered during the PRO-111 forensic analysis: (a) prompt-type PreToolUse Bash hooks adding 1–3s latency per shell call, (b) hook JSON outputs missing `hookEventName` causing silent bypass, (c) slash-command allowlist narrowing the session permission list. Each with remediation.
+
+### Fixed
+
+- Silent phase-dropping under context pressure. PRO-236, PRO-237, PRO-238 in the PRO-111 run were closed as `Done` after running 4/2/1 phases respectively instead of the mandated 7. The hard checkpoint in Constraint #10a now makes this mechanically impossible.
+- Zero Skill-tool invocations. The root cause combination (author-voice descriptions + catalog-in-prose session-start injection) is now addressed by Skill description rewrites + the thin session-start nudge.
+
+---
+
 ## [4.3.1] - 2026-04-15
 
 ### Fixed
@@ -1874,6 +1929,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.4.0
 [4.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.1
 [4.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.0
 [4.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.2.0

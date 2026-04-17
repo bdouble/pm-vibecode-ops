@@ -1,6 +1,6 @@
 ---
 description: Orchestrate sequential execution of epic sub-tickets using dependency-aware tier scheduling with worktree isolation and full per-ticket workflow pipelines
-allowed-tools: Task, Agent, Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), WebFetch, mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
+allowed-tools: Task, Agent, Read, Write, Edit, MultiEdit, Grep, Glob, LS, WebFetch, Bash, Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(npx:*), Bash(node:*), Bash(cd:*), Bash(mkdir:*), Bash(chmod:*), Bash(mv:*), Bash(cp:*), Bash(ln:*), Bash(touch:*), Bash(rm:*), Bash(test:*), Bash(cat:*), Bash(ls:*), Bash(find:*), Bash(rg:*), Bash(head:*), Bash(tail:*), Bash(pwd:*), Bash(echo:*), Bash(printf:*), Bash(which:*), Bash(jq:*), Bash(sed:*), Bash(awk:*), Bash(tr:*), Bash(sort:*), Bash(uniq:*), Bash(wc:*), Bash(xargs:*), Bash(docker:*), Bash(docker compose:*), Bash(tsc:*), Bash(vitest:*), Bash(jest:*), Bash(biome:*), Bash(eslint:*), Bash(prettier:*), mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
 argument-hint: <epic-id> [--dry-run] [--tier N] [--parallel]
 workflow-phase: epic-swarm
 closes-ticket: false
@@ -57,16 +57,24 @@ fi
 
 If you find yourself about to merge to or push to main/master: **STOP. You are violating this constraint.** Check out the epic branch and merge there instead.
 
-### 2. Use absolute paths for all commands — no relative paths, no cd persistence
+### 2. Absolute paths + tool-native working-dir flags — NO compound shell commands
 
-Claude Code blocks compound commands combining `cd` with `git`. All git operations on worktrees MUST use `git -C <absolute-path>`.
+All shell commands MUST use absolute paths and tool-native working-directory flags. Compound shell commands (chains with `&&`, `||`, or `;`) are PROHIBITED because they bypass pre-approved Bash allowlists and cause permission prompts that interrupt automation.
 
-**Broader principle:** The Bash tool does NOT persist the working directory across calls. Each Bash invocation starts at the project root. Using `cd X && Y` within a single call works, but the NEXT Bash call resets to the root. Relative paths like `.swarm/worktrees/PRO-430` will fail if a prior `cd` left the conceptual working directory elsewhere.
+**Use these tool-native flags instead of `cd X && Y`:**
+- `git -C <abs-path> <command>` (not `cd <path> && git <command>`)
+- `pnpm -C <abs-path> <script>` or `pnpm --dir <abs-path> <script>` (not `cd <path> && pnpm <script>`)
+- `npx --prefix <abs-path> <bin>` (not `cd <path> && npx <bin>`)
+- `docker compose --project-directory <abs-path> <command>` (not `cd <path> && docker compose <command>`)
+- For anything without a `-C`/`--dir`/`--prefix` flag: run two serial Bash calls, not a compound command.
+
+**Background:** The Bash tool does NOT persist the working directory across calls. Each Bash invocation starts at the project root. Relative paths like `.swarm/worktrees/PRO-430` fail when the conceptual working directory is elsewhere. Absolute paths + tool-native flags sidestep both issues while avoiding compound-command permission penalties.
 
 **Rules for the orchestrator AND agents:**
-- Use absolute paths for ALL Bash commands, not just git. Example: `/Users/brian/ProductLobster/.swarm/worktrees/PRO-430/...`, not `.swarm/worktrees/PRO-430/...`
-- When `cd X && Y` is necessary (e.g., `cd /abs/path && pnpm test`), the next Bash call MUST NOT assume it's still at `X`
-- Prefer tool-native paths (Read, Grep, Glob) which don't depend on the shell working directory
+- Use absolute paths for ALL Bash commands. Example: `/Users/brian/ProductLobster/.swarm/worktrees/PRO-430/...`, not `.swarm/worktrees/PRO-430/...`
+- Never use `&&`, `||`, or `;` to chain shell commands in a single Bash tool call. If you need two actions, issue two Bash calls.
+- Prefer tool-native paths (Read, Grep, Glob) which don't depend on the shell working directory at all.
+- Agent prompts dispatched by the orchestrator MUST include this rule verbatim — it is embedded in the agent prompt template in §3.2.1.
 
 ### 3. Subagents cannot spawn subagents
 
@@ -148,6 +156,22 @@ These tools do not invoke the shell and never trigger glob expansion.
 **Cascade hazard:** When a Bash call with an unquoted bracket path is batched with parallel `Grep` calls, the failure cancels ALL parallel calls in the batch ("Cancelled: parallel tool call Bash errored"). This wastes the parallelization. If you must batch a bracket-path Bash call with other tool uses, **quote the path first**.
 
 This rule applies to the orchestrator AND to every dispatched subagent. The agent prompt template in §3.2.1 enforces it for subagents.
+
+### 10. Opus 4.7 context efficiency and quality gates
+
+You are orchestrating a swarm on Opus 4.7, which per its system card (§2.2.5.1, §4.4.2, §6.2.2.2) is markedly more verbose than Opus 4.6, prone to "declaring sufficiency without acting," and prone to downgrading action requests into advice. Apply these counter-measures:
+
+**10a. Hard phase-completion checkpoint before marking any ticket Done.** Constraint #4 already requires all 7 phases and a Linear report per phase. Enforce it mechanically: BEFORE any `mcp__linear-server__update_issue(state='Done')` call for a ticket, verify that you have dispatched 7 phase agents for this ticket AND posted 7 structured reports to Linear for this ticket in this session. Count them. If the count is < 7, do NOT mark the ticket Done — post a `state='In Progress'` update with a `phase-incomplete` label, HALT the swarm, and report to the user which phases are missing. This rule supersedes any pressure you feel from context bloat to "just move on."
+
+**10b. Scope context-bundle generation to in-scope tickets only.** When the user scopes the swarm to a specific phase or tier (e.g., "Phase 1 only", "--tier 2"), skip Phase 1.5 context-bundle writes for tickets outside the declared scope. Bundles for out-of-scope tickets waste disk and compute and leave stale context if the epic's scope changes before they are used.
+
+**10c. Do NOT re-fetch posted reports via `list_comments`.** Once you have received a phase report from a subagent, you already hold it in your context AND posted it to Linear. Do not call `mcp__linear-server__list_comments` during subsequent phase dispatches to "re-ingest" prior reports for the next agent. Instead, persist each received report to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (write the raw report content, nothing else) and include the FILE PATH in the next phase agent's prompt. The agent will Read the file if it needs the content. This pattern cut ~300 KB of duplicated context per 6-ticket epic in the PRO-111 analysis.
+
+**10d. Observability logging.** For every phase agent dispatch, append one JSON line to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` with the shape `{ "ts": <iso8601>, "phase": "<name>", "agent": "<agent-name>", "tool_calls": <n>, "write_calls": <n>, "edit_calls": <n>, "status": "<DONE|BLOCKED|NEEDS_CONTEXT>", "report_bytes": <n>, "files_changed_count": <n> }`. The agent returns the counts in its Status block per its Operating Constraints; the orchestrator records the line immediately after parsing the report. This enables post-run retros and detection of the "sufficiency stall" regression.
+
+**10e. Re-dispatch on empty Write/Edit count.** If an implementation/testing/documentation agent returns `Status: DONE` but its reported `write_calls + edit_calls == 0`, the agent declared sufficiency without acting (§6.2.2.2). Re-dispatch the same phase with the directive `PRIOR DISPATCH PRODUCED NO ARTIFACTS. Your next tool call must be Write or Edit. Do not explore further.` appended to the prompt. If the second dispatch also returns zero artifacts, HALT and surface to the user.
+
+**10f. Report-size verification.** Agents are instructed to keep structured reports under 6,000 characters (10,000 for epic-closure). If a received report exceeds the cap by >50%, log a warning to observability and proceed — but do not attempt to re-invoke just for length.
 
 ---
 
@@ -780,22 +804,34 @@ else
   PKG_MGR="unknown"; INSTALL_CMD=""
 fi
 
-# Step 2: Install dependencies
+# Step 2: Install dependencies — use tool-native working-dir flags (no cd + &&)
 if [ -n "$INSTALL_CMD" ]; then
-  (cd "$worktree" && $INSTALL_CMD)
+  case "$PKG_MGR" in
+    pnpm)   pnpm -C "$worktree" install --frozen-lockfile ;;
+    yarn)   yarn --cwd "$worktree" install --frozen-lockfile ;;
+    bun)    bun install --cwd "$worktree" --frozen-lockfile ;;
+    npm)    npm --prefix "$worktree" ci ;;
+    *)      # pip/cargo/go/bundler lack cwd flags — write a setup script and exec it in one Bash call
+            printf '#!/usr/bin/env bash\ncd %q\n%s\n' "$worktree" "$INSTALL_CMD" > /tmp/swarm-install.sh
+            bash /tmp/swarm-install.sh ;;
+  esac
 fi
 
-# Step 3: Detect and run code generation / build steps
+# Step 3: Detect and run code generation / build steps (tool-native flags)
 if [ -f "$worktree/package.json" ]; then
-  # Check for common generate scripts in package.json
   for script in generate codegen prisma:generate db:generate build:types postinstall; do
     if grep -q "\"$script\"" "$worktree/package.json" 2>/dev/null; then
-      (cd "$worktree" && $PKG_MGR run "$script" 2>/dev/null || true)
+      case "$PKG_MGR" in
+        pnpm) pnpm -C "$worktree" run "$script" 2>/dev/null || true ;;
+        yarn) yarn --cwd "$worktree" run "$script" 2>/dev/null || true ;;
+        bun)  bun run --cwd "$worktree" "$script" 2>/dev/null || true ;;
+        npm)  npm --prefix "$worktree" run "$script" 2>/dev/null || true ;;
+      esac
     fi
   done
 fi
 if [ -f "$worktree/Makefile" ] && grep -q "^generate:" "$worktree/Makefile"; then
-  (cd "$worktree" && make generate 2>/dev/null || true)
+  make -C "$worktree" generate 2>/dev/null || true
 fi
 
 # Step 4: Detect test command
@@ -913,7 +949,28 @@ For each phase of the current ticket:
      /absolute/path/to/.swarm/worktrees/[ticket-id]/
    - Do NOT use relative paths from the repo root
    - Do NOT write to any directory outside your assigned worktree
-   - All git operations MUST use: git -C /absolute/path/to/.swarm/worktrees/[ticket-id]/
+
+   SHELL COMMAND POLICY — one action per Bash call, no compound shell:
+   Never chain commands with `&&`, `||`, or `;`. Compound shell commands
+   bypass the pre-approved Bash allowlist and trigger permission prompts
+   that interrupt the swarm. Use tool-native working-directory flags:
+
+     WRONG:  cd /absolute/path/to/.swarm/worktrees/[ticket-id] && pnpm test
+     RIGHT:  pnpm -C /absolute/path/to/.swarm/worktrees/[ticket-id] test
+
+     WRONG:  cd /absolute/path/to/.swarm/worktrees/[ticket-id] && npx tsc --noEmit
+     RIGHT:  npx --prefix /absolute/path/to/.swarm/worktrees/[ticket-id] tsc --noEmit
+
+     WRONG:  cd <wt> && git status
+     RIGHT:  git -C /absolute/path/to/.swarm/worktrees/[ticket-id] status
+
+     WRONG:  cd <wt> && docker compose up
+     RIGHT:  docker compose --project-directory /absolute/path/to/.swarm/worktrees/[ticket-id] up
+
+   If a tool has NO working-directory flag, issue two serial Bash calls —
+   do NOT chain them. This rule is non-negotiable and applies to EVERY
+   Bash call you make. The permission-interruption class observed on
+   Opus 4.7 + effort=xhigh is almost entirely caused by compound commands.
 
    SHELL HAZARD — Bracket paths (Next.js dynamic routes, etc.):
    This shell is zsh. Paths containing brackets like [id], [slug], [...slug]
@@ -969,7 +1026,17 @@ For each phase of the current ticket:
 
 3. **Ticket identity:** ticket ID, title
 
-4. **ALL prior phase reports for THIS ticket** — verbatim from Linear comments. Fetch fresh using `mcp__linear-server__list_comments` for this ticket. Copy the full text of each phase report comment. If the adaptation report says to use a specific pattern, the implementation agent needs to see that.
+4. **ALL prior phase reports for THIS ticket** — pass as file paths, NOT verbatim inline. Per Hard Constraint #10c, after every received phase report the orchestrator persists it to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (raw report content, no wrapper). When building the NEXT phase's agent prompt, include a section like:
+
+   ```
+   ## Prior Phase Reports (read as needed)
+   - /absolute/path/.swarm/context/<epic-id>/reports/<ticket-id>/adaptation.md
+   - /absolute/path/.swarm/context/<epic-id>/reports/<ticket-id>/implementation.md
+   ```
+
+   The agent will `Read` each file on demand. This avoids the ~300 KB per 6-ticket context bloat that came from inlining verbatim reports. EXCEPTION: if a prior phase report is under 2,000 chars, you MAY inline it verbatim to save the agent a Read round-trip. Reports over 2,000 chars MUST be passed as paths.
+
+   Do NOT call `mcp__linear-server__list_comments` to re-ingest reports you already received from the subagent in this session — you have them. List_comments is for Phase 1 context gathering and resume-from-interruption only.
 
 5. **Phase-specific instructions** from the relevant agent definition
 

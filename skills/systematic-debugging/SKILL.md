@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: Enforces systematic root-cause debugging methodology. Use when encountering a bug, test failure, build error, runtime exception, or unexpected behavior, or when user says "it's broken", "not working", "error", "failing", "debug this", or "why isn't this working".
+description: Use when a test fails, a build errors, a runtime exception appears, or behavior is unexpected. Also use when about to "just try" a fix without stating a hypothesis, when the second or third fix attempt has failed, when tempted to change multiple things at once, or when saying "it's broken", "not working", "failing", "debug this", or "why isn't this working".
 ---
 
 # Systematic Debugging
@@ -132,6 +132,12 @@ If you think any of these, you are about to guess instead of investigate.
 - **verify-implementation**: Evidence requirements for Phase 4 completion claims
 - **production-code-standards**: No workarounds or temporary fixes in production code
 - **testing-philosophy**: Test accuracy gates for regression tests
+
+## Gotchas
+
+Running list of edge cases encountered. Append new entries as they come up.
+
+- _(none logged yet — add entries as they come up during use)_
 
 ## Extended Resources
 

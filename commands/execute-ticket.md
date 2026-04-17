@@ -1,6 +1,6 @@
 ---
 description: Orchestrate all ticket workflow phases (adaptation → implementation → testing → documentation → codereview → codex-review → security-review) automatically
-allowed-tools: Task, Read, Grep, Glob, Bash, Bash(gh:*), Bash(git:*), WebFetch, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
+allowed-tools: Task, Agent, Read, Write, Edit, MultiEdit, Grep, Glob, LS, WebFetch, Bash, Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(npx:*), Bash(node:*), Bash(cd:*), Bash(mkdir:*), Bash(chmod:*), Bash(mv:*), Bash(cp:*), Bash(ln:*), Bash(touch:*), Bash(rm:*), Bash(test:*), Bash(cat:*), Bash(ls:*), Bash(find:*), Bash(rg:*), Bash(head:*), Bash(tail:*), Bash(pwd:*), Bash(echo:*), Bash(printf:*), Bash(which:*), Bash(jq:*), Bash(sed:*), Bash(awk:*), Bash(tr:*), Bash(sort:*), Bash(uniq:*), Bash(wc:*), Bash(xargs:*), Bash(docker:*), Bash(docker compose:*), Bash(tsc:*), Bash(vitest:*), Bash(jest:*), Bash(biome:*), Bash(eslint:*), Bash(prettier:*), mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
 argument-hint: <ticket-id>
 ---
 
@@ -8,7 +8,29 @@ argument-hint: <ticket-id>
 
 Execute all 6 ticket-level workflow phases automatically for the specified ticket. Pauses only for blocking issues that require user decision.
 
-**Git command constraint — NO compound commands:** Claude Code blocks compound shell commands that combine `cd` with `git` (e.g., `cd dir && git status`, or multi-line scripts with `cd` followed by `git`) to prevent bare repository attacks. This triggers a permission prompt that breaks automation. **All git operations MUST use `git -C <path>` instead of `cd <path>` + `git`.** This applies to the orchestrator AND to all agents dispatched by this workflow. When building agent prompts, include this instruction explicitly so agents do not use `cd` + `git` patterns.
+**Shell command constraint — NO compound commands, use tool-native working-dir flags:** Never chain shell commands with `&&`, `||`, or `;`. Compound commands bypass pre-approved Bash allowlists and trigger permission prompts that interrupt automation. Use tool-native flags instead of `cd`:
+- `git -C <abs-path> <command>` (not `cd <path> && git <command>`)
+- `pnpm -C <abs-path> <script>` (not `cd <path> && pnpm <script>`)
+- `npx --prefix <abs-path> <bin>` (not `cd <path> && npx <bin>`)
+- `docker compose --project-directory <abs-path> <command>`
+
+If a tool has no working-dir flag, run two serial Bash calls instead of chaining. This applies to the orchestrator AND to every agent dispatched by this workflow. Agent prompts include this rule verbatim via the agent's own "Opus 4.7 Operating Constraints" section.
+
+## Opus 4.7 Orchestrator Operating Constraints
+
+You are running on Opus 4.7, which per its system card (§2.2.5.1, §4.4.2, §6.2.2.2) is markedly more verbose than Opus 4.6, prone to "declaring sufficiency without acting," and prone to downgrading action requests into advice. Apply these counter-measures:
+
+1. **Sufficiency-stall detection.** After receiving a phase agent's report, validate its Status block against the reported tool-call counts:
+   - If phase is `implementation`, `testing`, or `documentation` AND `Status: DONE` AND `write_calls + edit_calls == 0`: re-dispatch the same phase with `PRIOR DISPATCH PRODUCED NO ARTIFACTS. Your next tool call must be Write or Edit. Do not explore further.` appended. If the second dispatch also reports zero artifacts, HALT and surface to user with options: (a) retry with a stricter "write code now" directive, (b) review manually, (c) reduce scope.
+   - If an agent transcript contains ≥30 tool calls but <3 Write/Edit in the last 10 tool uses: pause and surface the transcript to the user.
+
+2. **Reject report-without-artifacts for write phases.** Implementation, testing, and documentation phases MUST produce file changes. A report with zero `Write`/`Edit` calls and `Status: DONE` is a workflow defect — re-dispatch per rule #1 above.
+
+3. **No re-fetch loop.** Once an agent returns a phase report, you already have it in context AND post it to Linear. Do NOT call `mcp__linear-server__list_comments` to re-ingest prior reports for the next phase's prompt. Instead, persist each report to `.swarm/context/<ticket-id>/reports/<phase>.md` and pass the FILE PATH to the next-phase agent. The agent Reads it on demand.
+
+4. **Observability logging.** After each phase dispatch, append one JSON line to `.swarm/observability/<ticket-id>.jsonl` with `{ "ts": <iso8601>, "phase": "<name>", "agent": "<agent-name>", "tool_calls": <n>, "write_calls": <n>, "edit_calls": <n>, "status": "<DONE|BLOCKED|NEEDS_CONTEXT>", "report_bytes": <n>, "files_changed_count": <n> }`. Agents include the counts in their Status block per their own Operating Constraints.
+
+5. **Keep your orchestrator narration terse.** Under 4.7's verbosity regression, every extra paragraph you write multiplies across phase transitions. One-sentence status updates between phases: "Phase N complete. Dispatching Phase N+1." No recap, no re-summarization.
 
 ## Input
 
@@ -554,15 +576,40 @@ Agent tool parameters:
 - subagent_type: [agent-name from selection above]
 - description: "[Phase] for [ticket-id]"
 - prompt: Include ALL of the following:
+  0. SHELL COMMAND POLICY block (prescriptive, at TOP of prompt) — see below
   1. Ticket details (title, full description, all acceptance criteria, all Technical Notes — verbatim)
-  2. Complete prior phase reports (full text, not summarized)
+  2. Prior phase reports — pass as FILE PATHS to `.swarm/context/<ticket-id>/reports/<phase>.md`, NOT verbatim inline. Exception: reports under 2,000 chars may be inlined verbatim to save a Read round-trip.
   3. Specific phase instructions
-  4. Expected output format (structured report)
+  4. Expected output format (structured report, under 6,000 characters; include tool-call counts in Status block)
   5. Current branch name (so agent can verify it is on the correct branch)
   6. Referenced project documents and external content from Step 3.1.1 (formatted per Step E)
 ```
 
-**Critical:** Agents do NOT have Linear access. Include ALL necessary context in the prompt.
+**SHELL COMMAND POLICY block (item 0 above) — include verbatim at top of every agent prompt:**
+
+```
+SHELL COMMAND POLICY — one action per Bash call, no compound shell:
+Never chain commands with `&&`, `||`, or `;`. Compound commands bypass
+the pre-approved Bash allowlist and trigger permission prompts that
+interrupt automation. Use tool-native working-directory flags:
+
+  WRONG:  cd <abs-path> && pnpm test
+  RIGHT:  pnpm -C <abs-path> test
+
+  WRONG:  cd <abs-path> && npx tsc --noEmit
+  RIGHT:  npx --prefix <abs-path> tsc --noEmit
+
+  WRONG:  cd <abs-path> && git status
+  RIGHT:  git -C <abs-path> status
+
+  WRONG:  cd <abs-path> && docker compose up
+  RIGHT:  docker compose --project-directory <abs-path> up
+
+If a tool has NO working-directory flag, issue two serial Bash calls —
+do NOT chain them. This rule is non-negotiable.
+```
+
+**Critical:** Agents do NOT have Linear access. Include ALL necessary context in the prompt. Report persistence: after the agent returns its structured report, write the raw report text to `.swarm/context/<ticket-id>/reports/<phase>.md` BEFORE posting it to Linear. Both the Linear comment and the filesystem file get the same content.
 
 #### 3.3.1 Post-Dispatch Verification
 

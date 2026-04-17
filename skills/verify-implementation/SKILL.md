@@ -1,6 +1,6 @@
 ---
 name: verify-implementation
-description: Requires executed evidence before any completion claim. Use when about to claim work is done, fixed, passing, or ready for review, or when user says "is it done", "create PR", "commit", "ship it", "merge it", "deploy", or "mark as complete".
+description: Use when about to write "should work", "probably passes", "tests pass", "all done", "looks good", "Great!", or "Perfect!" — or any claim of completion. Also use when a subagent reports success and you are about to relay that, when about to commit/PR/deploy/merge, or when user asks "is it done", "can we ship", or "mark as complete".
 ---
 
 # Verify Implementation
@@ -194,6 +194,12 @@ If you think any of these, you are about to make an unverified claim.
 - `references/verification-checklist.md` - Task-specific checklists and command templates
 - `examples/evidence-formats.md` - Evidence formatting examples
 - `references/speculation-red-flags.md` - Language patterns signaling unverified claims
+
+## Gotchas
+
+Running list of edge cases encountered. Append new entries as they come up.
+
+- _(none logged yet — add entries as they come up during use)_
 
 ## Attribution
 

@@ -1,6 +1,6 @@
 ---
 name: model-aware-behavior
-description: Enforces read-before-write discipline and prevents scope creep. Use when about to propose or make code changes, especially to files not yet read in this session, or when user asks to "modify", "change", "update", "refactor", "fix", or "implement" code.
+description: Use when about to call Edit, MultiEdit, or Write on a file not yet Read in this session. Also use when proposing a change based on memory of a prior session, when about to modify a file discovered via Grep without reading it first, when tempted to guess a function signature or import path, or when user says "modify", "change", "update", "refactor", or "implement".
 ---
 
 # Model-Aware Behavior

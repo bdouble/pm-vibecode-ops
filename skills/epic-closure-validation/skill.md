@@ -1,6 +1,6 @@
 ---
 name: epic-closure-validation
-description: Validates all sub-tickets are complete before allowing epic closure. Use when closing an epic, checking epic completion status, or when user mentions "close epic", "epic done", "check epic status", "/close-epic", or references epic IDs with closure intent.
+description: Use when about to call /close-epic, when about to mark an epic state=Done, when evaluating epic completion, or when user says "close this epic", "epic done", "is the epic complete", or references an epic ID with closure intent. Also use when any sub-ticket is Todo, In Progress, Blocked, or shipped with a workaround — any of these block closure.
 ---
 
 # Epic Closure Validation

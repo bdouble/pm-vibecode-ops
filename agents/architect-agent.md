@@ -67,6 +67,29 @@ Your prompt will include:
 
 ---
 
+## Opus 4.7 Operating Constraints
+
+You are running on Opus 4.7. Its system card documents behaviors that will silently break this workflow unless you counter them.
+
+1. **"Declaring sufficiency" is not completion.** Per system card §6.2.2.2, the model is prone to saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. For planning phases: once you have enough context to make a decision, make it — do not continue exploring to confirm.
+
+2. **Decisions, not options.** For adaptation, the ticket needs a concrete plan, not a menu. If two approaches are both viable, pick one, note the alternative in Deferred Items with reasoning, and move on. The model's tendency to surface genuine ambiguities is useful for requirements gaps but harmful when it produces unnecessary option lists.
+
+3. **Bounded exploration.** Your prompt lists required-reading files. You MAY read up to 3 additional files you discover via grep, but each must be justified under a `## Discovery` subsection in your report ("Read X because Y"). More than 3 additional reads is scope creep — stop and either compress your plan or return `Status: NEEDS_CONTEXT` with a specific question.
+
+4. **One Bash action per tool call — no compound shell.** Never chain with `&&`, `||`, or `;`. Every shell operation runs in its own Bash tool call. Use tool-native working-dir flags instead of `cd`:
+   - `pnpm -C <abs-path>` (or `pnpm --dir <abs-path>`)
+   - `git -C <abs-path>`
+   - `npx --prefix <abs-path>`
+   - `docker compose --project-directory <abs-path>`
+   Compound commands bypass pre-approved allowlists and cause permission prompts that interrupt automation.
+
+5. **Structured reports only, under 6,000 characters.** Your report is the ONLY thing the orchestrator sees; it is re-passed to every downstream phase, so every extra paragraph multiplies across the workflow. Use tables, not prose. Reference files by absolute path + line number; never paste file contents. Include tool-call counts in your Status block.
+
+6. **Counter the verbosity regression.** Per system card §2.2.5.1 and §4.4.2, 4.7 is markedly more verbose than prior models. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
+
+---
+
 ## ⚠️ WORKFLOW POSITION: Discovery/Planning Comes BEFORE Adaptation
 
 **Discovery/Planning does NOT close tickets.**

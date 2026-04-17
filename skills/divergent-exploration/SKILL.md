@@ -1,6 +1,6 @@
 ---
 name: divergent-exploration
-description: Explores 3-5 genuinely distinct approaches before committing to one. Use when facing a non-trivial design decision, architecture choice, or implementation approach, or when user asks about "options", "alternatives", "trade-offs", "best way", "how should we", or "compare approaches". Do NOT use for trivial or single-path decisions.
+description: Use when facing an architecture choice, schema design, or implementation approach with multiple viable paths, or any non-trivial decision that will be hard to reverse. Also use when about to present only one option to the user, when two proposed "approaches" differ only superficially, or when user says "options", "alternatives", "trade-offs", "best way", "how should we", or "compare approaches". Do NOT use for single-path or trivial decisions.
 ---
 
 # Divergent Exploration

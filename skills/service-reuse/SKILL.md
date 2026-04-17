@@ -1,6 +1,6 @@
 ---
 name: service-reuse
-description: Prevents code duplication by requiring inventory check before creating new abstractions. Use when about to create a new service, helper, utility, middleware, repository, factory, or shared module, or when user mentions "create new", "add a service", "new class", "DRY", or "reuse".
+description: Use when about to write `class NewService`, `export function`, new middleware, new repository, new factory, or new utility — before the first keystroke of a new abstraction. Also use when unsure whether an auth, validation, pagination, logging, or repository pattern already exists in the codebase, or when user says "create new", "add a service", "new class", "DRY", or "reuse".
 ---
 
 # Service Reuse Enforcement
@@ -135,6 +135,12 @@ Even then:
 
 - **`references/service-inventory-template.md`** — Complete service inventory YAML template with categories, capabilities, and mandate fields
 - **`examples/inventory-search-session.md`** — Walkthrough of a real inventory search and reuse decision
+
+## Gotchas
+
+Running list of edge cases encountered. Append new entries as they come up.
+
+- _(none logged yet — add entries as they come up during use)_
 
 ## Related Skills
 - **production-code-standards**: Quality standards for any new services created

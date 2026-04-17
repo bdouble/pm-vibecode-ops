@@ -1,45 +1,24 @@
 #!/usr/bin/env bash
 # PM Workflow Session Start Hook
-# Reads the using-pm-workflow meta-skill and injects it as session context.
-# This ensures all skills are checked before every response.
+#
+# Injects a brief nudge to auto-activate skills via the Skill tool.
+#
+# We intentionally do NOT inline skill catalogs here. Per Jesse Vincent's
+# writing-skills guidance: when skill rules are pre-loaded as prose, Claude
+# absorbs the gist from the description and skips invoking the full skill
+# body. The Claude Code harness already lists all available skills in a
+# system reminder; our job is just to remind Claude to call them.
 
 set -euo pipefail
 
-# Resolve the plugin root directory (parent of scripts/)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+NUDGE='Skills are available via the Skill tool. Before responding to any coding, testing, debugging, documentation, or review request, scan the available skill list and invoke every skill whose description matches the task at hand. Do not paraphrase or follow the spirit of a skill without loading it — invoke the Skill tool to load the full body, including gotchas and prohibited patterns. Skills are enforcement mechanisms, not suggestions.'
 
-SKILL_FILE="$PLUGIN_ROOT/skills/using-pm-workflow/SKILL.md"
-
-if [ -f "$SKILL_FILE" ]; then
-  # Read the skill content, stripping the YAML frontmatter (between --- markers)
-  SKILL_CONTENT=$(awk 'BEGIN{skip=0} /^---$/{skip++; next} skip>=2{print}' "$SKILL_FILE")
-else
-  SKILL_CONTENT="WARNING: Meta-skill file not found at $SKILL_FILE. Skills may not auto-activate."
-fi
-
-# Escape the content for JSON embedding.
-# Prefer python3 when available, but keep a fallback so the hook works
-# in environments where python3 is not installed.
 if command -v python3 >/dev/null 2>&1; then
-  JSON_CONTENT=$(printf '%s' "$SKILL_CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+  JSON_CONTENT=$(printf '%s' "$NUDGE" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
 else
-  JSON_CONTENT=$(printf '%s' "$SKILL_CONTENT" | awk '
-    BEGIN { printf "\""; first = 1 }
-    {
-      if (!first) printf "\\n";
-      first = 0;
-      gsub(/\\/,"\\\\");
-      gsub(/"/,"\\\"");
-      gsub(/\t/,"\\t");
-      gsub(/\r/,"\\r");
-      printf "%s", $0
-    }
-    END { printf "\"" }
-  ')
+  JSON_CONTENT=$(printf '"%s"' "$(printf '%s' "$NUDGE" | sed 's/\\/\\\\/g; s/"/\\"/g')")
 fi
 
-# Output the hook response with the skill content as additionalContext
 cat << EOF
 {
   "hookSpecificOutput": {

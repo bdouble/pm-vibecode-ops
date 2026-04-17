@@ -1,6 +1,6 @@
 ---
 name: testing-philosophy
-description: Enforces test accuracy over coverage quantity with a fix-first methodology. Use when writing, editing, or debugging test files (*.spec.ts, *.test.ts, etc.), or when user mentions "write tests", "tests failing", "fix tests", "CI failing", "improve coverage", or "run tests".
+description: Use when writing new tests, when existing tests are failing, when CI is red, or when about to add coverage. Also use when tempted to mock an API without reading the implementation, skip a failing test to unblock a build, chase a coverage percentage, or assume a test passes without running it.
 ---
 
 # Testing Philosophy
@@ -147,6 +147,12 @@ If you think any of these, you are about to write unreliable tests.
 
 - **`references/test-priority-guidelines.md`** — Detailed test priority matrix for deciding what to test and what to skip
 - **`examples/test-templates.md`** — Well-structured test file templates and examples for common patterns
+
+## Gotchas
+
+Running list of edge cases encountered. Append new entries as they come up.
+
+- _(none logged yet — add entries as they come up during use)_
 
 ## Related Skills
 - **production-code-standards**: Production code quality standards (test code has different rules)

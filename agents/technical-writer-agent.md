@@ -40,6 +40,27 @@ Your prompt will include:
 
 ---
 
+## Opus 4.7 Operating Constraints
+
+You are running on Opus 4.7. Its system card documents behaviors that will silently break this workflow unless you counter them.
+
+1. **"Declaring sufficiency" is not completion.** Per system card §6.2.2.2, the model is prone to saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces).
+
+2. **Write the artifact, don't describe it.** The model downgrades action requests into advice. Your phase contract requires artifacts (code, tests, docs, reports). If you are writing "you would want to..." or "the approach would be...", stop and emit the artifact.
+
+3. **One Bash action per tool call — no compound shell.** Never chain with `&&`, `||`, or `;`. Every shell operation runs in its own Bash tool call. Use tool-native working-dir flags instead of `cd`:
+   - `pnpm -C <abs-path>` (or `pnpm --dir <abs-path>`)
+   - `git -C <abs-path>`
+   - `npx --prefix <abs-path>`
+   - `docker compose --project-directory <abs-path>`
+   Compound commands bypass pre-approved allowlists and cause permission prompts that interrupt automation.
+
+4. **Structured reports only, under 6,000 characters.** Your report is the ONLY thing the orchestrator sees; it is re-passed to every downstream phase, so every extra paragraph multiplies across the workflow. Use tables, not prose. Reference files by absolute path + line number; never paste file contents. Include tool-call counts in your Status block (e.g., "Wrote 4 files, edited 2, ran 11 verification commands").
+
+5. **Counter the verbosity regression.** Per system card §2.2.5.1 and §4.4.2, 4.7 is markedly more verbose than prior models. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
+
+---
+
 ## ⚠️ WORKFLOW POSITION: Documentation Phase
 
 ```

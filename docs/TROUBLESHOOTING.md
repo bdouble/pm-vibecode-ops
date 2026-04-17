@@ -285,3 +285,81 @@ claude mcp list
 ```
 
 Copy-paste this output when asking for help.
+
+---
+
+## External Hook & Settings Issues (discovered during PRO-111 epic-swarm on Opus 4.7)
+
+These are **outside this repo** — they live in your personal `~/.claude/` configuration and your target project's `.claude/` directory. They interact with epic-swarm runs in subtle ways and can cause the "extreme permission prompts" and silent hook failures the workflow is sensitive to.
+
+### Issue: Prompt-based Bash hook adds 1–3s latency to every shell call
+
+**Symptom:** `epic-swarm` feels like it is pausing mid-run on every Bash call, even though the JSONL transcript shows no rejection events.
+
+**Root cause:** A `PreToolUse` Bash hook in `~/.claude/settings.json` with `"type": "prompt"` spawns an LLM evaluation for every Bash command (commonly used to block patterns like `sed -i`). Under `/effort xhigh` this prompt-hook penalty compounds across thousands of Bash calls in a long swarm run.
+
+**Fix:** In `~/.claude/settings.json`, change the hook `type` from `"prompt"` to `"command"` and point it at a small shell script that does the check in ~50ms instead of a multi-second LLM call. Example:
+
+```bash
+#!/usr/bin/env bash
+# ~/.claude/hooks/block-sed-inplace.sh
+cmd=$(jq -r '.tool_input.command // ""')
+if echo "$cmd" | grep -qE '(^|[^a-zA-Z_-])sed\s+(-[a-zA-Z]*i|--in-place)'; then
+  jq -n '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: "sed -i is blocked. Use Edit or Write instead."
+    }
+  }'
+fi
+exit 0
+```
+
+Then in `settings.json`:
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{ "type": "command", "command": "$HOME/.claude/hooks/block-sed-inplace.sh" }]
+    }]
+  }
+}
+```
+
+### Issue: Project-local hooks fail schema validation and silently bypass
+
+**Symptom:** A hook you wrote to deny a specific command (e.g., `biome check`) appears to work, but during swarm runs the command runs anyway, then the session log shows a `hook_non_blocking_error` with `"Hook JSON output validation failed — hookSpecificOutput is missing required field 'hookEventName'"`.
+
+**Root cause:** The hook's JSON output is missing `hookEventName` inside `hookSpecificOutput`. Claude Code rejects the response and treats the hook as a non-blocking error, so the permission decision is discarded.
+
+**Fix:** Every hook script that emits `hookSpecificOutput` must include `hookEventName`. Example for a PreToolUse Bash hook:
+
+```bash
+#!/usr/bin/env bash
+jq -n '{
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "deny",
+    permissionDecisionReason: "Direct biome commands are blocked. Use pnpm lint."
+  }
+}'
+```
+
+Validate a hook by running it manually and piping the output to `jq .` — if it parses, it will likely validate against the Claude Code schema. If it shows up in your session transcript as `hook_non_blocking_error`, something is wrong.
+
+### Issue: Slash command narrows the Bash allowlist and triggers interactive prompts
+
+**Symptom:** A command like `/epic-swarm` runs dozens of `pnpm`, `npx`, `cd`, `mkdir` commands and each one pops an interactive approval prompt — even though your global `~/.claude/settings.json` has `Bash(pnpm:*)` and friends in its `permissions.allow` list.
+
+**Root cause:** The slash command's `allowed-tools` frontmatter REPLACES the session-scope Bash allowlist for the duration of the command. Any Bash subcommand not listed in `allowed-tools` prompts. This is visible in the session JSONL as a `command_permissions` attachment near the start of the session.
+
+**Fix (this repo):** `commands/epic-swarm.md` and `commands/execute-ticket.md` were updated in v4.4.0 to include a generous Bash allowlist (pnpm, npx, cd, mkdir, chmod, docker, etc.) in their `allowed-tools` frontmatter. If you see the same symptom in a command you've authored locally, audit its frontmatter and add the missing `Bash(<tool>:*)` entries.
+
+**Diagnostic:** grep the session transcript for `command_permissions`:
+```bash
+jq -c 'select(.type == "attachment" and .attachmentType == "command_permissions")' \
+  ~/.claude/projects/*/*.jsonl | head -3
+```
+The listed tools are the actual session allowlist. If `Bash(pnpm:*)` isn't there, add it to the command's frontmatter.
