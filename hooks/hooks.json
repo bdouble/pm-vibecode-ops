@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "If this update is marking an EPIC as Done (not a regular ticket), verify: 1) All sub-tickets are Done or Cancelled, 2) No workarounds or temporary solutions were shipped, 3) Business value was delivered. Epic closure requires all sub-tickets complete. If any sub-ticket is incomplete, BLOCK the epic closure and report which tickets need attention."
+            "prompt": "If this update is marking an EPIC as Done (not a regular ticket), verify ALL of the following before allowing the closure: (1) All sub-tickets are Done or Cancelled. (2) No workarounds or temporary solutions were shipped. (3) Business value was delivered. (4) DEFERRAL JUSTIFICATION CHECK: For every sub-ticket comment containing a Deferred Items table, every row with classification `AC-DEFERRED` MUST be accompanied by a `### Deferral Justification (CATASTROPHIC — required)` block with all four fields populated and a catastrophic condition value in {1,2,3,4}. If any AC-DEFERRED entry lacks a valid justification block, BLOCK the epic closure and report the offending ticket(s) and item(s) — the user must either re-dispatch the deferred work or explicitly approve the deferral. (5) RETROFIT CARDINALITY CHECK: If epic-closure is about to create more retrofit tickets than 50% of the epic's original sub-ticket count, surface this to the user as a signal that deferral discipline failed systemically — do not auto-create retrofits without explicit user approval. See the `no-silent-deferrals` and `epic-closure-validation` skills for the policy context."
           }
         ]
       }

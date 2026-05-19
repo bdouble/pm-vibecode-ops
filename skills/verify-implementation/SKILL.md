@@ -88,6 +88,7 @@ These are the excuses the model generates to skip verification. Recognizing them
 | "Different words so rule doesn't apply" | Spirit over letter |
 | "I already checked something similar" | Similar is not the same |
 | "The change is trivial" | Trivial changes still break things |
+| "I just ran it a moment ago" | If it's not in THIS response with fresh output, it doesn't count |
 
 ### Red-Flag Phrases
 
@@ -170,20 +171,6 @@ When claiming a bug is fixed with a regression test, verify the full red-green c
 
 A regression test that never fails is not testing anything. The revert step proves the test has value.
 
-## Rationalizations -- STOP
-
-If you think any of these, you are about to make an unverified claim.
-
-| Excuse | Reality |
-|--------|---------|
-| "It should work now" | "Should" is not evidence. Run the command and show output. |
-| "I'm confident the fix is correct" | Confidence is not verification. Execute and prove it. |
-| "The agent said it passed" | Never trust subagent self-reports. Check the diff and run tests independently. |
-| "I just ran it a moment ago" | If it's not in THIS response with fresh output, it doesn't count. |
-| "It's a trivial change, no need to verify" | Trivial changes break production. Verify everything. |
-| "Partial verification is enough" | Run the full test suite. Partial checks miss regressions. |
-| "The linter passed, so it works" | Linting checks syntax, not behavior. Run the actual tests. |
-
 ## Related Skills
 - **testing-philosophy**: Gate sequence for test verification
 - **production-code-standards**: Quality standards that must be verified
@@ -194,12 +181,6 @@ If you think any of these, you are about to make an unverified claim.
 - `references/verification-checklist.md` - Task-specific checklists and command templates
 - `examples/evidence-formats.md` - Evidence formatting examples
 - `references/speculation-red-flags.md` - Language patterns signaling unverified claims
-
-## Gotchas
-
-Running list of edge cases encountered. Append new entries as they come up.
-
-- _(none logged yet — add entries as they come up during use)_
 
 ## Attribution
 

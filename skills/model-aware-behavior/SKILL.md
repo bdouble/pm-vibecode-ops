@@ -7,6 +7,8 @@ description: Use when about to call Edit, MultiEdit, or Write on a file not yet 
 
 This skill enforces disciplined development practices that ensure code quality and efficiency across all Claude models.
 
+**Violating the letter of this skill is violating the spirit of this skill.** Skimming a file instead of fully reading it, "I'll Read it later in this session", or claiming the change is small enough to skip the discovery procedure — all violate the spirit. The procedure is not a checklist to game; it's the minimum due diligence before any modification. Spirit over letter, always.
+
 ## Pre-Change Verification
 
 Complete this numbered procedure before proposing or making any code changes. No step is optional.
@@ -181,6 +183,23 @@ These patterns indicate the skill is not being applied correctly:
 | Making three separate Bash calls that could run in parallel | Combine independent calls into a single message |
 | Editing a file, then reading it to check the result | Read first, edit second — Edit tool shows the result |
 | Adding "improvements" the user did not request | Apply the three-question gate above |
+
+## Red Flags — STOP
+
+When you notice ANY of these in your own thinking or writing, you are about to speculate or expand scope. Stop and read first.
+
+- About to call `Edit`/`MultiEdit`/`Write` on a file not yet `Read` in this session
+- "Based on what I remember about this codebase…"
+- "I think the function signature is…" / "It's probably called X"
+- "While I'm here, I'll also…"
+- "It would be cleaner to refactor this too"
+- "Let me add a small helper for future reuse"
+- "I'll update the related tests" (when the user didn't ask)
+- Three sequential `Bash` calls that don't depend on each other (parallelize)
+- "I'll Read the file after editing to confirm" (`Edit` shows the result; re-reading is waste)
+- "This is a small change, I don't need to read the whole file"
+
+**All of these mean: Read first, parallelize independent calls, and do only what was requested.**
 
 ## Rationalizations -- STOP
 

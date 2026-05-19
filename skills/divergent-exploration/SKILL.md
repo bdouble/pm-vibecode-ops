@@ -7,6 +7,8 @@ description: Use when facing an architecture choice, schema design, or implement
 
 Creative work demands divergent thinking before convergent decisions. This skill enforces structured exploration to prevent premature commitment to the first idea that seems reasonable.
 
+**Violating the letter of this skill is violating the spirit of this skill.** Generating three options where two are obvious dead-ends and the third is your pre-selected answer is not divergence — it's anchoring with extra steps. Three *genuinely distinct* approaches with different core mechanisms is the minimum. Spirit over letter, always.
+
 ## The Three Phases
 
 ### Phase 1: Diverge
@@ -110,3 +112,39 @@ Four biases commonly undermine exploration quality. Recognize and counter them:
 See `references/exploration-patterns.md` for self-check questions, evaluation dimensions, output templates, and anti-patterns.
 
 See `examples/exploration-session.md` for a complete divergent exploration session walkthrough.
+
+## Red Flags — STOP
+
+When you notice ANY of these in your own thinking or writing, you are about to skip exploration on a decision that warrants it. Stop and generate 3-5 distinct options first.
+
+- "The obvious solution is…"
+- "We should just use X" (with no consideration of alternatives)
+- "Everyone uses X for this" (availability heuristic)
+- Presenting "Option A", "Option A but faster", "Option A with better UI" — these are not distinct
+- "I'll just pick one and move on" on a decision costing more than an hour to reverse
+- "We already started with X, so we should continue" (sunk cost)
+- Skipping the "do nothing" baseline
+- Evaluating only one option against the criteria
+- Recommending a tech stack without naming what you rejected and why
+
+**All of these mean: stop, run the self-check questions, and produce at least 3 genuinely distinct options before recommending.**
+
+## Rationalizations — STOP
+
+If you think any of these, you are about to converge prematurely.
+
+| Excuse | Reality |
+|--------|---------|
+| "The first idea is clearly best" | Anchoring bias. Generate 3 distinct options *before* evaluating any. |
+| "There aren't really other options" | Run the self-check questions. There are always alternatives (including "do nothing"). |
+| "Option B is just Option A with a tweak" | Then it's not Option B. Genuinely distinct = different core mechanism, not different parameters. |
+| "Exploration is slow, the user wants an answer" | The user wants the *right* answer. Exploration costs minutes; reversing a wrong architectural choice costs months. |
+| "I'll explore later if needed" | Later is too late. Once committed, anchoring and sunk cost prevent honest reconsideration. |
+| "The user already said they want X" | Reframe X as one of 3-5 options and evaluate honestly. If X wins on the criteria, recommend X with confidence. If not, surface the trade-offs. |
+| "All the alternatives are obviously worse" | If true, document why each was rejected. "Obviously worse" without documentation is anchoring, not analysis. |
+
+## Related Skills
+- **using-pm-workflow**: This skill is invoked during planning phases (`/epic-planning`, `/planning`, `/adaptation`)
+- **service-reuse**: "Extend existing service" must be a candidate option in any architecture exploration
+- **systematic-debugging**: For debugging, divergence applies to *root cause hypotheses*, not to *fixes*
+- **production-code-standards**: Quality standards apply equally to whichever option is chosen — they are not a differentiator

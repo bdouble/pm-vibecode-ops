@@ -7,6 +7,8 @@ description: Use when writing new tests, when existing tests are failing, when C
 
 Fix broken tests BEFORE writing new tests. Accurate running tests > high coverage with broken tests.
 
+**Violating the letter of this skill is violating the spirit of this skill.** Marking a test `.skip()` instead of fixing it, writing a test that always passes (`expect(result).toBeDefined()` as the only assertion), or asserting on the workaround behavior instead of the correct behavior — all bypass the gates. Spirit over letter, always.
+
 ## Mandatory Gate Sequence
 
 ### Gate 0: Fix Existing Tests (FIRST)
@@ -130,6 +132,23 @@ await expect(service.failingOp()).rejects.toThrow(ValidationError);
 
 **Remember: 50% coverage with correct tests > 90% with broken tests.**
 
+## Red Flags — STOP
+
+When you notice ANY of these in your own thinking or writing, you are about to write unreliable tests. Stop and follow the gate sequence.
+
+- "I'll skip the failing test for now"
+- "The existing broken tests aren't my problem"
+- "I'll mock this without reading the implementation"
+- "Coverage is at X%, that's the goal"
+- `expect(result).toBeDefined()` as the only assertion
+- "Let me write tests after the implementation is done" (then "tomorrow", then "next sprint")
+- "This test is too complex, I'll write a simpler one that passes"
+- "I'll commit this with the tests skipped, fix later"
+- Writing a test that asserts the workaround behavior instead of the correct behavior
+- Mocking a function whose signature you haven't read
+
+**All of these mean: stop writing new tests and complete Gate 0 first** — make every existing test pass before adding new ones.
+
 ## Rationalizations -- STOP
 
 If you think any of these, you are about to write unreliable tests.
@@ -148,12 +167,7 @@ If you think any of these, you are about to write unreliable tests.
 - **`references/test-priority-guidelines.md`** — Detailed test priority matrix for deciding what to test and what to skip
 - **`examples/test-templates.md`** — Well-structured test file templates and examples for common patterns
 
-## Gotchas
-
-Running list of edge cases encountered. Append new entries as they come up.
-
-- _(none logged yet — add entries as they come up during use)_
-
 ## Related Skills
 - **production-code-standards**: Production code quality standards (test code has different rules)
 - **verify-implementation**: Run and show test output before claiming "tests pass"
+- **no-silent-deferrals**: `.skip()` on a failing test is a silent deferral

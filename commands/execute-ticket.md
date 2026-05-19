@@ -38,17 +38,23 @@ You are running on Opus 4.7, which per its system card (§2.2.5.1, §4.4.2, §6.
 
 ## Phase Sequence
 
-| Phase | Agent | Blocking Conditions |
-|-------|-------|---------------------|
-| 1. adaptation | architect-agent | Status: BLOCKED |
-| 2. implementation | backend-engineer-agent OR frontend-engineer-agent | Compile errors, duplication detected |
-| 3. testing | qa-engineer-agent | Gate #0 fail (existing tests broken) OR Gates #1-3 fail (new test issues) |
-| 4. documentation | technical-writer-agent | Status: BLOCKED |
-| 5. codereview | code-reviewer-agent | Status: CHANGES_REQUESTED |
-| 5.5 codex-review | *(MCP tool, no agent)* | JSON `"error": "rate_limit"` (deferred, not blocking) — "rate limit" in review *findings* is NOT an error |
-| 6. security-review | security-engineer-agent | CRITICAL/HIGH severity findings |
+The active phase list depends on the ticket's assigned workflow profile (set in Step 1.5):
 
-**Note:** Only `security-review` closes the ticket when no critical/high issues are found.
+| Phase | Agent | MINIMAL | STANDARD | STRICT | Blocking Conditions |
+|-------|-------|:-------:|:--------:|:------:|---------------------|
+| 1. adaptation | architect-agent | ✓ | ✓ | ✓ | Status: BLOCKED |
+| 2. implementation | backend-engineer-agent OR frontend-engineer-agent | ✓ | ✓ | ✓ | Compile errors, duplication detected |
+| 3. testing | qa-engineer-agent | — (N/A) | ✓ | ✓ | Gate #0 fail (existing tests broken) OR Gates #1-3 fail (new test issues) |
+| 4. documentation | technical-writer-agent | — (N/A) | ✓ | ✓ | Status: BLOCKED |
+| 5. codereview | code-reviewer-agent | ✓ | ✓ | ✓ | Status: CHANGES_REQUESTED |
+| 5.5 codex-review | *(MCP tool, no agent)* | — (N/A) | ✓ | ✓ | JSON `"error": "rate_limit"` (deferred, not blocking) — "rate limit" in review *findings* is NOT an error |
+| 6. security-review | security-engineer-agent | — (N/A) | ✓ | ✓ | CRITICAL/HIGH severity findings |
+
+**Phases marked `— (N/A)` for MINIMAL** post an N/A report (see Step 3.6.0b) with the exact header the resume-detection logic expects, preserving the audit trail.
+
+**Note:** Only `security-review` closes the ticket when no critical/high issues are found in STANDARD/STRICT profiles. In MINIMAL profile, the orchestrator closes the ticket after codereview passes — see Step 3.7.
+
+**Profile selection happens in Step 1.5** based on objective ticket signals. Default is STANDARD. The user can force a profile with `--profile <name>` or `--strict` flags. See `skills/using-pm-workflow/references/workflow-profiles.md` for the full profile definitions and selection criteria.
 
 ---
 
@@ -137,6 +143,62 @@ Use mcp__linear-server__update_issue:
 ```
 
 Skip if already "In Progress" or later state.
+
+### Step 1.5: Profile Selection (one-shot decision)
+
+Assign exactly one workflow profile to this ticket. The assignment governs which phases will run live vs. post N/A reports. Reference: `skills/using-pm-workflow/references/workflow-profiles.md`.
+
+**Algorithm (run in order):**
+
+1. **If `--strict` flag passed to `/execute-ticket`** → assign `STRICT`. Stop.
+2. **If `--profile <name>` flag passed** → assign that profile. Stop.
+3. **Resume check:** fetch existing Linear comments and search for a `## Profile Assignment` comment. If found, parse the profile from it and use that value. Do NOT re-evaluate criteria on resume.
+4. **Evaluate MINIMAL criteria (ALL must match):**
+   - Ticket has at least one Linear label from: `docs-only`, `typo`, `config-only`, `comment-only`, `lockfile`, `lint-only`, `readme-only`, `error-message-wording`, `dep-bump-patch`
+     - OR ticket title/description matches one of: `"fix typo"`, `"update README"`, `"doc fix"`, `"docs only"`, `"config tweak"`, `"comment only"`, `"rename variable"`, `"lockfile update"`, `"lint fix"`, `"error message wording"`
+   - No acceptance criterion mentions: logic, behavior, API, endpoint, query, mutation, authentication, authorization, validation, test coverage, performance, security
+   - Estimated change scope: <30 lines net, 1-3 files affected (default to STANDARD if not estimable)
+   - No new dependencies introduced
+   - No schema changes (DB, GraphQL, OpenAPI, JSON Schema, Zod)
+   - If ALL match → assign `MINIMAL`. Else → assign `STANDARD`.
+
+**Record the assignment:**
+
+1. Post a Linear comment on the ticket with title `## Profile Assignment`. Body:
+   ```
+   ## Profile Assignment
+
+   Profile: [MINIMAL | STANDARD | STRICT]
+   Source: [CLI flag --strict | CLI flag --profile | auto-detected | resumed-from-prior-comment]
+   Active phases: [list]
+   N/A phases: [list, or "None"]
+   Matched criteria: [verbatim list]
+   Reasoning: [one paragraph if MINIMAL — explain why; otherwise "Default profile for this ticket shape."]
+
+   ---
+   *Automated by /execute-ticket — Profile Selection*
+   ```
+
+2. Append to `.swarm/observability/[ticket-id].jsonl`:
+   ```json
+   {"ts": "<iso8601>", "event": "profile_assigned", "profile": "MINIMAL|STANDARD|STRICT", "selection_source": "<source>"}
+   ```
+
+**Profile reclassification is one-shot.** Once recorded, the orchestrator MUST NOT change the profile mid-execution. STANDARD → MINIMAL downgrade is prohibited. STANDARD → STRICT upgrade requires explicit `AskUserQuestion` confirmation.
+
+**The phase list for the rest of this execution comes from the assigned profile:**
+
+```
+PHASES_BY_PROFILE = {
+  "MINIMAL":  ["adaptation", "implementation", "codereview"],
+  "STANDARD": ["adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-review"],
+  "STRICT":   ["adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-review"],
+}
+PHASES = PHASES_BY_PROFILE[ticket.profile]
+SKIPPED_PHASES = ["adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-review"] - PHASES
+```
+
+**Post N/A reports for SKIPPED_PHASES NOW** (before Step 2 resume detection), so the resume logic sees the complete header set for this profile. See Step 3.6.0b for the N/A report format. (If a prior session already posted these N/A reports, do NOT duplicate them.)
 
 ---
 
@@ -922,38 +984,98 @@ After implementation agent returns, before posting report:
 
 3. **If changes exist:** Proceed to posting report and PR creation
 
+#### 3.6.0b N/A Phase Reports (profile-skipped phases)
+
+For every phase in `SKIPPED_PHASES` (computed in Step 1.5 from the ticket's active profile), post a structured Linear comment with the EXACT header the resume-detection logic expects:
+
+```
+Use mcp__linear-server__create_comment:
+- issue_id: [ticket-id]
+- body: |
+    ## [Phase Name] Report
+
+    Status: N/A — Skipped per [PROFILE] profile
+
+    This phase is not in the active profile's phase list for this ticket.
+    Profile selection criteria and reasoning are documented in the ## Profile Assignment
+    comment above.
+
+    ---
+    *Automated by /execute-ticket — Profile-aware phase skip*
+```
+
+**Phase name → header mapping:**
+
+| Skipped phase | N/A header |
+|---------------|-----------|
+| testing | `## Testing Report` |
+| documentation | `## Documentation Report` |
+| codex-review | `## Cross-Model Review Report` |
+| security-review | `## Security Review Report` |
+
+**Idempotency:** Check existing comments first. Do NOT post duplicate N/A reports. (adaptation, implementation, and codereview run in every profile — they will never appear as N/A.)
+
 #### 3.6.1a Validate No AC Deferrals (All Phases)
 
-Before advancing to the next phase, scan the agent's Deferred Items table for any items that match acceptance criteria:
+Before advancing to the next phase, scan the agent's Deferred Items table for any items that match acceptance criteria. **Invoke the `no-silent-deferrals` skill at this step** — it defines the four catastrophic conditions and the required Deferral Justification block.
+
+**Pass 1 — AC fuzzy-match (existing):**
 
 1. **Extract** all items from the agent's Deferred Items table
 2. **For each item**, check if it matches an acceptance criterion:
    - Fuzzy match on key terms: file names, function names, component names, patterns mentioned in AC
    - Check if the deferred item's description overlaps with any AC text
-3. **If a match is found:**
-   - Reclassify the item as `AC-DEFERRED` (see Deferred Items Handling section)
-   - DO NOT advance to the next phase
-   - Report to user:
-     ```
-     ⚠️ ACCEPTANCE CRITERION DEFERRED
+3. **If a match is found:** Reclassify the item as `AC-DEFERRED` and continue to Pass 2.
+4. **If no matches found:** This pass is clean — Pass 2 still applies to any pre-existing `AC-DEFERRED` items in the report.
 
-     The agent deferred an item that matches an acceptance criterion:
+**Pass 2 — Catastrophic-justification validation (new):**
 
-     AC: "[acceptance criterion text]"
-     Deferred Item: "[item description]"
-     Agent Reason: "[agent's stated reason for deferral]"
-     Severity: [agent-assigned severity]
+For every `AC-DEFERRED` entry (whether classified by the agent or reclassified by Pass 1):
 
-     Options:
-     1. Accept deferral and continue (AC will not be fulfilled)
-     2. Send back to agent for implementation
-     3. Modify AC to reflect reduced scope
-     ```
-   - Wait for user decision
+1. Search the report for a `### Deferral Justification (CATASTROPHIC — required)` block within ~30 lines of the Deferred Items table.
+2. The block MUST contain these four fields populated with non-empty, non-placeholder values:
+   - `Catastrophic condition:` value is `1`, `2`, `3`, or `4`
+   - `Evidence:` contains a concrete external fact (not "complex," "tricky," "would take time," any time/effort language)
+   - `Confidence the catastrophic condition applies:` is `HIGH`, `MEDIUM`, or `LOW`
+   - `Specific blocker that prevents doing the work in this session:` contains a factual description
+3. **If MISSING/MALFORMED/CONDITION-OUT-OF-RANGE** → `DEFERRAL_INVALID` → re-dispatch (Pass 3)
+4. **If condition #4 cited but the deferred item fuzzy-matches an AC** → `DEFERRAL_OVERRIDDEN` → re-dispatch (Pass 3)
 
-4. **If no matches found:** Proceed to next step normally
+**Pass 3 — Re-dispatch protocol (max 1 re-dispatch per agent per phase):**
+
+```
+If DEFERRAL_INVALID or DEFERRAL_OVERRIDDEN and redispatch_count[phase] == 0:
+  1. Increment redispatch_count[phase]
+  2. Append to the agent prompt:
+     ---
+     PRIOR DISPATCH DEFERRED IN-SCOPE WORK WITHOUT VALID CATASTROPHIC JUSTIFICATION.
+     The following deferrals were rejected by the orchestrator:
+     [list each rejected item with the rejection reason]
+     Your default disposition is "do the work now". Re-attempt the phase and
+     complete the work that was deferred. If a deferral genuinely meets a
+     catastrophic condition (1-4 in the no-silent-deferrals skill), include
+     the full Deferral Justification block with concrete external evidence.
+     ---
+  3. Re-invoke the same agent with the supplemented prompt
+  4. Re-validate the new report from §3.4 onward (full validation cascade)
+
+If redispatch_count[phase] == 1 and still DEFERRAL_INVALID/OVERRIDDEN:
+  PAUSE the ticket. Surface to user with the two rejected reports side-by-side.
+  Options:
+    1. Accept the deferral and continue (records as user-approved deferral)
+    2. Re-dispatch the agent with the user's own supplemental prompt
+    3. Send back to agent for implementation
+    4. Modify AC to reflect reduced scope
+```
+
+Record every re-dispatch in `.swarm/observability/[ticket-id].jsonl`:
+```json
+{"ts": "<iso8601>", "event": "deferral_redispatch", "phase": "<name>", "rejection_reason": "DEFERRAL_INVALID|DEFERRAL_OVERRIDDEN", "items": [<item_titles>]}
+```
 
 **This validation runs for ALL phases**, not just implementation. Code review and testing agents can also improperly defer items that match AC.
+
+**Why this exists:** The user has observed ~80-90% deferral rates with most deferrals being inappropriate. The AC fuzzy-match catches deferrals that map to acceptance criteria, but it does not enforce that the deferral has a valid catastrophic reason. Pass 2 + Pass 3 provide that enforcement at the orchestrator level. See `no-silent-deferrals` skill for the policy rationale.
 
 #### 3.6.1 Commit and Create Draft PR (Implementation Phase Only)
 
@@ -1137,11 +1259,110 @@ The Cross-Model Review Report becomes part of the context passed to the security
 
 ---
 
-## Step 4: Handle Security Review Completion
+## Step 3.9: End-of-Ticket Deferral Review (single proactive user question)
+
+After all phases in the active profile complete (including the per-phase deferral re-dispatch loop in §3.6.1a), aggregate any surviving deferred items and surface them to the user in a single Linear comment. This is the **one proactive question** at the end of the ticket workflow — never a mid-workflow interruption.
+
+**This step runs regardless of profile.** In MINIMAL profile, it runs after codereview. In STANDARD/STRICT, it runs after security-review but BEFORE the auto-closure logic in Step 4.1.
+
+**Step 1 — Collect surviving deferrals:**
+
+1. Fetch all Linear comments via `mcp__linear-server__list_comments`
+2. Search each phase report comment body for `Deferred Items` tables
+3. For each row, extract: classification, severity, location, issue title, reason
+4. If classification is `AC-DEFERRED`, extract the `### Deferral Justification (CATASTROPHIC — required)` block (if present)
+5. Skip rows whose `Issue` text was previously dispositioned by the user (track via persisted state if available)
+
+**Step 2 — Decide whether to post the review comment:**
+
+```
+total_deferrals = count of surviving deferred items
+if total_deferrals == 0:
+  Skip this step. Proceed to Step 4.
+else:
+  Post the structured review comment (Step 3 below) and PAUSE the workflow.
+```
+
+**Step 3 — Post the consolidated review comment on the ticket:**
+
+```
+Use mcp__linear-server__create_comment:
+  - issue_id: [ticket-id]
+  - body: |
+      ## Deferred Items Review — User Decision Required
+
+      The following items were deferred during this ticket. Per workflow policy
+      (skill: no-silent-deferrals), deferrals are presumed undesirable. Please
+      choose a disposition for each before the ticket is finalized.
+
+      Total surviving deferrals: [N]
+
+      ---
+
+      ### Item 1: [Issue title]
+      - Phase: [phase that posted it]
+      - Classification: [AC-DEFERRED | DISCOVERED | OUT-OF-SCOPE]
+      - Severity: [CRITICAL/HIGH/MEDIUM/LOW/INFO]
+      - Location: [file:line if available]
+      - Reason cited by agent: [verbatim]
+      - Catastrophic condition cited: [1-4 or "none — silent deferral caught by code review"]
+      - Justification: [verbatim Deferral Justification block, or "missing"]
+      - **Recommended disposition**: [DO_NOW | ACCEPT_DEFERRAL | NEW_TICKET]
+      - Why recommended: [one-line orchestrator reasoning]
+
+      ### Item 2: ...
+
+      ---
+
+      To respond, reply to this comment with a numbered list, e.g.:
+        1. DO_NOW
+        2. NEW_TICKET
+        3. ACCEPT_DEFERRAL
+
+      The ticket will not auto-close until dispositions are recorded.
+```
+
+**Recommended disposition heuristics:**
+
+| Condition | Recommended |
+|-----------|-------------|
+| Classification is `AC-DEFERRED` and justification missing or fails catastrophic test | `DO_NOW` |
+| Classification is `AC-DEFERRED` and justification cites condition 1, 2, or 3 with HIGH confidence | `ACCEPT_DEFERRAL` |
+| Classification is `DISCOVERED`, severity LOW/INFO | `NEW_TICKET` |
+| Classification is `DISCOVERED`, severity MEDIUM or higher | `DO_NOW` |
+| Classification is `OUT-OF-SCOPE` | `NEW_TICKET` |
+| User previously disposed this exact item | use the prior disposition |
+
+**Step 4 — Pause and surface to user (terminal):**
+
+```
+Deferred items review posted to <linear-comment-url>.
+[N] items pending your decision.
+Ticket will not auto-close until you respond.
+```
+
+**Step 5 — On user response:**
+
+- For `DO_NOW` items: identify the phase that produced the deferral, re-dispatch with explicit "do it now" instruction. Re-run that phase's validation cascade. If new deferrals arise from the re-dispatch, run Step 3.9 again for those.
+- For `ACCEPT_DEFERRAL` items: record the disposition in persisted state with the user's acknowledgment.
+- For `NEW_TICKET` items: do NOT create the ticket here (that is `/close-epic`'s job in epic flow; for standalone `/execute-ticket` runs, record the recommendation in the Execution Summary).
+
+**Why this exists:** Across the last 100+ tickets, ~80-90% of deferrals should have been "do it now" decisions. This aggregated review at end-of-workflow gives the user one decision point with action-defaulting recommendations, complementing the per-phase deferral validation in §3.6.1a.
+
+---
+
+## Step 4: Handle Final-Phase Completion and Ticket Closure
+
+**Profile-aware closure:**
+
+- **STANDARD/STRICT profile**: The last phase is `security-review`. Steps 4.1/4.2 below apply directly.
+- **MINIMAL profile**: The last phase is `codereview`. Closure logic mirrors Step 4.1 but is triggered when codereview reports `Status: APPROVED` (no `CHANGES_REQUESTED`). Security/codex/testing/docs phases have N/A reports from Step 3.6.0b — the ticket is closed without those phases running live.
+
+In all profiles, **Step 3.9 (End-of-Ticket Deferral Review) MUST complete before this step runs.** If the deferral review surfaced items and the user has not dispositioned them, the orchestrator stays paused — do NOT auto-close.
 
 **Worktree mode note:** When `WORKTREE_MODE=true`, this security review is the pre-merge per-ticket scan. The swarm orchestrator runs a separate comprehensive post-merge security review (epic-swarm Phase 5) after integration. Do NOT close the ticket here when in worktree mode — the swarm orchestrator handles ticket closure after post-merge security review passes.
 
-When security-review phase completes:
+When the active profile's final phase completes:
 
 ### 4.1 If No CRITICAL/HIGH Findings (PASS):
 
@@ -1363,29 +1584,42 @@ The threshold is 500K because security review — the final phase — receives 5
 
 ## Deferred Items Handling
 
-When agents bypass issues (correct behavior for low-priority items), they MUST document them in a Deferred Items table for user traceability:
+The default disposition for every in-scope item is **complete the work now**. Agents may document a deferral ONLY when it meets one of the four catastrophic conditions defined in the `no-silent-deferrals` skill. The Deferred Items table exists for traceability of those genuinely catastrophic-justified deferrals plus the residue of out-of-scope discoveries — NOT as a place to park work the agent didn't feel like doing.
+
+**Invoke the `no-silent-deferrals` skill before populating a Deferred Items table or before the orchestrator runs §3.6.1a validation.** The skill defines what counts as catastrophic, the required justification block, and the agent's red-flag phrases that trigger STOP.
 
 | Classification | Severity | Location | Issue | Reason |
 |---------------|----------|----------|-------|--------|
 | [AC-DEFERRED/DISCOVERED/OUT-OF-SCOPE] | [CRITICAL/HIGH/MEDIUM/LOW/INFO] | [file:line] | [Brief description] | [Why deferred] |
 
+**For every AC-DEFERRED entry, the report MUST ALSO include the Deferral Justification block** (see §3.6.1a for the required fields). A table entry without the justification block is invalid and triggers re-dispatch.
+
 ### Deferred Item Classifications
 
-| Classification | Description | Requires User Approval? |
-|---------------|-------------|------------------------|
-| AC-DEFERRED | An explicit acceptance criterion the agent chose not to implement | **YES — ALWAYS** |
-| DISCOVERED | A new issue found during the phase, not in the original AC | NO — agent discretion |
-| OUT-OF-SCOPE | Work that belongs to a different ticket | NO — agent discretion |
+| Classification | Description | Requires Catastrophic Justification? | Requires User Approval? |
+|---------------|-------------|--------------------------------------|------------------------|
+| AC-DEFERRED | An explicit acceptance criterion the agent did not implement | **YES — orchestrator re-dispatches if missing** | **YES — ALWAYS** |
+| DISCOVERED | A new issue found during the phase, NOT in the original AC and NOT required to fulfill an AC | NO — but if the orchestrator's fuzzy match finds an AC match, it reclassifies to AC-DEFERRED | NO — agent discretion |
+| OUT-OF-SCOPE | Work that genuinely belongs to a different ticket | NO | NO — agent discretion |
 
 ### Orchestrator Validation Rule
 
-Before posting a completed report (`DONE`, `DONE_WITH_CONCERNS`, or legacy `COMPLETE`), the orchestrator MUST:
+The orchestrator validates deferred items in three passes (see §3.6.1a for full detail):
+
+**Pass 1 — AC fuzzy-match:**
 1. Extract all acceptance criteria from the ticket
 2. Check each deferred item against the AC list (fuzzy match on key terms)
 3. If ANY deferred item matches an AC → reclassify as `AC-DEFERRED`
-4. If ANY `AC-DEFERRED` items exist → **PAUSE for user decision** (see Step 3.6.1a)
 
-**Agents MUST NOT unilaterally defer acceptance criteria.** Deferring discovered issues is expected and encouraged. Deferring AC requires explicit user approval.
+**Pass 2 — Catastrophic-justification validation:**
+4. For every `AC-DEFERRED`, validate the `### Deferral Justification (CATASTROPHIC — required)` block
+5. If missing, malformed, or condition outside 1-4 → `DEFERRAL_INVALID` → Pass 3
+
+**Pass 3 — Re-dispatch (max 1 per agent per phase):**
+6. Re-invoke the agent with "do it now" supplemental instruction
+7. If still invalid after re-dispatch → PAUSE the ticket for user decision
+
+**Agents MUST NOT unilaterally defer in-scope work.** Catastrophic conditions are narrow and enumerated; the default disposition is "do the work now."
 
 **Rules for Deferred Items:**
 1. ANY issue found but not addressed MUST appear in this table

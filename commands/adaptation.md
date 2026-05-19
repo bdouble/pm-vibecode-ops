@@ -7,6 +7,17 @@ closes-ticket: false
 workflow-sequence: "**adaptation** → implementation → testing → documentation → code-review → security-review"
 ---
 
+## Deferral Policy (read before invoking the agent)
+
+The default disposition for in-scope work is **complete it now**. Deferral is only valid under the four catastrophic conditions in the `no-silent-deferrals` skill (see `/Users/brian/pm-vibecode-ops/skills/no-silent-deferrals/SKILL.md`). When parsing the agent's report:
+
+1. Scan the Deferred Items table for any `AC-DEFERRED` entries (and reclassify any `DISCOVERED`/`OUT-OF-SCOPE` entries that fuzzy-match an acceptance criterion).
+2. For each `AC-DEFERRED`, validate the presence of a `### Deferral Justification (CATASTROPHIC — required)` block with all four fields populated and a catastrophic condition in 1-4.
+3. If validation fails, re-dispatch the agent ONCE with explicit "do it now" instructions before posting to Linear.
+4. If the re-dispatch still fails validation, PAUSE and surface to the user.
+
+If invoked standalone (outside `/execute-ticket` or `/epic-swarm`), this command is responsible for the same deferral validation as those orchestrators.
+
 ## MANDATORY: Agent Invocation Required
 
 **You MUST use the Task tool to invoke the `architect-agent` for this phase.**

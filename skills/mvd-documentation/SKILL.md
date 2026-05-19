@@ -7,6 +7,8 @@ description: Use when about to add a code comment, JSDoc block, inline explanati
 
 Document the "why", not the "what" - TypeScript already shows the "what".
 
+**Violating the letter of this skill is violating the spirit of this skill.** "Documenting why" by restating the function signature in slightly different prose, or adding a comment that explains the line directly below it, is the same violation as a JSDoc type duplicate. Spirit over letter, always.
+
 ## Decision Matrix
 
 | Code Type | Document? | What to Document |
@@ -130,6 +132,36 @@ async createUser(@Body() data: CreateUserDto)
 
 **Best documentation = code that doesn't need documentation.**
 
+## Red Flags — STOP
+
+When you notice ANY of these in your own thinking or writing, you are about to add documentation noise. Stop and ask: does this explain WHY, or does it duplicate WHAT?
+
+- `/** @param userId - The user ID */` (duplicating types)
+- `/** Gets the user by ID */` on a function named `getUserById`
+- `/** TODO: document this later */`
+- `/** TBD */` / `/** @example // haven't tested */`
+- `// This function takes X and returns Y` (compiler shows this)
+- Adding JSDoc to private helpers Claude can read in 2 seconds
+- A README with badges, install instructions, and obvious feature lists
+- `// Note: setTimeout here due to race condition` (documenting a workaround — fix the workaround instead)
+- "More documentation is better, so I'll add some"
+
+**All of these mean: delete the comment, OR replace it with WHY this code makes the choice it makes** (security implications, business rules, non-obvious constraints, regulatory requirements).
+
+## Rationalizations — STOP
+
+If you think any of these, you are about to add documentation noise.
+
+| Excuse | Reality |
+|--------|---------|
+| "More documentation is better" | No. Wrong documentation is worse than none. Stale docs actively mislead. |
+| "Future devs will need to know what this does" | TypeScript shows what. Names show purpose. Only document non-obvious WHY. |
+| "I'll add JSDoc to every public function" | Public functions with good names need no JSDoc. Document only non-obvious decisions and security/PII constraints. |
+| "I'll add TODO comments where docs are incomplete" | TODO docs are placeholder noise. Either document fully now or not at all. |
+| "The README needs badges and an install section" | Most READMEs need a one-line description, quickstart, and config notes. Nothing else. |
+| "I should document the workaround so future devs understand" | Document the workaround? No — fix the workaround. Code that needs a workaround comment fails `production-code-standards`. |
+| "I'll write JSDoc that restates the type signature for clarity" | TypeScript IS the documentation for types. Restating creates two sources of truth, one of which will drift. |
+
 ## Architecture Decisions
 
 For significant architectural decisions affecting multiple files, use an ADR.
@@ -139,3 +171,9 @@ See `references/adr-template.md` for template and examples.
 
 - **`references/adr-template.md`** — Architecture Decision Record template
 - **`examples/adr-example.md`** — Complete ADR example showing the decision record format in practice
+
+## Related Skills
+- **production-code-standards**: TODO/FIXME/HACK comments are banned in code AND in documentation
+- **verify-implementation**: Documentation claims about behavior must match verifiable code behavior
+- **no-silent-deferrals**: `/** TODO: document later */` is a silent deferral
+- **security-patterns**: Security-sensitive and PII-handling code REQUIRES documentation of the security implications

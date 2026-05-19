@@ -165,6 +165,20 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 **Example trigger**: "Tests are failing" or "This endpoint returns a 500 error"
 
+### 12. no-silent-deferrals
+
+**Activates when**: An agent is about to defer in-scope work — especially when saying "I'll defer", "follow-up ticket", "TODO", "out of scope", "future work", "subsequent iteration", "downstream", "punt to". Also when writing a Deferred Items table entry for any acceptance-criterion-related work.
+
+**Enforces**:
+- Default disposition: complete the work in scope. Deferral is the most expensive disposition.
+- Four catastrophic conditions are the ONLY valid deferral reasons (external dep unavailable, schema collision with in-flight ticket, unobtainable stakeholder info, AC modification requiring user authorization)
+- No time-based or effort-based escape hatch ("complex," "tricky," "would take time" are all invalid)
+- AC-DEFERRED entries MUST include the `### Deferral Justification (CATASTROPHIC — required)` block with four populated fields
+- Orchestrator re-dispatches agents that defer without valid justification (max 1 re-dispatch per phase)
+- Silent deferrals (work omitted without a Deferred Items entry) are detected at code review as SCOPE_GAP
+
+**Example trigger**: "This edge case is tricky, I'll create a follow-up ticket" or "Adding TODO for the rate limit"
+
 ## Skills vs Commands vs Agents
 
 | Aspect | Skills | Commands | Agents |
@@ -176,7 +190,7 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 ## How Skills Complement the Workflow
 
-The pm-vibecode-ops workflow has 11 phases (4 project-level + 6 ticket-level + 1 epic-level). Skills add a proactive enforcement layer:
+The pm-vibecode-ops workflow has 11 phases (4 project-level + 6 ticket-level + 1 epic-level). Twelve skills add a proactive enforcement layer:
 
 ```
 Traditional:

@@ -11,6 +11,8 @@ description: Use when a test fails, a build errors, a runtime exception appears,
 
 When a bug appears, the instinct is to guess at a fix and try it. Resist. Systematic debugging is faster than thrashing—a methodical approach achieves first-time resolution far more often than iterative guessing.
 
+**Violating the letter of this skill is violating the spirit of this skill.** "I'm just exploring" while editing code is guessing. A "small experiment" that changes three files at once is multi-fix. Going to Fix #4 after disguising Fix #3 as something else is still Fix #4. Spirit over letter, always.
+
 ## The 4-Phase Process
 
 Every debugging session follows these phases in order. Do not skip ahead.
@@ -76,19 +78,6 @@ Instead:
 
 When these patterns appear, the right move is to step back and reconsider the approach — not to keep patching.
 
-## Rationalization Prevention
-
-| Excuse | Reality |
-|--------|---------|
-| "Issue is simple, don't need process" | Simple issues have root causes too |
-| "Emergency, no time for process" | Systematic is FASTER than thrashing |
-| "Just try this first, then investigate" | First fix sets the pattern. Do it right |
-| "I see the problem, let me fix it" | Seeing symptoms is not understanding root cause |
-| "Multiple fixes at once saves time" | Can't isolate what worked. Causes new bugs |
-| "One more fix attempt" (after 2+ failures) | 3+ failures = architectural problem. Escalate |
-| "It's probably just a typo" | Verify before assuming |
-| "The test is wrong, not the code" | Prove it. Run the test against known-good code |
-
 ## Process Violations — Red Flags
 
 Stop immediately if you catch yourself:
@@ -117,11 +106,16 @@ If you think any of these, you are about to guess instead of investigate.
 | Excuse | Reality |
 |--------|---------|
 | "I know what the bug is" | You have a hypothesis, not knowledge. Investigate first. |
+| "Issue is simple, don't need process" | Simple issues have root causes too. |
+| "Emergency, no time for process" | Systematic is FASTER than thrashing. |
 | "Let me just try this quick fix" | Quick fixes without investigation create new bugs. Follow the 4-phase process. |
-| "One more attempt should do it" | If 3 fixes have failed, the problem is architectural. Stop and escalate. |
-| "I'll change multiple things at once to save time" | One change at a time. Otherwise you can't tell what fixed it -- or what broke something else. |
+| "I see the problem, let me fix it" | Seeing symptoms is not understanding root cause. |
+| "One more attempt should do it" (after 2+ failures) | If 3 fixes have failed, the problem is architectural. Stop and escalate. |
+| "I'll change multiple things at once to save time" | One change at a time. Otherwise you can't tell what fixed it — or what broke something else. |
 | "The error message tells me exactly what's wrong" | Error messages describe symptoms, not root causes. Trace backward. |
 | "It works on my machine / in this environment" | Investigate the environmental difference. That IS the bug. |
+| "It's probably just a typo" | Verify before assuming. |
+| "The test is wrong, not the code" | Prove it. Run the test against known-good code. |
 
 ## Additional Resources
 
@@ -132,16 +126,6 @@ If you think any of these, you are about to guess instead of investigate.
 - **verify-implementation**: Evidence requirements for Phase 4 completion claims
 - **production-code-standards**: No workarounds or temporary fixes in production code
 - **testing-philosophy**: Test accuracy gates for regression tests
-
-## Gotchas
-
-Running list of edge cases encountered. Append new entries as they come up.
-
-- _(none logged yet — add entries as they come up during use)_
-
-## Extended Resources
-
-- `references/root-cause-tracing.md` - Backward tracing technique for deep call stack bugs
 
 ## Attribution
 

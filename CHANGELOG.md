@@ -5,6 +5,67 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.0] - 2026-05-19
+
+### Added
+
+#### Deferral prevention — `no-silent-deferrals` skill and orchestrator re-dispatch
+
+Observed over 100+ tickets since v4.4.0: agents unilaterally defer work in ~80-90% of tickets, sometimes silently, even on P0/P1 items in small scopes. Close-epic phase commonly creates MORE retrofit tickets than the epic's original sub-ticket count. The bookkeeping infrastructure (AC-DEFERRED classification, Deferred Items tables, retrofit recovery) was correct; the problem was the agent default disposition.
+
+- **New skill** `skills/no-silent-deferrals/SKILL.md` defines the four catastrophic conditions that are the ONLY valid deferral reasons (external dep unavailable, schema collision with in-flight ticket, unobtainable stakeholder info, AC modification requiring user authorization). All other "reasons" — difficulty, complexity, "would take time," "deserves its own ticket" — are explicitly rejected. Activation triggers on phrases like "follow-up ticket", "TODO", "out of scope", "punt to".
+- **All 10 agents** gained a `## Deferral Discipline` section reinforcing: default disposition is "complete the work in scope"; the four-question YES gate before any deferral; explicit rejection of time/effort reasoning; per-agent specific deferral risks (architect = "deferred to future phase", QA = "skip the hard test", security = "CRITICAL/HIGH can never defer", etc.).
+- **Orchestrator re-dispatch** (`epic-swarm.md §3.2.4.5` and `execute-ticket.md §3.6.1a Pass 2/3`): every AC-DEFERRED entry MUST carry a `### Deferral Justification (CATASTROPHIC — required)` block with four populated fields and a catastrophic condition in 1-4. Missing or malformed → orchestrator re-dispatches the agent ONCE with explicit "do it now" instructions. Still invalid → pause for user decision.
+- **End-of-workflow deferral review** (`epic-swarm.md §6.1.5`, `execute-ticket.md §3.9`): all surviving deferrals across the epic/ticket are aggregated into ONE Linear comment with recommended dispositions (DO_NOW/ACCEPT_DEFERRAL/NEW_TICKET). Single proactive question, never a mid-workflow interruption.
+- **Hooks-level enforcement**: epic-closure validation hook now blocks state=Done if any sub-ticket has an AC-DEFERRED row without a valid justification block, AND if retrofit ticket count exceeds 50% of original sub-ticket count (systemic deferral discipline failure signal).
+- All 6 individual phase commands (`adaptation`, `implementation`, `testing`, `documentation`, `codereview`, `security-review`) gained a `## Deferral Policy` block at the top, ensuring standalone command invocations get the same validation as the orchestrators.
+
+#### Adaptive workflow profiles — MINIMAL / STANDARD / STRICT
+
+Constraint #6 (all 7 phases mandatory) overcorrected for trivial work — docs-only, typo, lockfile, config-tweak tickets ran the full pipeline despite no value from testing or security review.
+
+- **New reference** `skills/using-pm-workflow/references/workflow-profiles.md` defines three profiles with objective selection criteria. MINIMAL runs 3 phases (adaptation + implementation + codereview) for docs/config/typo work. STANDARD is the default 7-phase pipeline. STRICT forces full pipeline with no reclassification.
+- **`epic-swarm.md §1.5.7`** and **`execute-ticket.md Step 1.5`**: one-shot profile selection per ticket from objective signals (Linear labels, AC content, estimated change size, dependency/schema indicators). User can force via `--strict` or `--profile <name>` flags.
+- **PHASES list is now profile-driven** (`PHASES_BY_PROFILE` lookup). N/A reports are posted to Linear for skipped phases using the EXACT headers the hard checkpoint expects — preserving the original failure-mode fix without weakening it.
+- **Hard checkpoint** unchanged in spirit (still validates all 7 expected headers exist) — N/A reports satisfy the check. Added a profile-aware audit: a phase in the active profile that posts N/A is a defect (the agent silently skipped work) and fails the checkpoint.
+- **Constraint #6 rewritten** to be profile-aware. Profile reclassification is one-shot — STANDARD → MINIMAL downgrade is prohibited; STANDARD → STRICT upgrade requires explicit user approval.
+
+#### Model tiering — implementation pinned to Opus 4.7
+
+User directive: heavy-reasoning work runs on Opus 4.7 (1M); mechanical work runs on Sonnet; haiku is never used.
+
+- `backend-engineer-agent` and `frontend-engineer-agent` moved from `model: sonnet` → `model: opus` (**pinned** — not a candidate for future Sonnet downgrade).
+- `design-reviewer-agent` moved from `model: haiku` → `model: sonnet` per "never haiku" rule.
+- Unchanged (heavy reasoning, already Opus): `architect-agent`, `code-reviewer-agent`, `security-engineer-agent`, `epic-closure-agent`.
+- Unchanged (mechanical, stays Sonnet): `qa-engineer-agent`, `technical-writer-agent`, `ticket-context-agent`.
+- Frontmatter validation: `grep -E "^model:" agents/*.md` should show 6× opus, 4× sonnet, 0× haiku.
+
+### Changed
+
+- `skills/epic-closure-validation/SKILL.md` workaround-detection table updated to distinguish AC-DEFERRED entries with valid catastrophic justification (HIGH block, may be dispositioned) from those without (CRITICAL block, mandatory re-dispatch). Added retrofit cardinality detection (>50% of sub-ticket count signals systemic deferral failure).
+- `hooks/hooks.json` epic-closure hook extended to enforce the catastrophic justification requirement and retrofit cardinality check.
+
+#### Skill suite hardening — Anthropic Skills Guide + Superpowers writing-skills audit
+
+Audited the full skill suite against [Anthropic's Complete Guide to Building Skills for Claude](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) and the [Superpowers writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills) best practices. The audit identified gaps in discipline mechanics across most skills.
+
+- **`no-silent-deferrals` description scrubbed** of workflow-summary content per Superpowers' tested finding that descriptions summarizing workflow cause Claude to read the description and skip the body. The triggers themselves are retained; the doctrine moved entirely into the SKILL.md body.
+- **"Red Flags — STOP" sections** added to 9 skills that lacked them: `no-silent-deferrals`, `production-code-standards`, `service-reuse`, `testing-philosophy`, `mvd-documentation`, `security-patterns`, `model-aware-behavior`, `divergent-exploration`, `epic-closure-validation`. Red Flags catalog the *thoughts and phrases* an agent has just before violating a skill (distinct from Rationalizations, which catalog the excuses given).
+- **"Violating the letter is violating the spirit" foundational principle** added to 10 discipline skills. Previously only present in `verify-implementation`. This single principle cuts off an entire class of rationalizations ("I'm following the spirit, not the letter").
+- **Rationalizations tables** added to `service-reuse`, `mvd-documentation`, `divergent-exploration`, `epic-closure-validation` — discipline-style skills that previously lacked one.
+- **Progressive disclosure extractions**: heavy reference content moved out of three SKILL.md files into `references/` subdirectories. `production-code-standards/references/typescript-anti-patterns.md` (TypeScript anti-patterns + ESLint config), `security-patterns/references/infrastructure-security.md` (CI/CD, container, secrets, dependencies), `codex-finding-resolution/references/report-template.md` (full report template + skip variants). `codex-finding-resolution` SKILL.md dropped from 260 → 165 lines; `production-code-standards` from 168 → 125 lines.
+- **Consolidated duplicate Rationalizations tables** in `verify-implementation` and `systematic-debugging` (each previously had two near-identical tables).
+- **Removed empty `## Gotchas` placeholder sections** from 6 skills where no edge cases had been logged.
+- **Related Skills cross-references** added to `mvd-documentation`, `epic-closure-validation`, `divergent-exploration`, with cross-link entries to `no-silent-deferrals` added in several others.
+
+Final state: 12/14 skills have Red Flags (or equivalent), 11/14 have spirit-over-letter, 10/14 have Rationalizations tables, 0/14 have empty Gotchas placeholders. Two skills are intentionally exempt from these mechanics (`using-pm-workflow` is a router; `codex-finding-resolution` and `swarm-phase-reporting` are workflow-step skills, not discipline skills).
+
+### Fixed
+
+- The deferral default-disposition problem. The fix is not better catalog-and-recover machinery (that already worked); the fix is shifting the default from "defer when uncertain" to "complete the work now" and giving the orchestrator a mechanical re-dispatch when agents deviate.
+
+---
+
 ## [4.4.0] - 2026-04-17
 
 ### Added
@@ -1929,6 +1990,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.5.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.5.0
 [4.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.4.0
 [4.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.1
 [4.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.0

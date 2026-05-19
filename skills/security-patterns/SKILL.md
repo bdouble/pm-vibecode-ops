@@ -7,6 +7,8 @@ description: Use when about to write authentication, authorization, user input h
 
 Shift security left - prevent vulnerabilities while writing code, not at review time.
 
+**Violating the letter of this skill is violating the spirit of this skill.** Using a slightly different injection sink, naming the secret variable differently, or skipping authorization on the "internal" route — all violate the spirit. Defense applies at every boundary, every time, regardless of how the code is dressed up. Spirit over letter, always.
+
 ## Enforcement Checklist
 
 When writing security-relevant code:
@@ -187,40 +189,29 @@ The following code patterns indicate elevated security risk. When any appear in 
 - **Least privilege**: Minimal permissions required
 - **Secure defaults**: Safe configuration out of the box
 
-## Infrastructure Security Patterns
+## Infrastructure Security
 
-### Secrets Detection
+For CI/CD, container, secrets-detection, and dependency security patterns, see `references/infrastructure-security.md`. Apply these when reviewing `.github/workflows/`, `Dockerfile`, package manifests, or scanning for committed secrets.
 
-Known secret prefixes to scan for (in code AND git history):
-- `AKIA` — AWS access key IDs
-- `sk-` — OpenAI, Stripe secret keys
-- `ghp_`, `gho_`, `github_pat_` — GitHub tokens
-- `xoxb-`, `xoxp-`, `xapp-` — Slack tokens
-- `SG.` — SendGrid API keys
-- `sk_live_`, `pk_live_` — Stripe live keys
+## Red Flags — STOP
 
-### CI/CD Security
+When you notice ANY of these in your own thinking or writing, you are about to introduce a vulnerability. Stop and apply the relevant security pattern.
 
-When reviewing `.github/workflows/` or CI configuration:
-- All third-party actions MUST be pinned to SHA, not tag
-- `pull_request_target` trigger requires extra scrutiny (fork PRs get write access)
-- `${{ github.event.* }}` in `run:` steps is script injection — use environment variables instead
-- Secrets should be scoped to the steps that need them, not the entire job
+- `` `${userInput}` `` interpolated into SQL, shell command, or HTML
+- `req.params.id` or `req.query.x` passed to a database query without an ownership filter
+- Hardcoded API key, token, password, or secret in source
+- `console.log` printing auth headers, tokens, or user PII
+- Route handler without authentication middleware
+- Admin or privileged endpoint without role/permission check
+- `dangerouslySetInnerHTML` with anything that touched user input
+- `child_process.exec` with a string built from request data
+- `eval()` / `new Function()` on anything that touched user input
+- Trusting a webhook payload without signature verification
+- `==` (instead of `crypto.timingSafeEqual`) for comparing secrets/tokens
+- Pinning a third-party Action by `@latest` or `@v3` instead of SHA
+- `.env` file added to a `COPY` directive in a Dockerfile
 
-### Container Security
-
-When reviewing Dockerfiles:
-- MUST include a `USER` directive (don't run as root)
-- Secrets MUST NOT appear as `ARG` or `ENV` in build
-- `.env` files MUST NOT be `COPY`ed into images
-- Use multi-stage builds to exclude build-time dependencies from production images
-
-### Dependency Security
-
-When reviewing package manifests:
-- Lockfile MUST exist AND be tracked by git
-- Production dependencies with install scripts are a supply chain risk — verify they are necessary
-- Pin exact versions for production dependencies
+**All of these mean: stop and apply the corresponding OWASP pattern** before continuing.
 
 ## Rationalizations -- STOP
 
@@ -253,5 +244,11 @@ For the complete agentic security assessment framework, see `agents/references/s
 ## Additional Resources
 
 - **`references/owasp-patterns.md`** — Comprehensive OWASP Top 10 vulnerability patterns with prevention strategies
+- **`references/infrastructure-security.md`** — CI/CD, container, secrets, and dependency security patterns
 - **`examples/owasp-code-examples.md`** — Before/after code examples for common OWASP vulnerabilities
 - **`agents/references/security-agentic-owasp-reference.md`** — OWASP Top 10 for Agentic Applications 2026 assessment framework
+
+## Related Skills
+- **production-code-standards**: Many security vulnerabilities (any, unvalidated JSON.parse, console.log) overlap with production code prohibitions
+- **verify-implementation**: Security claims ("auth check is in place") require evidence, not assertion
+- **no-silent-deferrals**: "I'll add auth later" is the deferral pattern this skill exists to prevent

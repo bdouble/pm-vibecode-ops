@@ -7,6 +7,8 @@ description: Use when about to call /close-epic, when about to mark an epic stat
 
 Validates that ALL sub-tickets are complete before an epic can be closed.
 
+**Violating the letter of this skill is violating the spirit of this skill.** Closing an epic with one sub-ticket left "almost done", auto-cancelling unfinished work to clear the queue, accepting an `AC-DEFERRED` without justification, or marking a workaround "good enough for now" — all bypass the spirit. Closure requires the work to be done or explicitly descoped. Spirit over letter, always.
+
 ## Pre-Closure Assessment Process
 
 Follow this numbered procedure before any epic closure. No step may be skipped.
@@ -126,10 +128,12 @@ Review each completed ticket's Linear comments for:
 | Finding | Severity | Action |
 |---------|----------|--------|
 | TODO/FIXME in production code | HIGH | Block closure, create fix ticket |
-| AC-DEFERRED item in any ticket | HIGH | Block closure unless user explicitly approved the deferral |
+| AC-DEFERRED item WITHOUT Deferral Justification block (or with invalid block) | CRITICAL | Block closure immediately. Re-dispatch the deferring agent with "do it now" or surface for user override. See `no-silent-deferrals` skill. |
+| AC-DEFERRED item WITH valid Deferral Justification block (catastrophic 1-4) | HIGH | Block closure unless user has dispositioned this specific item as `ACCEPT_DEFERRAL` in an end-of-workflow review |
 | Stub or placeholder in production | CRITICAL | Block closure, complete implementation |
 | Known security finding unaddressed | CRITICAL | Block closure, fix before shipping |
-| Minor code quality note deferred | LOW | Allow closure, create follow-up ticket in retrofit analysis |
+| Minor code quality note deferred (DISCOVERED, LOW severity, no AC match) | LOW | Allow closure, create follow-up ticket in retrofit analysis |
+| Retrofit ticket count > 50% of original sub-ticket count | HIGH | Systemic deferral discipline failure — block auto-closure, surface to user for review of whether the original tickets met the "do the work now" policy |
 
 ## Required Before Closure
 
@@ -150,6 +154,43 @@ If epic closure is blocked:
 4. **REPORT** clear guidance on next steps
 
 **Block epic closure when work is incomplete. Report all blocking items with clear guidance on required next steps.**
+
+## Red Flags — STOP
+
+When you notice ANY of these in your own thinking or writing, you are about to close an epic that should remain open. Stop and run the full pre-closure assessment.
+
+- "Almost all tickets are Done, close enough"
+- "The remaining tickets are minor, we can ship"
+- "There's a TODO in there but it's just a note"
+- "AC-DEFERRED items don't really block closure"
+- "The workaround works, we'll fix it next quarter"
+- "Cancelled tickets are basically done"
+- "The security finding is just medium severity"
+- "Retrofit tickets will catch anything we missed"
+- "The user asked me to close it, so close it"
+- A retrofit ticket count growing as you assess (smell — original tickets weren't actually done)
+
+**All of these mean: run the assessment procedure** — query sub-tickets, evaluate blocking conditions, scan for workarounds, verify business value, then decide. Do not shortcut.
+
+## Rationalizations — STOP
+
+If you think any of these, you are about to close an epic that isn't actually done.
+
+| Excuse | Reality |
+|--------|---------|
+| "Most tickets are Done, the rest can be follow-ups" | Closure requires ALL sub-tickets Done or Cancelled. "Most" is not "all". |
+| "The remaining work is minor" | Minor work shipped as a retrofit ticket is more expensive than minor work shipped in the original epic. |
+| "The AC-DEFERRED item has a good reason" | "A reason" isn't enough. It needs a Deferral Justification block matching one of four catastrophic conditions — and even then, only if the user has dispositioned it. See `no-silent-deferrals`. |
+| "Cancelling the remaining tickets clears the queue" | Cancellation requires a documented reason and business-value verification. It isn't a closure shortcut. |
+| "The workaround is acceptable for now" | Workarounds in production code block closure. Period. |
+| "Retrofit analysis will catch any gaps" | Retrofit tickets are evidence of failed prevention. Don't pre-emptively rely on them to justify closure. |
+| "The retrofit ticket count is reasonable" | If retrofits exceed 50% of original sub-ticket count, that is itself a systemic deferral discipline failure — block closure and surface to user. |
+
+## Related Skills
+- **no-silent-deferrals**: AC-DEFERRED items without the Deferral Justification block block closure
+- **verify-implementation**: Business value claims ("delivered the epic's goal") require evidence, not assertion
+- **production-code-standards**: Workarounds in production code block closure
+- **using-pm-workflow**: Epic closure is the final phase; tickets must have passed security review first
 
 ## Additional Resources
 

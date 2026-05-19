@@ -7,6 +7,8 @@ description: Use when about to write `class NewService`, `export function`, new 
 
 Before creating ANYTHING new, check existing inventory first.
 
+**Violating the letter of this skill is violating the spirit of this skill.** Searching with one keyword and concluding "nothing exists", creating a parallel utility with slightly different naming, or "extending the inventory after the fact" instead of before — all violate the spirit. The default is reuse; new code is the exception. Spirit over letter, always.
+
 ## Enforcement Workflow
 
 1. **STOP** before creating any new service/utility/helper
@@ -131,17 +133,41 @@ Even then:
 
 **When the service inventory cannot be found, ask the user for its location. Never assume creation is needed.**
 
+## Red Flags — STOP
+
+When you notice ANY of these in your own thinking or writing, you are about to duplicate functionality that may already exist. Stop and search first.
+
+- `class New[Anything]Service` / `export function` before any inventory or grep check
+- "I'll just write a quick helper for…"
+- "This needs a [validator/auth/middleware/repository]" without checking if one exists
+- "I haven't seen one, so I'll create it" (you haven't *looked*)
+- "It's simpler to write a new one than learn the existing one"
+- "The existing one doesn't quite fit, I'll make a parallel one"
+- "Different module = different service" (often false)
+- Creating a utility used only once
+
+**All of these mean: search the inventory and grep the codebase first.** Document what you searched, what you found, and your reuse decision before creating anything new.
+
+## Rationalizations — STOP
+
+If you think any of these, you are about to duplicate functionality that already exists.
+
+| Excuse | Reality |
+|--------|---------|
+| "I searched and didn't find anything similar" | Search again with multiple synonyms. Auth/authenticate/login/session, validator/validate/check/sanitize, etc. Function names rarely match the search term you tried first. |
+| "The existing service doesn't quite fit my needs" | Extend it. Pass parameters. Compose. Forking creates two things to maintain. |
+| "It's simpler to write a new one" | Simpler now, expensive forever. New code = new bugs, new tests, new maintenance. |
+| "This is a different use case" | Different inputs are not different services. Different *behavior* might be — verify before duplicating. |
+| "I didn't see it in the inventory" | The inventory may be stale. Grep the codebase before concluding. |
+| "It's a one-off helper, I won't add it to the inventory" | One-offs become two-offs. If it's worth writing, it's worth inventorying. |
+| "I'll inline this logic instead of extracting a function" | If it appears once, fine. If you're about to copy-paste it elsewhere, extract and reuse. |
+
 ## Additional Resources
 
 - **`references/service-inventory-template.md`** — Complete service inventory YAML template with categories, capabilities, and mandate fields
 - **`examples/inventory-search-session.md`** — Walkthrough of a real inventory search and reuse decision
 
-## Gotchas
-
-Running list of edge cases encountered. Append new entries as they come up.
-
-- _(none logged yet — add entries as they come up during use)_
-
 ## Related Skills
 - **production-code-standards**: Quality standards for any new services created
-- **divergent-exploration**: Explore alternatives before deciding to create new services
+- **divergent-exploration**: "Extend existing service" must be a candidate option in any architecture exploration
+- **no-silent-deferrals**: "I'll add this to the inventory later" is a silent deferral

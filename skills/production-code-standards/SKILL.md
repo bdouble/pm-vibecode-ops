@@ -7,6 +7,8 @@ description: Use when writing, editing, or reviewing production code — especia
 
 All production code must be permanent, complete, and production-grade.
 
+**Violating the letter of this skill is violating the spirit of this skill.** A `WORKAROUND:` comment is the same violation as `TODO`. `value ?? default` used to silently mask absence is the same violation as `value || default`. A new prohibited pattern with a friendlier name is the same prohibited pattern. Spirit over letter, always.
+
 ## Enforcement Workflow
 
 1. **Before writing**: Plan the complete, permanent solution
@@ -35,66 +37,7 @@ All production code must be permanent, complete, and production-grade.
 
 ## TypeScript-Specific Anti-Patterns
 
-These patterns are prohibited in production TypeScript code. Each introduces a category of bugs that the type system is designed to prevent:
-
-### Type Safety Violations
-
-| Pattern | Why Blocked | Required Alternative |
-|---------|-------------|---------------------|
-| `any` type | Disables type checking entirely, defeats purpose of TypeScript | Use `unknown` and narrow with type guards |
-| Excessive `as` assertions | Overrides compiler safety; hides type mismatches | Fix the underlying type or use a type guard |
-| Unvalidated `JSON.parse()` | Returns `any`; downstream code assumes shape without verification | Parse with Zod schema: `schema.parse(JSON.parse(raw))` |
-| Non-null assertion `!` on uncertain values | Asserts non-null without evidence; crashes at runtime | Use explicit null check or optional chaining |
-
-### Async Anti-Patterns
-
-| Pattern | Why Blocked | Required Alternative |
-|---------|-------------|---------------------|
-| Floating promises (async call without `await`) | Errors silently swallowed; execution order unpredictable | Always `await` or explicitly handle with `.catch()` |
-| `async` function without `try/catch` at boundary | Unhandled rejection crashes process in Node.js | Wrap in try/catch at service boundaries; let errors propagate through middleware |
-| `Promise.all` without error handling | One rejection loses all results | Use `Promise.allSettled` when partial results are acceptable |
-
-### Production Hygiene
-
-| Pattern | Why Blocked | Required Alternative |
-|---------|-------------|---------------------|
-| `console.log` in production code | Pollutes output, may leak sensitive data, not structured | Use structured logger (e.g., pino, winston) with log levels |
-| `console.error` for error handling | Not a substitute for proper error propagation | Throw typed error or pass to error handler |
-| `debugger` statement | Halts execution in production | Remove entirely |
-
-## Automated Enforcement
-
-Reference these ESLint rules to catch TypeScript anti-patterns automatically. When setting up a project or reviewing ESLint configuration, verify these rules are enabled:
-
-| Rule | What It Catches |
-|------|-----------------|
-| `@typescript-eslint/no-explicit-any` | Blocks `any` type usage |
-| `@typescript-eslint/no-floating-promises` | Catches unawaited async calls |
-| `@typescript-eslint/no-non-null-assertion` | Blocks `!` operator on uncertain values |
-| `@typescript-eslint/no-unsafe-assignment` | Blocks assigning `any` to typed variables |
-| `@typescript-eslint/no-unsafe-member-access` | Blocks accessing properties on `any` |
-| `no-console` | Blocks console.log/error/warn in production |
-| `no-debugger` | Blocks debugger statements |
-
-When these rules are not present in a project's ESLint config, flag it during code review. The rules catch the most common TypeScript anti-patterns at lint time rather than at runtime.
-
-### Recommended ESLint Configuration
-
-For projects using `@typescript-eslint`, verify the following base configuration exists:
-
-```json
-{
-  "rules": {
-    "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-floating-promises": "error",
-    "@typescript-eslint/no-non-null-assertion": "warn",
-    "no-console": ["error", { "allow": ["warn"] }],
-    "no-debugger": "error"
-  }
-}
-```
-
-If the project lacks this configuration, note it as a code review finding. Do not add it unilaterally — configuration changes affect the entire team and require discussion.
+For TypeScript projects, additional anti-patterns and ESLint rules apply. See `references/typescript-anti-patterns.md` for the full catalog including `any` type usage, floating promises, non-null assertions, `console.log` in production, and the recommended ESLint configuration to enforce these at lint time.
 
 ## Schema Quality Standards
 
@@ -140,6 +83,23 @@ If proper implementation is blocked:
 
 **If implementation requires a workaround, do not implement. Communicate the blocker clearly.**
 
+## Red Flags — STOP
+
+When you notice ANY of these in your own thinking or writing, you are about to ship a workaround. Stop and write the permanent solution instead.
+
+- `// TODO:` / `// FIXME:` / `// HACK:` / `// XXX:` / `// WORKAROUND:`
+- `value || default` or `value ?? default` to silently mask missing data
+- `try { ... } catch (e) { /* swallow */ }`
+- `setTimeout(() => ..., 0)` to mask a race condition
+- `: any` / `as any` / `JSON.parse(raw)` without schema validation
+- `console.log` / `console.error` in production paths
+- "Just for now" / "Temporary fix" / "I'll clean it up"
+- "It's just a prototype" / "Quick prototype"
+- Mock or stub service inside `src/` (outside `__tests__/`)
+- "Skip this check, the upstream code already validates"
+
+**All of these mean: write the permanent solution now.** If genuinely blocked, follow the "When Blocked" procedure — STOP, DOCUMENT, CREATE TICKET, WAIT. Never ship a workaround.
+
 ## Rationalizations -- STOP
 
 If you think any of these, you are about to violate this skill.
@@ -153,16 +113,13 @@ If you think any of these, you are about to violate this skill.
 | "Tests don't need production standards" | Test code with workarounds creates false confidence. Tests must be accurate. |
 | "This is a minor change, standards don't apply" | Minor changes are where standards slip. Apply them especially here. |
 
-## Gotchas
-
-Running list of edge cases encountered. Append new entries as they come up.
-
-- _(none logged yet — add entries as they come up during use)_
-
 ## Related Skills
 - **testing-philosophy**: Test code may use mocks and fixtures; production code must not
 - **verify-implementation**: Verify all claims before marking work complete
+- **no-silent-deferrals**: TODO/FIXME/HACK comments are silent deferrals — banned for the same reason
 
-See `references/anti-patterns.md` for detailed code examples of prohibited and required patterns.
+## Additional Resources
 
-See `examples/error-handling-patterns.md` for practical before/after transformations.
+- **`references/typescript-anti-patterns.md`** — Full TypeScript anti-pattern catalog and ESLint configuration
+- **`references/anti-patterns.md`** — Detailed code examples of prohibited and required patterns
+- **`examples/error-handling-patterns.md`** — Practical before/after transformations
