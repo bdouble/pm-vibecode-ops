@@ -1582,11 +1582,17 @@ The threshold is 500K because security review — the final phase — receives 5
 
 ---
 
-## Deferred Items Handling
+## Deferred Items and Closure-Log Handling
 
 The default disposition for every in-scope item is **complete the work now**. Agents may document a deferral ONLY when it meets one of the four catastrophic conditions defined in the `no-silent-deferrals` skill. The Deferred Items table exists for traceability of those genuinely catastrophic-justified deferrals plus the residue of out-of-scope discoveries — NOT as a place to park work the agent didn't feel like doing.
 
-**Invoke the `no-silent-deferrals` skill before populating a Deferred Items table or before the orchestrator runs §3.6.1a validation.** The skill defines what counts as catastrophic, the required justification block, and the agent's red-flag phrases that trigger STOP.
+**For OUT-OF-SCOPE observations the agent considers as candidates for follow-up tickets**, agents apply the impact bar in `no-silent-deferrals` Part 2:
+- If the would-be impact-bar sentence is fillable with specifics → file a ticket (or fix in-branch if cheap).
+- If it isn't → record in a `### Considered but not pursued` section in the phase report. This is the closure-log. Do NOT add it to the Deferred Items table — that table is for AC-deferrals + tracked deferrals only.
+
+The closure-log section is durable per-ticket audit-trail content. The epic-closure agent aggregates closure-log entries across sub-tickets into the epic's Considered-but-not-pursued section. The `ticket-context-agent` is required to surface closure-log presence to the closure orchestrator.
+
+**Invoke the `no-silent-deferrals` skill before populating a Deferred Items table, a closure-log section, or before the orchestrator runs §3.6.1a validation.** The skill defines what counts as catastrophic, the required justification block, the impact bar for would-be tickets, the disqualifying phrasings, and the agent's red-flag phrases that trigger STOP.
 
 | Classification | Severity | Location | Issue | Reason |
 |---------------|----------|----------|-------|--------|

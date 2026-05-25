@@ -1815,7 +1815,7 @@ Post to the epic in Linear:
 
 ### Next Steps
 - **Review and merge the epic PR** — all work is on branch `epic/[epic-id]`
-- Run `/close-epic [epic-id]` for retrofit analysis and follow-up ticket creation
+- Run `/close-epic [epic-id]` for follow-up discipline (impact bar + boundary question + ≤3 cap) and Considered-but-not-pursued closure-log
 - [If Codex reviews were skipped] Run `/codex-review [ticket-id]` for tickets missing cross-model review
 ```
 
@@ -1985,7 +1985,7 @@ Worktrees for blocked/pending tickets are preserved for manual intervention unle
 
 ### 6.4 Transition to /close-epic
 
-"All tiers complete. Run `/close-epic [epic-id]` for retrofit analysis, follow-up tickets, and to clean up swarm state."
+"All tiers complete. Run `/close-epic [epic-id]` for follow-up discipline (≤3 tickets max, rest to closure-log) and to clean up swarm state."
 
 `/close-epic` deletes `.swarm/state/[epic-id].json` as its final step.
 
@@ -2001,11 +2001,17 @@ Worktrees for blocked/pending tickets are preserved for manual intervention unle
 
 ---
 
-## Deferred Items Handling
+## Deferred Items and Closure-Log Handling
 
 The default disposition for every in-scope item is **complete the work now**. Agents may document a deferral ONLY when it meets one of the four catastrophic conditions defined in the `no-silent-deferrals` skill. The Deferred Items table exists for traceability of those genuinely catastrophic-justified deferrals plus the residue of out-of-scope discoveries — NOT as a place to park work the agent didn't feel like doing.
 
-**Invoke the `no-silent-deferrals` skill before populating a Deferred Items table or before the orchestrator runs §3.2.4.5 validation.** The skill defines what counts as catastrophic, the required justification block, and the agent's red-flag phrases that trigger STOP.
+**For OUT-OF-SCOPE observations the agent considers as candidates for follow-up tickets**, agents apply the impact bar in `no-silent-deferrals` Part 2:
+- If the would-be impact-bar sentence is fillable with specifics → file a ticket (or fix in-branch if cheap).
+- If it isn't → record in a `### Considered but not pursued` section in the phase report. This is the closure-log. Do NOT add it to the Deferred Items table.
+
+The closure-log per-ticket entries are aggregated by `/close-epic` into the epic-level Considered-but-not-pursued section.
+
+**Invoke the `no-silent-deferrals` skill before populating a Deferred Items table, a closure-log section, or before the orchestrator runs §3.2.4.5 validation.** The skill defines what counts as catastrophic, the required justification block, the impact bar for would-be tickets, the disqualifying phrasings, and the agent's red-flag phrases that trigger STOP.
 
 **Deferred Items table format (included in every agent report — even when empty):**
 

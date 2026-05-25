@@ -175,58 +175,55 @@ This runs in read-only mode. No files are modified.
 
 ---
 
-## Step 3: Present Results
+## Step 3: Agent Resolution (Hands-Off, No User Wait)
 
-Parse Codex's output and present to the user in four sections:
+Codex review is a hands-off automated step. **Do not present findings to the user for mid-flow decisions.** The agent resolves all remaining items by applying the policy in `codex-finding-resolution` SKILL.md (Step 3). The user reviews the posted report retrospectively and can promote any rejection by filing a regular ticket that references the comment line.
 
-```
-## Codex Cross-Model Review Results
+Parse Codex's output and apply this resolution tree per item:
 
-Model: gpt-5.4 | Reasoning: xhigh
+**Category A — Auto-Fixed by Codex (any priority, unambiguous):**
+Verify each fix didn't introduce a regression. If an auto-fix is wrong, revert and treat the underlying finding as Category B.
 
-### Auto-Fixed (P0-P3, unambiguous)
-| # | Priority | Category | File | What Changed | Codex Reasoning |
-|---|----------|----------|------|-------------|-----------------|
-| 1 | P0 | security | src/auth.ts:42 | Parameterized SQL query | Raw string interpolation — SQL injection risk |
-| 2 | P1 | bug | src/api.ts:89 | Added null check on response | Optional field accessed without guard |
+**Category B — Needs Agent Resolution (P1-P2 with ambiguity, or P3 candidates):**
 
-### Needs Your Decision (has questions or ambiguity)
-| # | Priority | Category | File | Issue | Codex's Question | Codex Recommendation |
-|---|----------|----------|------|-------|-----------------|---------------------|
-| 3 | P1 | logic | src/util.ts:15 | Off-by-one in pagination | "0-indexed or 1-indexed? API returns 1-indexed but frontend sends 0-indexed." | Align to API convention (1-indexed) |
+For each P1 or P2 item, apply the resolution tree in order:
 
-### Declined by Codex (identified but not auto-fixed)
-| # | Priority | Category | File | Issue | Why Not Fixed |
-|---|----------|----------|------|-------|--------------|
-| 4 | P2 | perf | src/routes/search.ts:120 | N+1 query in loop | Fix requires restructuring data loader — too broad for auto-fix |
+1. **DEFAULT: fix it now in the originating branch.** Use `codex_fix` with explicit instructions, or fix manually. Bias strongly toward this default. "It's complex," "tricky," "needs more thought" are NOT reasons to skip — they are reasons to think harder. Use `systematic-debugging` if you genuinely need to work through the problem.
 
-### For Awareness (P3)
-| # | Category | File | Observation |
-|---|----------|------|-------------|
-| 5 | style | src/config.ts:8 | Magic number could be a named constant |
-```
+2. **SCOPE_EXPANSION_ESCAPE — single escape for P1/P2 only.** The agent may file a follow-up ticket for a P1/P2 finding ONLY when BOTH conditions hold:
+   - The fix would touch files outside the ticket's AC-defined scope in a substantial way (a different module entirely, OR 3+ files outside the surfaces named in the ticket's AC). Touching 1–2 adjacent files is NOT scope expansion.
+   - The agent can write a passing impact-bar sentence for the deferred fix:
 
-**For "Needs Your Decision" items, ask the user for each:**
-- **FIX** — provide guidance, then run second pass via `codex_fix`
-- **DISMISS** — skip (record the reason — it goes in the Linear report)
-- **DEFER** — add to deferred items for follow-up ticket
+   > "Without this, **[specific production behavior / user experience / cost / security control / operational property]** changes for **[identified code path / user-operator segment / named operation-system]**."
 
-**Record the user's decision and reasoning for each item.** These are included in the Linear report (Step 6) as the "User-Reviewed Items" section with the full context chain: issue → Codex question → Codex recommendation → user decision → user reasoning.
+   Disqualifying rationales (the fix happens in branch, no escape): "complex", "tricky", "would take a while", "needs more thought", "might cause regressions", "user might disagree", "maintainability", "code quality", "consistency", "developer experience". See `no-silent-deferrals` Part 2.
+
+   When the escape applies, file ONE ticket with title `[Follow-up] [Description]`, label `SCOPE_EXPANSION_ESCAPE` plus priority. The agent does not need to prompt the user.
+
+3. **Dismiss with explicit reasoning** — if the finding is wrong (Codex misunderstood the intent, the pattern is intentional). Record the dismissal with reasoning the reviewer can evaluate.
+
+For each P3 item:
+
+- **Closure-log entry only. No ticket.** P3 findings document non-load-bearing concerns; they live in the report's closure-log section so reviewers can see them. No exceptions.
 
 ---
 
-## Step 4: Second Pass (if needed)
+## Step 4: Apply Resolutions
 
-If the user approved any "Needs Your Decision" items with guidance:
+For each P1/P2 the agent resolved as "fix now":
 
 ```
 Use mcp__codex-review-server__codex_fix with:
   - project_dir: [absolute path to project root]
-  - findings: [the approved findings with user's guidance]
-  - context: [user's specific instructions for how to approach each fix]
+  - findings: [the findings with agent's guidance]
+  - context: [agent's specific instructions for how to approach each fix]
 ```
 
-Codex runs again with write access, applying only the specified fixes.
+Codex runs again with write access, applying only the specified fixes. Or fix manually if Codex fix is not suitable.
+
+For each SCOPE_EXPANSION_ESCAPE: create the Linear ticket with `mcp__linear-server__create_issue` and capture the ID for the report.
+
+For each closure-log entry: capture the item + rationale for the report.
 
 ---
 
@@ -261,7 +258,7 @@ Use mcp__linear-server__create_comment with:
 
 **Report format:**
 
-The report captures the full audit trail: what Codex found, what it fixed, what was ambiguous, what the user decided, and why. This serves both as documentation and as input for `/close-epic` deferred item extraction.
+The report captures the full audit trail: what Codex found, what it fixed, what the agent fixed, what the agent dismissed (with reasoning), what the agent filed as SCOPE_EXPANSION_ESCAPE (with rationale), and what the agent placed in the closure-log (with rationale). This enables retrospective user review and `/close-epic` aggregation.
 
 ```markdown
 ## Cross-Model Review Report
@@ -270,44 +267,47 @@ The report captures the full audit trail: what Codex found, what it fixed, what 
 
 ### Summary
 - **Total findings**: N (P0: X, P1: Y, P2: Z, P3: W)
-- **Auto-fixed by Codex**: N (unambiguous P0-P3 — applied and committed)
-- **Fixed after user review**: N (ambiguous items user chose to fix)
-- **Dismissed by user**: N (with reasoning)
-- **Deferred**: N (to follow-up tickets)
-- **Declined by Codex**: N (identified but not auto-fixed, with reasoning)
-- **For awareness**: N (P3 informational)
+- **Auto-fixed by Codex**: N
+- **Fixed by agent**: N
+- **SCOPE_EXPANSION_ESCAPE tickets filed**: N
+- **Dismissed by agent (with reasoning)**: N
+- **Closure-log (P3 + below-bar items)**: N
 
-### Auto-Fixed Items
+### Auto-Fixed by Codex
 | # | Priority | Category | File | What Changed | Codex Reasoning |
 |---|----------|----------|------|-------------|-----------------|
 | [n] | [P-level] | [category] | [file:line] | [change description] | [why fixed] |
 
-### User-Reviewed Items
-Items Codex could not auto-fix due to ambiguity — presented to user with Codex's question and recommendation.
+### Fixed by Agent
+Items Codex could not auto-fix; the agent applied the impact-bar policy and chose to fix in-branch.
 
-| # | Priority | File | Issue | Codex Question | Codex Recommendation | User Decision | User Reasoning |
-|---|----------|------|-------|---------------|---------------------|--------------|----------------|
-| [n] | [P-level] | [file:line] | [issue] | [uncertainty] | [suggestion] | Fixed/Dismissed/Deferred | [reasoning] |
+| # | Priority | File | Finding | Fix Applied |
+|---|----------|------|---------|-------------|
+| [n] | [P-level] | [file:line] | [issue] | [fix description] |
 
-### Declined by Codex
-Items identified but not auto-fixed (broader refactoring needed, risk outweighs benefit, etc.).
+### SCOPE_EXPANSION_ESCAPE Tickets
+For each escape used — required for any P1/P2 not fixed in-branch.
 
-| # | Priority | Category | File | Issue | Why Not Auto-Fixed |
-|---|----------|----------|------|-------|-------------------|
-| [n] | [P-level] | [category] | [file:line] | [issue] | [Codex reasoning] |
+| # | Priority | File | Finding | Linear Ticket | Impact-Bar Sentence | Scope-Expansion Rationale |
+|---|----------|------|---------|---------------|---------------------|---------------------------|
+| [n] | [P-level] | [file:line] | [issue] | [PROJ-XXX] | "Without this, X changes for Y" | [files outside AC scope, count, why fix-in-branch is inappropriate] |
 
-### For Awareness (P3)
-| # | Category | File | Observation |
-|---|----------|------|-------------|
-| [n] | [category] | [file:line] | [observation] |
+### Dismissed
+Items the agent concluded are wrong (Codex misunderstood intent, pattern is intentional).
 
-### Deferred Items
-| Classification | Severity | Location | Issue | Reason |
-|---------------|----------|----------|-------|--------|
-| DISCOVERED | [severity] | [file:line] | [finding] | [why deferred] |
+| # | Priority | File | Finding | Agent's Reasoning |
+|---|----------|------|---------|-------------------|
+| [n] | [P-level] | [file:line] | [issue] | [why dismissed] |
+
+### Considered but not pursued (closure-log)
+
+All P3 findings + any below-bar items the agent considered. Reviewers may promote any entry by filing a regular ticket referencing this comment line.
+
+- **[Item]** — Why considered: [Codex finding]. Why below the bar: [disqualifying phrasing or unfillable slot]. What would change to re-evaluate: [named condition].
+- (or: "None — all P1/P2 findings were resolved, no P3 items observed.")
 ```
 
-**If this is running as part of `/execute-ticket` or `/epic-swarm`:** the report becomes part of the context passed to the Security Review phase. The "User-Reviewed Items" and "Declined by Codex" sections are critical for security review — they may reveal issues the security agent should assess.
+**If this is running as part of `/execute-ticket` or `/epic-swarm`:** the report becomes part of the context passed to the Security Review phase. The "SCOPE_EXPANSION_ESCAPE Tickets" and "Dismissed" sections are critical for security review — they may reveal issues the security agent should assess. The closure-log is aggregated by `/close-epic` into the epic-level Considered-but-not-pursued section.
 
 ---
 

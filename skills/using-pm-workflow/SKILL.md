@@ -35,7 +35,7 @@ Use only when a specific phase needs manual control, rerun, or debugging:
 | 10 | `/security-review` | OWASP assessment (closes tickets) |
 
 **Epic-Level (after all tickets complete):**
-11. `/close-epic` — Close epic with retrofit analysis
+11. `/close-epic` — Close epic with follow-up discipline (impact bar + boundary question + ≤3 cap) and Considered-but-not-pursued closure-log
 
 ## Closure Rules
 

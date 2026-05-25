@@ -2,6 +2,8 @@
 
 The full markdown template for posting Codex review results to Linear. Use exactly this structure to preserve the audit trail and enable downstream extraction by `/close-epic`.
 
+The flow is hands-off: the agent applies the impact-bar policy in `SKILL.md` Step 3 autonomously, posts this report, and lets the user review retrospectively. There is no mid-flow user-decision step.
+
 ## Standard Template
 
 ```markdown
@@ -11,45 +13,46 @@ The full markdown template for posting Codex review results to Linear. Use exact
 
 ### Summary
 - **Total findings**: N (P0: X, P1: Y, P2: Z, P3: W)
-- **Auto-fixed by Codex**: N (unambiguous P0-P3 — applied and committed)
-- **Fixed after user review**: N (ambiguous items user chose to fix)
-- **Dismissed by user**: N (with reasoning)
-- **Deferred**: N (to follow-up tickets)
-- **Declined by Codex**: N (identified but not auto-fixed, with reasoning)
-- **For awareness**: N (P3 informational)
+- **Auto-fixed by Codex**: N
+- **Fixed by agent**: N
+- **SCOPE_EXPANSION_ESCAPE tickets filed**: N
+- **Dismissed by agent (with reasoning)**: N
+- **Closure-log (P3 + below-bar items)**: N
 
-### Auto-Fixed Items
+### Auto-Fixed by Codex
 Items Codex fixed automatically because the correct fix was unambiguous.
 
 | # | Priority | Category | File | What Changed | Codex Reasoning |
-|---|----------|----------|------|-------------|-----------------|
+|---|----------|----------|------|--------------|-----------------|
 | [n] | [P-level] | [bug/security/logic/style] | [file:line] | [what changed] | [why this was fixed] |
 
-### User-Reviewed Items
-Items Codex identified but could not auto-fix due to ambiguity. Each was presented to the user with Codex's question and recommendation. The user's decision and reasoning are recorded.
+### Fixed by Agent
+Items Codex could not auto-fix due to ambiguity. The agent applied the impact-bar policy and chose to fix in-branch.
 
-| # | Priority | File | Issue | Codex Question | Codex Recommendation | User Decision | User Reasoning |
-|---|----------|------|-------|---------------|---------------------|--------------|----------------|
-| [n] | [P-level] | [file:line] | [issue description] | [what Codex was uncertain about] | [what Codex would suggest] | Fixed / Dismissed / Deferred | [user's stated reasoning] |
+| # | Priority | File | Finding | Fix Applied |
+|---|----------|------|---------|-------------|
+| [n] | [P-level] | [file:line] | [finding] | [fix description] |
 
-### Declined by Codex
-Items Codex identified but chose not to auto-fix because the fix would require broader changes, the risk of the fix outweighs the issue, or the item is outside the scope of a surgical review.
+### SCOPE_EXPANSION_ESCAPE Tickets
+For each escape used — required for any P1/P2 not fixed in-branch. The escape applies ONLY when the fix would touch a different module entirely OR 3+ files outside the ticket's AC-defined scope, AND the agent can write a passing impact-bar sentence.
 
-| # | Priority | Category | File | Issue | Why Not Auto-Fixed |
-|---|----------|----------|------|-------|-------------------|
-| [n] | [P-level] | [category] | [file:line] | [issue description] | [Codex's reasoning for declining] |
+| # | Priority | File | Finding | Linear Ticket | Impact-Bar Sentence | Scope-Expansion Rationale |
+|---|----------|------|---------|---------------|---------------------|---------------------------|
+| [n] | [P-level] | [file:line] | [finding] | [PROJ-XXX] | "Without this, [behavior] changes for [code path / segment / property]" | [files outside AC scope, count, why fix-in-branch is inappropriate] |
 
-### For Awareness (P3)
-Low-priority observations that don't require action but are worth noting.
+### Dismissed
+Items the agent concluded are wrong (Codex misunderstood intent, the pattern is intentional, the code is correct). Reasoning must be specific enough that a reviewer can evaluate.
 
-| # | Category | File | Observation |
-|---|----------|------|-------------|
-| [n] | [category] | [file:line] | [observation] |
+| # | Priority | File | Finding | Agent's Reasoning |
+|---|----------|------|---------|-------------------|
+| [n] | [P-level] | [file:line] | [finding] | [why dismissed — specifics, not "intentional"] |
 
-### Deferred Items
-| Classification | Severity | Location | Issue | Reason |
-|---------------|----------|----------|-------|--------|
-| DISCOVERED | [severity] | [file:line] | [finding] | [why deferred — include user's reasoning if user chose to defer] |
+### Considered but not pursued (closure-log)
+
+All P3 findings + any below-bar items the agent considered. Reviewers may promote any entry by filing a regular ticket referencing this comment line.
+
+- **[Item]** — Why considered: [Codex finding]. Why below the bar: [disqualifying phrasing or unfillable slot — see `no-silent-deferrals` Part 2]. What would change to re-evaluate: [named condition that would promote this to a real ticket].
+- (or: "None — all P1/P2 findings were resolved, no P3 items observed.")
 
 ---
 *Automated by /epic-swarm — Tier [N]*
@@ -59,9 +62,10 @@ For `/execute-ticket` standalone mode, replace the footer with `*Automated by /e
 
 ## Critical Rules for This Report
 
-- The **User-Reviewed Items** section preserves the FULL context chain: issue → Codex's uncertainty → Codex's recommendation → user's decision → user's reasoning. Do NOT collapse this into just "decision + reasoning" — the Codex question and recommendation are critical for understanding WHY the item needed human judgment.
-- Items the user chose to DEFER in the User-Reviewed section MUST also appear in the Deferred Items table with classification `DISCOVERED`.
-- Items in "Declined by Codex" that the user later identifies as needing fixes should be addressed in a follow-up — they are NOT retroactively fixed during this phase.
+- The **SCOPE_EXPANSION_ESCAPE Tickets** section is the named escape hatch. Every use must include the impact-bar sentence AND the scope-expansion rationale. The escape exists to handle genuine cross-module scope expansion — NOT difficulty, complexity, or "needs more thought." See `SKILL.md` Step 3 for the disqualifying-rationale list.
+- The **Closure-log** section is durable audit-trail content. It is aggregated by `/close-epic` into the epic-level Considered-but-not-pursued section. Do NOT omit items to make the report shorter — every observation that didn't earn a fix or ticket goes here.
+- The **Dismissed** section requires specific reasoning a reviewer can evaluate. Vague notes like "intentional" or "false positive" are insufficient.
+- Items in **Auto-Fixed by Codex** should be reviewed by the agent for correctness before posting. If Codex misunderstood intent, revert and treat as Category B (Fixed by Agent or Dismissed).
 
 ## Skip / Error Variants
 

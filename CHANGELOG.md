@@ -5,6 +5,52 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0] - 2026-05-25
+
+### Added
+
+#### Reducing ticket sprawl — impact bar, closure-log, boundary question, ≤3 follow-up cap
+
+Observed across many epic closures: the closure phase routinely generated more retrofit/follow-up tickets than the epic had sub-tickets. Most had no concrete operational, cost, user-perceived, or compliance impact — they were observations the agent had no legal way to acknowledge without filing a ticket. Backlogs accumulated workflow-generated items dominating user-requested work. Three workflow design choices interacted to produce this: binary deferral gate (only "do it" or "file ticket"), closure validation rewarded comprehensive ticketing, and retrofit fan-out was a defined closure output.
+
+- **New closure-log outcome** in `skills/no-silent-deferrals/SKILL.md` Part 2. Adds a legal third disposition for items observed during execution that aren't in scope: "considered but not pursued" entries in the phase report, gated by an impact-bar that the would-be ticket must clear. The four catastrophic conditions (Part 1) remain unchanged for in-scope AC-deferrals. The closure-log is for out-of-scope candidates that fail the bar — agents previously had to file these as tickets or silently drop them.
+- **New impact bar** with anti-gaming language: agents must complete "Without this, [specific behavior/property] changes for [identified code path / user segment / operational property]" using concrete content. Generic content ("users", "developers", "maintainability", "code quality", "consistency", "future-proofing") fails the bar. Disqualifying phrasings catalog'd explicitly to defeat agent padding.
+- **New boundary question** in `skills/no-silent-deferrals/SKILL.md` Part 3 and `epic-closure-validation`: for cross-cutting concerns, agents now ask "is there a single point of enforcement that makes the unsafe version impossible to produce, and has this epic installed it?" Three outcomes: enforcement installed → zero propagation tickets; not viable + bar clears → ONE propagation ticket with surfaces as checklist (not one per surface); not viable + bar fails → closure-log only.
+- **Mandatory Considered-but-not-pursued section** in every epic closure comment. Format is anti-padding-constrained: items belong only if one filled impact-bar sentence away from a ticket. Empty section ("None") is a positive signal. Reviewers promote rejected items by filing a regular ticket referencing the comment line — no special promotion mechanism needed.
+- **Absolute cap of 3 follow-up tickets per epic closure** replaces the prior "retrofit > 50% of sub-tickets is a smell" rule. 0-2 normal, 3 at the cap, 4+ blocks closure and surfaces to user. Rare audit-epic exception requires explicit citation against original AC.
+- **Hands-off Codex review** in `skills/codex-finding-resolution/SKILL.md` and `commands/codex-review.md`. Removed the "WAIT for user response" mid-flow user-decision step that was forcing user adjudication on every Codex run and producing P3-ticket sprawl via the "Defer" option. New policy: P1/P2 default fix-now in branch; agent-side `SCOPE_EXPANSION_ESCAPE` allows filing a ticket only when fix would touch a different module entirely OR 3+ files outside the ticket's AC scope (with impact-bar rationale); P3 → closure-log only, no escape. "Complex", "tricky", "would take a while" are explicitly disqualifying rationales for the escape. User reviews report retrospectively.
+- **Epic-closure agent rewritten** (`agents/epic-closure-agent.md`): Phase 3 renamed from "Retrofit Analysis" to "Follow-Up Discipline." Output contract changes from "ticket-ready specs for every pattern observed" to "≤3 follow-up specs (each with passing impact-bar sentence) + closure-log with rationale per entry." Pre-policy bias acknowledged explicitly.
+- **Close-epic command rewritten** (`commands/close-epic.md`): the prior "CREATE RETROFIT TICKETS (CRITICAL - Do not skip)" step is replaced with the "APPLY THE FOLLOW-UP DISCIPLINE" step containing Rules A (impact bar validation), B (boundary question), C (≤3 cap), D (file surviving tickets). Closure report template gains the Considered-but-not-pursued section. `--skip-retrofit` flag renamed to `--skip-followups`. Follow-up ticket titles use `[Follow-up]` (not `[Retrofit]`) to reflect that follow-ups are a residual outcome, not a default expectation.
+
+### Changed
+
+- `skills/epic-closure-validation/SKILL.md` workaround-detection table updated: minor code-quality notes default to closure-log, not retrofit ticket. New "Follow-Up Ticket Discipline" section codifies Rules A/B/C. New "Considered-but-not-pursued section (Required)" with validation rules and anti-padding constraints.
+- `agents/ticket-context-agent.md` Output Format adds a `Def/Log` column surfacing closure-log presence per ticket; orchestrator fetches verbatim when count > 0. Deferral-discipline section extended to require closure-log entries propagate up.
+- `commands/execute-ticket.md` and `commands/epic-swarm.md` "Deferred Items Handling" sections extended into "Deferred Items and Closure-Log Handling" with guidance on routing OUT-OF-SCOPE candidates between Deferred Items table (catastrophic + tracked deferrals) and closure-log (would-be tickets below the bar).
+- `skills/using-pm-workflow/SKILL.md` workflow description for `/close-epic` updated to reflect new discipline.
+- `skills/epic-closure-validation/references/closure-decision-tree.md` "Retrofit Analysis Triggers" replaced with "Follow-Up Discipline" decision tree.
+- `skills/epic-closure-validation/examples/mixed-closure-scenario.md` updated to walk through the new boundary-question/impact-bar application end-to-end.
+
+### Removed
+
+- Mid-flow user-decision step in `/codex-review` (`Step 3: Present Results` with FIX/DISMISS/DEFER prompt). Replaced with agent-driven Step 3 (impact bar + SCOPE_EXPANSION_ESCAPE + closure-log).
+- "User-Reviewed Items" section in the Codex Cross-Model Review Report. Replaced with "Fixed by Agent" + "SCOPE_EXPANSION_ESCAPE Tickets" + "Dismissed" + "Considered but not pursued (closure-log)".
+
+### Fixed
+
+- `skills/epic-closure-validation/skill.md` was tracked in lowercase but Anthropic's skills spec requires exact `SKILL.md` casing. Renamed in the index (working tree on macOS was already uppercase; case-sensitive filesystems would have broken activation).
+
+### Compliance audit (writing-skills best-practices)
+
+Audited the three rewritten skills against [Anthropic's Complete Guide to Building Skills for Claude](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) and [Superpowers writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills). All three pass description-format, length-ceiling, authority-language, rationalizations-table, red-flag, loophole-closure, and progressive-disclosure criteria. Two compliance fixes applied:
+
+- **`skills/codex-finding-resolution/references/report-template.md` rewritten** to match the new hands-off agent flow. Stale categories ("User-Reviewed Items", "Deferred to follow-up tickets") replaced with "Fixed by Agent" + "SCOPE_EXPANSION_ESCAPE Tickets" + "Dismissed" + "Considered but not pursued". The SKILL.md body was duplicating the new template inline; trimmed it to a single pointer at the references file, restoring progressive disclosure (198 lines, down from 231).
+- **Descriptions for all three skills extended** with trigger phrases for the new failure modes per Superpowers' tested finding that descriptions must include the concrete symptoms agents would search for. `no-silent-deferrals` adds "for maintainability", "for consistency", "for code quality", "future bugs harder to catch", "this surface doesn't have the pattern yet", "per-surface tickets for cross-cutting concern". `epic-closure-validation` adds "more than 3 follow-up tickets", "per-surface tickets", "clears the impact bar". `codex-finding-resolution` adds the disqualifying rationales ("complex / tricky / needs more thought"), the P3-as-ticket anti-pattern, and the hands-off-no-user-pause clarification. All descriptions remain under the 1024-char ceiling.
+
+Skill names (`no-silent-deferrals`, `epic-closure-validation`, `codex-finding-resolution`) are noun-form rather than the verb-first form Superpowers prefers, but these are established v4.5 names — renaming would break invocations and cross-references project-wide. Retained for compatibility.
+
+---
+
 ## [4.5.0] - 2026-05-19
 
 ### Added
@@ -1990,6 +2036,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.6.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.6.0
 [4.5.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.5.0
 [4.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.4.0
 [4.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.3.1

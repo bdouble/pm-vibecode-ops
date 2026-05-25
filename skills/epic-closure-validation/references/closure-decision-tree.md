@@ -35,10 +35,15 @@ Before closure, search for workarounds in completed tickets:
 - Check Deferred Items tables for AC-DEFERRED classifications
 - Verify no tickets were closed with known production workarounds
 
-### Retrofit Analysis Triggers
+### Follow-Up Discipline
 
-Flag for retrofit analysis when:
-- Patterns introduced in early tickets could improve later tickets
-- Security findings in one ticket may affect sibling tickets
-- Code review feedback suggests systemic improvements
-- New shared utilities could replace code in completed tickets
+When patterns introduced in this epic could (or have been) violated on existing surfaces, apply this decision in order:
+
+1. **Impact bar.** For each candidate, write the impact-bar sentence: "Without this, [specific behavior/property] changes for [identified code path/segment/property]." Generic content ("users", "developers", "maintainability") fails the bar → closure-log only.
+2. **Boundary question** (for cross-cutting candidates). "Is there a single point of enforcement that makes the unsafe version impossible to produce, and has this epic installed it?"
+   - Enforcement installed → zero propagation tickets; closure-log only
+   - Not viable + bar clears → ONE propagation ticket with surfaces as checklist (not one per surface)
+   - Not viable + bar fails → all surfaces → closure-log
+3. **Absolute cap of 3 filed follow-ups per closure.** Excess candidates → closure-log. 4+ filed → block closure, surface to user.
+
+This replaces prior "Retrofit Analysis Triggers." Under the new discipline, most candidates land in the Considered-but-not-pursued closure-log; filing a ticket is a residual outcome, not a default.
