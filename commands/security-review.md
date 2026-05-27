@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(find:*), Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Bash(git remote show:*), Bash(gh pr comment:*), Read, Glob, Grep, LS, Task, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
+allowed-tools: Bash(find:*), Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Bash(git remote show:*), Bash(gh pr comment:*), Read, Glob, Grep, LS, Task, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 description: Complete a security review of the pending changes on the current branch and update Linear ticket with findings
 argument-hint: [ticket-id] (e.g., /security-review LIN-456)
 workflow-phase: security-review
@@ -87,7 +87,7 @@ Perform security vulnerability assessment for this ticket following OWASP Top 10
 After the agent returns its report:
 
 1. **Parse the agent's report** - Extract vulnerabilities found, severity levels, fixes made
-2. **Write the completion comment** - Use `mcp__linear-server__create_comment` with the structured security report
+2. **Write the completion comment** - Use `mcp__linear-server__save_comment` with the structured security report
 3. **Determine ticket outcome**:
    - **If APPROVED (no critical/high issues)**: Use `mcp__linear-server__update_issue` to mark ticket as "Done"
    - **If BLOCKED (critical/high issues remain)**: Keep ticket "In Progress", add security-blocked label
@@ -142,7 +142,7 @@ Before running:
 **Tools you will use:**
 - **Fetch ticket**: `mcp__linear-server__get_issue` - YOU fetch before agent invocation
 - **Fetch comments**: `mcp__linear-server__list_comments` - YOU fetch before agent invocation (all phase reports + security concerns!)
-- **Add comments**: `mcp__linear-server__create_comment` - YOU write after agent returns
+- **Add comments**: `mcp__linear-server__save_comment` - YOU write after agent returns
 - **Update status**: `mcp__linear-server__update_issue` - YOU update after agent returns (CLOSE TICKET if approved!)
 
 You are a senior security engineer conducting a focused security review of the changes on this branch for ticket **$1**.
@@ -713,7 +713,7 @@ Your final reply must contain the detailed vulnerability report, confirmation of
 ### If Security Review PASSES (No Critical/High Issues):
 
 1. **Add security review comment** using template above:
-   - **Use MCP tool:** `mcp__linear-server__create_comment` with detailed security report
+   - **Use MCP tool:** `mcp__linear-server__save_comment` with detailed security report
 
 2. **Close the ticket** - this is the END of the workflow:
    - **Use MCP tool:** `mcp__linear-server__update_issue` to mark ticket as "Done"
@@ -724,7 +724,7 @@ Your final reply must contain the detailed vulnerability report, confirmation of
 ### If Security Review FAILS (Critical/High Issues Found):
 
 1. **Add security review comment** with issues (using template above):
-   - **Use MCP tool:** `mcp__linear-server__create_comment` with detailed findings
+   - **Use MCP tool:** `mcp__linear-server__save_comment` with detailed findings
 
 2. **KEEP ticket OPEN** - do NOT close:
    - Ticket should remain in current state until issues are fixed

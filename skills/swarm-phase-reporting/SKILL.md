@@ -30,14 +30,14 @@ The execute-ticket workflow posted all 7 phase reports correctly on the same wor
 ```
 1. Agent returns structured report
 2. VALIDATE report has required fields (see Report Validation below)
-3. POST report to Linear via mcp__linear-server__create_comment
+3. POST report to Linear via mcp__linear-server__save_comment
 4. VERIFY the comment was created (check for errors)
 5. ADD quality label if applicable
 6. UPDATE swarm state (if in epic-swarm)
 7. ONLY THEN advance to the next phase
 ```
 
-**Step 3 is the critical step that gets skipped.** If you are about to move to the next phase and you have not called `mcp__linear-server__create_comment` for this ticket and this phase — STOP. You are violating this rule.
+**Step 3 is the critical step that gets skipped.** If you are about to move to the next phase and you have not called `mcp__linear-server__save_comment` for this ticket and this phase — STOP. You are violating this rule.
 
 ## Report Format
 

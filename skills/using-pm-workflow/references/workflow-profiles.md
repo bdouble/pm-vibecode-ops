@@ -27,7 +27,7 @@ The decision is recorded in:
 
 **Phases that run:** `adaptation`, `implementation`, `codereview`
 
-**Phases skipped** (orchestrator posts N/A reports for audit trail): `testing`, `documentation`, `codex-review`, `security-scan`
+**Phases skipped** (orchestrator posts N/A reports for audit trail): `testing`, `documentation`, `codex-review`, `security-review`
 
 **Criteria — ALL must match for MINIMAL assignment:**
 
@@ -46,7 +46,7 @@ The decision is recorded in:
 
 ## Profile: STANDARD (7 phases) — DEFAULT
 
-**Phases that run:** `adaptation`, `implementation`, `testing`, `documentation`, `codereview`, `codex-review`, `security-scan`
+**Phases that run:** `adaptation`, `implementation`, `testing`, `documentation`, `codereview`, `codex-review`, `security-review`
 
 **Criteria:** This is the default. Any ticket that does NOT match MINIMAL criteria gets STANDARD. No explicit signals required.
 

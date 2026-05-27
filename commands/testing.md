@@ -1,6 +1,6 @@
 ---
 description: Generate comprehensive test suites with edge case coverage, security testing, and performance validation for implemented features.
-allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(gh pr comment:*), NotebookEdit, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
+allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(gh pr comment:*), NotebookEdit, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 argument-hint: [ticket-id] [test-types] [coverage] (e.g., /testing LIN-456 unit,integration 90)
 workflow-phase: testing
 closes-ticket: false
@@ -83,7 +83,7 @@ Create comprehensive tests for this ticket following the accuracy-first testing 
 After the agent returns its report:
 
 1. **Parse the agent's report** - Extract test files created, coverage metrics, issues found
-2. **Write the completion comment** - Use `mcp__linear-server__create_comment` with the structured testing report
+2. **Write the completion comment** - Use `mcp__linear-server__save_comment` with the structured testing report
 3. **Update ticket status if needed** - Use `mcp__linear-server__update_issue` (keep as "In Progress")
 4. **Verify success** - Confirm the comment was added
 5. **Report to user** - Summarize test coverage, any issues, next steps
@@ -132,7 +132,7 @@ You are acting as a **QA Engineer** responsible for building accurate, high-valu
 **Tools you will use:**
 - **Fetch ticket**: `mcp__linear-server__get_issue` - YOU fetch before agent invocation
 - **Fetch comments**: `mcp__linear-server__list_comments` - YOU fetch before agent invocation (implementation report is here!)
-- **Add comments**: `mcp__linear-server__create_comment` - YOU write after agent returns
+- **Add comments**: `mcp__linear-server__save_comment` - YOU write after agent returns
 - **Update status**: `mcp__linear-server__update_issue` - YOU update after agent returns
 
 Generate **accurate, compilable** test suites for ticket **$1** that use the actual API implementation.
@@ -334,7 +334,7 @@ During test generation and implementation, the agent MUST enforce different stan
 14. **Commit & Push**: Commit all test fixes and additions to feature branch
 15. **PR Comment**: Add testing summary with verification results
 16. **PR Status Update**: Add test commits, labels (only if all gates pass)
-17. **Linear Integration**: Use `mcp__linear-server__create_comment` with verification report
+17. **Linear Integration**: Use `mcp__linear-server__save_comment` with verification report
 
 ## 🆕 MANDATORY: API Discovery Phase (Before Writing Tests)
 
