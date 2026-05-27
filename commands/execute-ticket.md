@@ -112,7 +112,7 @@ This avoids paths and grep patterns being contaminated by flag tokens (e.g. an u
 **Extract `epic_id` — and verify the parent is actually an epic.** Linear's `parentId` points at any parent issue, not specifically epics. A sub-task of a Story carries a `parentId` but should NOT route into epic bookkeeping. Probe the parent before treating it as an epic.
 
 ```
-Read the parentId from the ticket fetched above. If null/absent, set epic_id=null and skip to path resolution.
+Read the parentId from the ticket fetched above. If null/absent, leave epic_id UNSET (in bash: do not assign; or assign empty string with epic_id=""). DO NOT write the literal string "null" — bash treats "null" as non-empty and the path-resolution branch below will produce orchestrator-log-null.md / observability/null/ / null.lock paths shared across every parent-less ticket.
 
 If parentId is present:
   1. Fetch the parent via mcp__linear-server__get_issue(parentId)
@@ -120,12 +120,12 @@ If parentId is present:
      - parent.parentId is null (epics are top-level — a sub-sub-ticket's grandparent is the epic, not its direct parent)
      - parent has children other than this ticket (a real epic has multiple sub-tickets; if the only child is this ticket, prefer solo and revisit when peer tickets appear)
      - OR the parent has a label matching ^(epic|type:epic|epic:.*)$ (explicit signal overrides the heuristic)
-  3. If those checks fail: set epic_id=null and treat as a solo run. Log to terminal:
+  3. If those checks fail: leave epic_id unset/empty and treat as a solo run. Log to terminal:
      "Parent <parentId> is not an epic (no epic label, or has its own parent, or has fewer than 2 children). Routing to solo bookkeeping."
   4. If they pass: set epic_id=parentId.
 ```
 
-`epic_id` is used downstream for: all JSONL observability paths (Step 1.5+), the orch-log append path (Step 3.7.x and Step 4), the phase report persistence path (Step 3.3), and the state.json upsert path (Step 4). When `epic_id=null`, bookkeeping routes to `_solo/` (observability/reports) or `orchestrator-log-tickets/` (orch-log) instead.
+`epic_id` is used downstream for: all JSONL observability paths (Step 1.5+), the orch-log append path (Step 3.7.x and Step 4), the phase report persistence path (Step 3.3), and the state.json upsert path (Step 4). When `epic_id` is empty/unset, bookkeeping routes to `_solo/` (observability/reports) or `orchestrator-log-tickets/` (orch-log) instead.
 
 **Resolve canonical local-artifact paths from `epic_id`:** Stash these four paths once at the top so every subsequent Step references them consistently. **Use absolute paths derived from the main repo's git-common-dir** — `git rev-parse --show-toplevel` returns the worktree root when called from inside a worktree, which would put locks/orch-logs/state in the worktree (different inode from the main checkout) and break the shared-lock contract with `/epic-swarm`. Using `git-common-dir` keeps all bookkeeping in the main checkout regardless of cwd.
 
@@ -136,22 +136,35 @@ If parentId is present:
 git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null)"
 git_common_dir="$(cd "$git_common_dir" 2>/dev/null && pwd)"
 REPO_ROOT="${git_common_dir%/.git}"
-REPO_ROOT="${REPO_ROOT%/.git/}"
 [ -z "$REPO_ROOT" ] && REPO_ROOT="$(git rev-parse --show-toplevel)"  # fallback for non-git contexts
+
+# Defensive: treat the literal string "null" (which Linear's JSON returns for missing
+# parents and a literal-minded reader might assign) as absent. Without this, every
+# parent-less ticket collides on orchestrator-log-null.md / observability/null/ / null.lock.
+[ "$epic_id" = "null" ] && epic_id=""
 
 if [ -n "$epic_id" ]; then
   ORCH_LOG="$REPO_ROOT/.swarm/orchestrator-log-${epic_id}.md"
   REPORTS_DIR="$REPO_ROOT/.swarm/context/${epic_id}/reports/${TICKET_ID}"
   JSONL_PATH="$REPO_ROOT/.swarm/observability/${epic_id}/${TICKET_ID}.jsonl"
   STATE_PATH="$REPO_ROOT/.swarm/state/${epic_id}.json"
+  LOCK_KEY="${epic_id}"
 else
   ORCH_LOG="$REPO_ROOT/.swarm/orchestrator-log-tickets/${TICKET_ID}.md"
   REPORTS_DIR="$REPO_ROOT/.swarm/context/_solo/${TICKET_ID}/reports"
   JSONL_PATH="$REPO_ROOT/.swarm/observability/_solo/${TICKET_ID}.jsonl"
   STATE_PATH=""   # Solo runs do not maintain a state.json — only epic-context runs do.
+  LOCK_KEY="solo-${TICKET_ID}"
 fi
 LOCK_DIR="$REPO_ROOT/.swarm/.locks"
-LOCK_FILE="$LOCK_DIR/${epic_id:-solo-$TICKET_ID}.lock"
+LOCK_FILE="$LOCK_DIR/${LOCK_KEY}.lock"
+
+# Create parent directories NOW (before Step 1.5 emits its first JSONL event) so
+# the very first `>> "$JSONL_PATH"` doesn't fail with "no such file or directory"
+# on a brand-new epic. Step 1.6 re-runs these mkdir calls idempotently for the
+# orch-log seed + helper definitions that come later — `mkdir -p` is safe to repeat.
+mkdir -p "$REPORTS_DIR" "$(dirname "$JSONL_PATH")" "$(dirname "$ORCH_LOG")" "$LOCK_DIR"
+[ -n "$STATE_PATH" ] && mkdir -p "$(dirname "$STATE_PATH")"
 ```
 
 These four (or three, for solo) paths are the **canonical bookkeeping surface** for the whole execution. They replace ad-hoc paths previously scattered through Steps 3.3, 3.6, 4.1, 4.2. `/epic-swarm` resolves `REPO_ROOT` the same way (see `commands/epic-swarm.md` §1.8) so both commands land on the same absolute paths and share the same kernel lock even when one runs inside a worktree.
@@ -235,26 +248,28 @@ Assign exactly one workflow profile to this ticket. The assignment governs which
 
 **Algorithm (run in order):**
 
-1. **If `--strict` flag passed to `/execute-ticket`** → assign `STRICT`. Stop.
-2. **If `--profile <name>` flag passed** → assign that profile. Stop.
-3. **Resume check:** fetch existing Linear comments and search for a `## Profile Assignment` comment. If found, parse the profile from it and use that value. Do NOT re-evaluate criteria on resume.
-4. **Evaluate MINIMAL criteria (ALL must match):**
-   - Ticket has at least one Linear label from: `docs-only`, `typo`, `config-only`, `comment-only`, `lockfile`, `lint-only`, `readme-only`, `error-message-wording`, `dep-bump-patch`
-     - OR ticket title/description matches one of: `"fix typo"`, `"update README"`, `"doc fix"`, `"docs only"`, `"config tweak"`, `"comment only"`, `"rename variable"`, `"lockfile update"`, `"lint fix"`, `"error message wording"`
-   - No acceptance criterion mentions: logic, behavior, API, endpoint, query, mutation, authentication, authorization, validation, test coverage, performance, security
-   - Estimated change scope: <30 lines net, 1-3 files affected (default to STANDARD if not estimable)
-   - No new dependencies introduced
-   - No schema changes (DB, GraphQL, OpenAPI, JSON Schema, Zod)
-   - If ALL match → assign `MINIMAL`. Else → assign `STANDARD`.
+1. **ALWAYS fetch existing Linear comments first** — store as `$prior_comments`. This is the resume-check fetch and it MUST run before any flag-driven branch so the idempotency gate at the end has comments to search regardless of how the profile was selected. (Prior versions skipped this fetch on `--strict` / `--profile` and posted duplicate Profile Assignment comments on resume — confirmed-latent bug A3.)
+2. **Determine the assigned profile** — first match wins:
+   - **Resumed:** if `$prior_comments` contains a `## Profile Assignment` header, parse the profile from it and use that value. `selection_source = "resumed-from-prior-comment"`. Do NOT re-evaluate criteria, do NOT honor flags (the prior assignment is the source of truth on resume).
+   - **`--strict` flag passed:** assign `STRICT`. `selection_source = "CLI flag --strict"`.
+   - **`--profile <name>` flag passed:** assign that profile. `selection_source = "CLI flag --profile"`.
+   - **Auto-detect against MINIMAL criteria (ALL must match):**
+     - Ticket has at least one Linear label from: `docs-only`, `typo`, `config-only`, `comment-only`, `lockfile`, `lint-only`, `readme-only`, `error-message-wording`, `dep-bump-patch`
+       - OR ticket title/description matches one of: `"fix typo"`, `"update README"`, `"doc fix"`, `"docs only"`, `"config tweak"`, `"comment only"`, `"rename variable"`, `"lockfile update"`, `"lint fix"`, `"error message wording"`
+     - No acceptance criterion mentions: logic, behavior, API, endpoint, query, mutation, authentication, authorization, validation, test coverage, performance, security
+     - Estimated change scope: <30 lines net, 1-3 files affected (default to STANDARD if not estimable)
+     - No new dependencies introduced
+     - No schema changes (DB, GraphQL, OpenAPI, JSON Schema, Zod)
+     - If ALL match → assign `MINIMAL` (`selection_source = "auto-detected"`). Else → assign `STANDARD`.
 
 **Record the assignment:**
 
-**Idempotency gate (BEFORE posting):** Search the comments already fetched in algorithm step 3 above (the resume-check fetch) for a `## Profile Assignment` comment header. If one is found:
+**Idempotency gate (BEFORE posting) — uniform regardless of selection_source.** Search `$prior_comments` (fetched in algorithm step 1) for a `## Profile Assignment` comment header. If one is found:
 - DO NOT post a new Profile Assignment comment (would create a duplicate).
 - Log to terminal: `Profile already assigned: <profile> (re-using from prior session)`.
 - Skip directly to the JSONL append in step 2 below, marking `selection_source` as `resumed-from-prior-comment` if not already.
 
-This prevents duplicate Profile Assignment comments on resume — confirmed-latent bug A3 from the v4.7 regression analysis.
+This prevents duplicate Profile Assignment comments on resume across EVERY selection path — auto-detect, `--strict`, `--profile`, and prior-comment-driven resume — closing bug A3 for all algorithm branches.
 
 1. Post a Linear comment on the ticket with title `## Profile Assignment`. Body:
    ```
@@ -391,10 +406,13 @@ phase_tail_append() {
 # $patterns_used_block, $cross_ticket_observations_block (use "— none —" for
 # any block that has no entries; never leave a variable empty).
 write_passed_entry() {
-  if entry_exists "$TICKET_ID" "PASSED"; then
-    return 0  # already recorded by a prior session
-  fi
+  # Double-checked locking: the existence check MUST run inside the flock too.
+  # Otherwise two concurrent writers both pass the outer check, both acquire the
+  # lock serially, and both append a duplicate Format A block (TOCTOU race).
   ( flock -x 200
+    if entry_exists "$TICKET_ID" "PASSED"; then
+      exit 0  # already recorded by a prior session — return from the subshell only
+    fi
     {
       printf '\n### %s — %s\n' "$TICKET_ID" "$ticket_title"
       printf '**Tier:** %s | **Source:** /execute-ticket | **Completed:** %s | **Outcome:** PASSED\n\n' \
@@ -416,10 +434,13 @@ write_passed_entry() {
 # hard-checkpoint failures. Caller MUST have bound: $ticket_title, $halt_phase,
 # $halt_reason, $phases_done.
 write_failed_entry() {
-  if entry_exists "$TICKET_ID" "FAILED" "$halt_phase"; then
-    return 0  # already recorded for this halt_phase
-  fi
+  # Double-checked locking — see write_passed_entry comment above. entry_exists
+  # MUST run inside the flock; otherwise concurrent writers both see "no FAILED
+  # block for this halt_phase yet" and both append.
   ( flock -x 200
+    if entry_exists "$TICKET_ID" "FAILED" "$halt_phase"; then
+      exit 0  # already recorded for this halt_phase — return from the subshell only
+    fi
     {
       printf '\n### %s — %s\n' "$TICKET_ID" "$ticket_title"
       printf '**Tier:** %s | **Source:** /execute-ticket | **Halted:** %s | **Outcome:** FAILED\n\n' \

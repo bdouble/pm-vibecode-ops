@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Read, Glob, Grep, LS, Task, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__list_issues, mcp__linear-server__list_projects
+allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Bash(mkdir:*), Bash(cat:*), Bash(jq:*), Bash(flock:*), Bash(date:*), Bash(printf:*), Bash(echo:*), Bash(test:*), Bash(rev-parse:*), Bash(git:*), Read, Write, Glob, Grep, LS, Task, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__list_issues, mcp__linear-server__list_projects
 description: Close completed epic with impact-bar-disciplined follow-up tickets (capped at 3), boundary-fix-or-propagation-epic for cross-cutting concerns, Considered-but-not-pursued closure-log, downstream impact propagation, and CLAUDE.md updates
 argument-hint: <epic-id> [--skip-deferred-review] [--skip-followups] [--skip-downstream] (e.g., /close-epic EPIC-123)
 workflow-phase: epic-closure
@@ -200,20 +200,25 @@ Use the Task tool to invoke the `epic-closure-agent` with ALL context embedded:
 - Testing and security findings
 - Original success criteria
 - List of related/dependent epics (for downstream analysis)
-- **Closure-log aggregation** (NEW in v4.7): for every sub-ticket, grep its phase report comments for both `### Considered but not pursued` (canonical h3) and `## Considered but not pursued` (legacy h2 — pre-v4.7 artifacts may use it) sections. Aggregate all entries — deduplicated — into the prompt under a `## Aggregated Closure-Log Across Sub-Tickets` section. The agent uses this to write the epic-level `### Considered but not pursued in this epic` section without losing items that lived only inside individual phase reports.
+- **Closure-log aggregation** (NEW in v4.7): for every sub-ticket, grep its phase report comments for `Considered but not pursued` sections at h2/h3/h4 (canonical h3, legacy h2 from v4.6.0, h4 when nested inside follow-up-discipline blocks — see `agents/epic-closure-agent.md` template). Aggregate all entries — deduplicated — into the prompt under a `## Aggregated Closure-Log Across Sub-Tickets` section. The agent uses this to write the epic-level `### Considered but not pursued in this epic` section without losing items that lived only inside individual phase reports.
 
-**Aggregation pseudocode:**
+**Aggregation pseudocode** (canonical procedure — `skills/closure-log-aggregation/SKILL.md` operationalizes this):
 ```
 aggregated = []
 for ticket in sub_tickets:
     comments = mcp__linear-server__list_comments(ticket.id)
     for c in comments:
-        for level in ["##", "###"]:  # h2 legacy, h3 canonical
+        # Match (##|###|####)\s+Considered but not pursued at line start.
+        # h2 = v4.6.0 legacy. h3 = canonical phase-report section.
+        # h4 = nested inside epic-closure-agent's Follow-Up Discipline block.
+        for level in ["##", "###", "####"]:
             entries = extract_section(c.body, f"{level} Considered but not pursued")
             for e in entries:
-                aggregated.append({"ticket": ticket.id, "entry": e})
-# Deduplicate by entry text similarity (>80% overlap = same item)
-# Pass aggregated list into prompt
+                aggregated.append({"ticket": ticket.id, "phase": c.phase, "entry": e})
+# Deduplicate ONLY when entry body is byte-identical across two source tickets.
+# Different wording is different signal — do not collapse near-duplicates.
+# (Rule lives in skills/closure-log-aggregation/SKILL.md — kept in sync here.)
+# Pass aggregated list into prompt, preserving per-entry [from TICKET-ID/phase] attribution.
 ```
 
 **Heading-level note:** `### Considered but not pursued` (h3) is canonical as of v4.7. The h2 fallback exists to catch v4.6-era artifacts that emitted h2 inconsistently. New phase reports and agent templates use h3 only.
@@ -697,6 +702,22 @@ The agent writes one sentence stating what boundary mechanism was considered and
 - Boundary-question answer (one sentence)
 - Up to 3 follow-up recommendations, each with: title, impact-bar sentence, files/surfaces, priority (P0-P3), estimated effort, acceptance criteria
 - Considered-but-not-pursued list with rationales (this is the audit trail for everything that did NOT clear the bar)
+
+**Observability emissions for Phase 3 (v4.7 — append to `.swarm/observability/<epic-id>/_epic.jsonl`):**
+
+For **every candidate that fails the impact bar** (moved to closure-log instead of filed as a ticket), emit one `impact_bar_rejected` event:
+
+```json
+{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":"close-epic","event":"impact_bar_rejected","data":{"candidate_title":"<title>","reason":"<one-line — generic-for, no-prod-behavior-change, etc.>","disposition":"closure-log"}}
+```
+
+For **every boundary-question answer** (Rule B was invoked because the candidate was a cross-cutting pattern), emit one `boundary_question_answered` event:
+
+```json
+{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":"close-epic","event":"boundary_question_answered","data":{"candidate_title":"<title>","outcome":"single-enforcement-installed | propagation-ticket-filed | propagation-bar-failed","mechanism":"<one-line — what enforcement was considered>"}}
+```
+
+Both events feed the `IMPACT BAR & CLOSURE-LOG` dashboard section in `/swarm-stats`. Without them the v4.6 anti-sprawl discipline is invisible to operators — the metric structurally cannot exist.
 
 **Naming note:** The output is no longer called "retrofit recommendations" — it's now "follow-up discipline." The change is semantic: under the new policy, follow-ups are a residual outcome (most items should land in the closure-log), not a default expectation. Ticket titles use `[Follow-up]` rather than `[Retrofit]`.
 

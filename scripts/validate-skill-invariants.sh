@@ -186,7 +186,18 @@ while IFS= read -r skill; do
     continue   # New skill in this branch — no merge-base content to protect.
   fi
 
-  BASE_PROTECTED_RANGES=$(printf '%s\n' "$BASE_CONTENT" | extract_protected_ranges)
+  # `set -e` does NOT propagate exit codes through command substitution, so we
+  # cannot let `extract_protected_ranges`'s exit 3 (malformed input) silently
+  # collapse to empty output here — the caller would `continue` past it and the
+  # malformed skill ships. Capture stderr + exit code explicitly and surface them.
+  BASE_PROTECTED_ERR=$(mktemp)
+  if ! BASE_PROTECTED_RANGES=$(printf '%s\n' "$BASE_CONTENT" | extract_protected_ranges 2>"$BASE_PROTECTED_ERR"); then
+    cat "$BASE_PROTECTED_ERR" >&2
+    echo "  (in $skill at merge-base $MERGE_BASE)" >&2
+    rm -f "$BASE_PROTECTED_ERR"
+    exit 3
+  fi
+  rm -f "$BASE_PROTECTED_ERR"
   if [[ -z "$BASE_PROTECTED_RANGES" ]]; then
     continue   # No protected regions in the merge-base version — nothing to enforce.
   fi

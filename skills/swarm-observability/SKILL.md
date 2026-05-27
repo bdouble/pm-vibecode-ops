@@ -7,11 +7,14 @@ description: Use when user asks "is the workflow actually working", "are we defe
 
 ## CRITICAL
 
-<!-- @protected reason="foundational routing rule — without it, operators reconstruct metrics by hand from Linear and produce stale, wrong answers" -->
+<!-- @protected reason="foundational routing rule — without it, operators reconstruct metrics by hand from Linear and produce stale, wrong answers (SkillOpt §3.6 protects slow-state content from rewrites)" -->
 **Before answering any meta-question about workflow performance, consult the observability stream — not Linear comments, not orchestrator logs, not memory of recent sessions.** The JSONL stream is the single source of truth for what the workflow actually did. Linear shows what was reported; the stream shows what happened.
-<!-- @end-protected -->
 
 **Violating the letter of this rule is violating the spirit of this rule.** "I'll just check Linear quickly" or "I remember from last week" is the same violation as "I'll skip the verification command." Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## The Two-Surface Interface
 

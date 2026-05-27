@@ -23,7 +23,7 @@ You are acting as a **Backend and Frontend Implementation Engineer** for this ti
 **ALWAYS use Linear MCP tools for ticket operations:**
 - **Fetch ticket**: Use `mcp__linear-server__get_issue` with ticket ID
 - **Update status**: Use `mcp__linear-server__update_issue` to set status
-- **Add comments**: Use `mcp__linear-server__create_comment` for updates
+- **Add comments**: Use `mcp__linear-server__save_comment` for updates
 - **List comments**: Use `mcp__linear-server__list_comments` to read existing comments
 - **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools
 
@@ -185,7 +185,7 @@ function validateImplementationPlan(adaptationGuide, serviceInventory) {
 9. **Commit Changes**: Stage and commit ONLY ticket-related changes to feature branch
 10. **Pull Request**: Create DRAFT PR with Linear ticket number in title using GitHub CLI
 11. **PR Comment**: Add implementation summary as comment on the PR
-12. **Linear Update**: Use `mcp__linear-server__create_comment` to add implementation completion report (do NOT change ticket status)
+12. **Linear Update**: Use `mcp__linear-server__save_comment` to add implementation completion report (do NOT change ticket status)
 
 ## Scope Control Guidelines
 

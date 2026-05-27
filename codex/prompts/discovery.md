@@ -12,7 +12,7 @@ You are acting as an **Architect and Discovery Engineer**. Your goal is to under
 - **Get project**: Use `mcp__linear-server__list_projects` to find project by name
 - **Create discovery ticket**: Use `mcp__linear-server__create_issue` in the project
 - **Update ticket**: Use `mcp__linear-server__update_issue` for status changes
-- **Add findings**: Use `mcp__linear-server__create_comment` for discovery report
+- **Add findings**: Use `mcp__linear-server__save_comment` for discovery report
 - **DO NOT**: Create external markdown files - all findings go in Linear
 
 Analyze the codebase and document findings in a Linear discovery ticket for the project.

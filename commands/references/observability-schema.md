@@ -10,12 +10,24 @@ Canonical reference for `.swarm/observability/<epic>/<ticket-id>.jsonl` event st
 .swarm/observability/
 ├── <epic-id>/
 │   ├── <ticket-id-1>.jsonl     # per-ticket event stream when run inside an epic
-│   └── <ticket-id-2>.jsonl
+│   ├── <ticket-id-2>.jsonl
+│   └── _epic.jsonl             # epic-level events only (epic_completed,
+│                               # followup_cap_blocked, impact_bar_rejected,
+│                               # boundary_question_answered) emitted by
+│                               # /close-epic. Distinct from per-ticket
+│                               # files: aggregators MUST NOT mix them
+│                               # into per-ticket metrics — see
+│                               # scripts/swarm-stats.sh "two streams" pattern.
 └── _solo/
     └── <ticket-id>.jsonl       # standalone /execute-ticket runs (no epic context)
 ```
 
 Each `.jsonl` file is append-only. One JSON object per line. Never modify or delete prior lines — the file IS the audit trail.
+
+**Three audiences for the file split:**
+- Per-ticket files (`<epic-id>/<ticket-id>.jsonl`) — phase-loop, deferral, codex, ticket-lifecycle events. Single ticket's audit trail.
+- Epic-level file (`<epic-id>/_epic.jsonl`) — closure-time events that have no single ticket parent: epic_completed, followup_cap_blocked, impact_bar_rejected, boundary_question_answered. Emitted by `/close-epic`.
+- Solo files (`_solo/<ticket-id>.jsonl`) — `/execute-ticket` invoked against a ticket with no epic parent. Same event types as per-ticket files; no epic-level file exists for solo runs.
 
 ---
 
@@ -318,23 +330,25 @@ Emitted by `/close-epic` after all sub-tickets are Done/Cancelled and the closur
 
 ## Where each event is emitted
 
-| Event | `/execute-ticket` | `/epic-swarm` | `/close-epic` |
-|---|:-:|:-:|:-:|
-| `profile_assigned` | Step 1.5 (existing) | §1.5.7 (existing) | — |
-| `profile_overridden` | Step 1.5 when `--profile` or `--strict` passed | §1.5.7 same | — |
-| `phase_started` | Step 3 dispatch loop, before agent invoke | §3.2.2 before agent invoke | — |
-| `phase_completed` | Step 3 dispatch loop, after report parsed | §3.2.7 after report parsed | — |
-| `phase_skipped_na` | Step 1.5 after posting each N/A report | §3.2.5b after posting each N/A | — |
-| `deferral_redispatch` | Step 3.6 (existing JSONL is here, supplement with new schema) | §3.6 same | — |
-| `deferral_accepted` | Step 3.6 / Step 3.9 user-decision branches | §3.6 / §3.9 same | — |
-| `impact_bar_rejected` | At the discrete decision point when a candidate item is closure-logged instead of filed as a ticket — one event per item, with `candidate_summary` and `why_below_bar` populated at that moment | same | Step 4 closure-log aggregation |
-| `boundary_question_answered` | At the discrete decision point when the boundary question is answered (single-enforcement-point vs. per-surface-tickets) | same | Step 4 follow-up discipline output |
-| `followup_cap_blocked` | — (close-epic only) | — | Step 4 when candidate count > 3 pre-cap |
-| `codex_finding_resolved` | Step 3.8 per finding | §3.8 per finding | — |
-| `codex_scope_escape` | Step 3.8 SCOPE_EXPANSION_ESCAPE branch | §3.8 same | — |
-| `ticket_completed` | Step 4 after Linear set to Done | §3.5.6 after Linear set to Done | — |
-| `ticket_failed` | Step 4 on any halt | §3.2.7 / §3.3 fail / §3.5 conflict | — |
-| `epic_completed` | — | — | Step 4 after closure comment lands |
+**Routing convention:** events with `epic_id` + `ticket_id` populated land in `<epic-id>/<ticket-id>.jsonl` (or `_solo/<ticket-id>.jsonl`). Events with `epic_id` populated but `ticket_id: null` land in `<epic-id>/_epic.jsonl`. Aggregators key off this routing — keeping epic-level events out of per-ticket files prevents the "inflated per-ticket metric" failure mode.
+
+| Event | `/execute-ticket` | `/epic-swarm` | `/close-epic` | File |
+|---|:-:|:-:|:-:|:-:|
+| `profile_assigned` | Step 1.5 (existing) | §1.5.7 (existing) | — | per-ticket |
+| `profile_overridden` | Step 1.5 when `--profile` or `--strict` passed | §1.5.7 same | — | per-ticket |
+| `phase_started` | Step 3 dispatch loop, before agent invoke | §3.2.2 before agent invoke | — | per-ticket |
+| `phase_completed` | Step 3 dispatch loop, after report parsed | §3.2.7 after report parsed | — | per-ticket |
+| `phase_skipped_na` | Step 1.5 after posting each N/A report | §3.2.5b after posting each N/A | — | per-ticket |
+| `deferral_redispatch` | Step 3.6 (existing JSONL is here, supplement with new schema) | §3.6 same | — | per-ticket |
+| `deferral_accepted` | Step 3.6 / Step 3.9 user-decision branches | §3.6 / §3.9 same | — | per-ticket |
+| `impact_bar_rejected` | — | — | Phase 3 — one event per candidate moved to closure-log (see `commands/close-epic.md` Phase 3 emission block) | epic-level (`_epic.jsonl`) |
+| `boundary_question_answered` | — | — | Phase 3 — one event per cross-cutting candidate's Rule B answer (see `commands/close-epic.md` Phase 3 emission block) | epic-level (`_epic.jsonl`) |
+| `followup_cap_blocked` | — | — | Step 6 when candidate count > 3 pre-cap | epic-level (`_epic.jsonl`) |
+| `codex_finding_resolved` | Step 3.8 per finding | §3.8 per finding | — | per-ticket |
+| `codex_scope_escape` | Step 3.8 SCOPE_EXPANSION_ESCAPE branch | §3.8 same | — | per-ticket |
+| `ticket_completed` | Step 4 after Linear set to Done | §3.5.6 after Linear set to Done | — | per-ticket |
+| `ticket_failed` | Step 4 on any halt | §3.2.7 / §3.3 fail / §3.5 conflict | — | per-ticket |
+| `epic_completed` | — | — | Step 6 after closure comment lands | epic-level (`_epic.jsonl`) |
 
 ---
 

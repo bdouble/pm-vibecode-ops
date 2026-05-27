@@ -26,7 +26,7 @@ You are acting as the **Architect** for this ticket. Focus on analysis, planning
 **ALWAYS use Linear MCP tools for ticket operations:**
 - **Fetch ticket**: Use `mcp__linear-server__get_issue` with ticket ID
 - **Update status**: Use `mcp__linear-server__update_issue` to set status
-- **Add comments**: Use `mcp__linear-server__create_comment` for updates
+- **Add comments**: Use `mcp__linear-server__save_comment` for updates
 - **List comments**: Use `mcp__linear-server__list_comments` to read existing comments
 - **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools
 
@@ -149,7 +149,7 @@ The adaptation phase must create implementation guides that result in production
       * Has long-term architectural value AND
       * Cannot fit reasonably in Linear comment
     - **NEVER**: Create temporary markdown files that won't be useful after implementation
-12. **Linear Comment**: Use `mcp__linear-server__create_comment` to add COMPLETE adaptation report with ALL implementation guidance (do NOT change status to done)
+12. **Linear Comment**: Use `mcp__linear-server__save_comment` to add COMPLETE adaptation report with ALL implementation guidance (do NOT change status to done)
     - This is the PRIMARY deliverable - should contain everything engineers need
     - External files are RARE exceptions, not the default
 
@@ -215,7 +215,7 @@ git push origin "project/$PROJECT_NAME"
 4. **Parent Ticket Update**:
 ```javascript
 // Update parent ticket with project information
-await mcp__linear-server__create_comment({
+await mcp__linear-server__save_comment({
   issueId: parentTicket.id,
   body: `
 ## 📋 Project Created for Large Feature

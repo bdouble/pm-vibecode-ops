@@ -1,0 +1,44 @@
+name: Validate skill invariants
+
+# Enforce SkillOpt §3.6 protected-region discipline at PR time. Without this
+# gate, a contributor can silently rewrite a foundational principle inside a
+# `<!-- @protected -->` block. SkillOpt's ablation table puts the cost of
+# losing this safeguard at 22 SpreadsheetBench points (77.5 → 55.0).
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**/SKILL.md'
+      - 'scripts/validate-skill-invariants.sh'
+      - '.github/workflows/validate-skills.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**/SKILL.md'
+      - 'scripts/validate-skill-invariants.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with full history so merge-base resolves)
+        uses: actions/checkout@v4
+        with:
+          # Need both branches in the local clone for `git merge-base` to work
+          # against the PR's base ref. fetch-depth: 0 = full history.
+          fetch-depth: 0
+
+      - name: Resolve base ref
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "ref=origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=HEAD~1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run validator
+        run: bash scripts/validate-skill-invariants.sh "${{ steps.base.outputs.ref }}"

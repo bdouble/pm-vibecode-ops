@@ -23,54 +23,64 @@ Render a single dashboard view of the v4.7 JSONL observability stream for an epi
 
 2. **Detect legacy data**: Pre-v4.7 JSONL files only contain `profile_assigned` events. Render with a "**Pre-v4.7 epic — partial data only**" badge in the dashboard header; missing-metric cells display `—`. Per Tier 3 decision #5: no backfill in v4.7.
 
-3. **Shell out**: Call `scripts/swarm-stats.sh "$ARGUMENTS" [flags]` and stream the output verbatim. The shell script owns formatting and aggregation logic — keep this slash command thin so CI and operators see identical output.
+3. **Shell out**: Resolve `scripts/swarm-stats.sh` against the repo root and call it with the parsed argv, NOT a single quoted blob. `bash $REPO_ROOT/scripts/swarm-stats.sh $TARGET $FLAGS` (let the shell word-split `$ARGUMENTS` into TARGET + flags first; passing `"$ARGUMENTS"` as one quoted argv slot collapses `PRO-1156 --per-skill` into a single TARGET string and the flag never reaches arg parsing). Stream the output verbatim. The shell script owns formatting and aggregation logic — keep this slash command thin so CI and operators see identical output.
 
 4. **Surface the headline number**: After the dashboard prints, add a one-line summary highlighting the most important signal: deferral acceptance rate trend, impact-bar rejection count, or follow-up cap compliance.
 
 ## Expected dashboard layout (default, no flags)
 
-```
-EPIC PRO-1156 — 10 tickets, MINIMAL/STANDARD mix
-Wall clock: 14h22m | Started 2026-05-24 | Closed 2026-05-25
+Matches what `scripts/swarm-stats.sh` actually emits. Counts come from the per-ticket stream (`.swarm/observability/<epic-id>/<ticket-id>.jsonl`) except `IMPACT BAR & CLOSURE-LOG` and `LIFECYCLE: Epics completed`, which read the epic-level stream (`_epic.jsonl`).
 
+```
+EPIC PRO-1156 — 10 ticket(s)
 PROFILES
-├── MINIMAL:  3 tickets
-├── STANDARD: 7 tickets
-└── STRICT:   0 tickets   (overrides: 0)
+├── MINIMAL:  3 ticket(s)
+├── STANDARD: 7 ticket(s)
+└── STRICT:   0 ticket(s)   (overrides: 0)
 
 PHASES
-├── Live dispatched: 47 of 70 expected     (33% N/A via profile — working)
-├── Re-dispatched:    2 (sufficiency stall on PRO-1158/testing)
-└── Failed phases:    1 (PRO-1163/codereview — CHANGES_REQUESTED, recovered)
+├── Live dispatched:  47 (47 completed)
+└── Skipped via N/A:  23
 
 DEFERRAL DISCIPLINE
-├── Re-dispatch attempted: 12
-├── Re-dispatch accepted:  3   (all met catastrophic condition)
-└── Re-dispatch rejected:  9   (rate: 75% — discipline holding)
+├── Re-dispatched:   9
+└── Accepted:        3   (catastrophic-justified)
 
 IMPACT BAR & CLOSURE-LOG
 ├── Closure-log entries:  28
-├── P3 tickets filed:      0
-└── Follow-up cap blocks:  0   (capacity within ≤3)
+├── Boundary-question:    2
+└── Follow-up cap blocks: 0
 
 CODEX REVIEW
-├── Findings resolved:        23
-├── Auto-fixed:               18
-├── User-escalated:            2
-├── Closure-log only (P3):     3
-└── SCOPE_EXPANSION_ESCAPE:    0
+├── Findings resolved:   23
+├── Auto-fixed:          18
+├── User-escalated:      2
+├── Closure-log (P3):    3
+└── SCOPE_ESCAPE filed:  0
 
-EPIC CLOSURE
-├── Follow-ups filed:     1 of 3 cap
-├── Closure-log items:    8 aggregated across sub-tickets
-└── Boundary-question:    2 invoked, 1 single-enforcement, 1 cross-cutting
+LIFECYCLE
+├── Tickets completed:   10
+├── Tickets failed:      0
+└── Epics completed:     1
+
+Headline: 12 deferral attempt(s) — 9 rejected (75%), 3 accepted as catastrophic-justified.
 ```
 
 ## Expected dashboard with `--per-skill`
 
-```
-EPIC PRO-1156 — per-skill activation and compliance
+**Status (v4.7):** The `--per-skill` flag is wired into the script but its data source — `skill_activated` JSONL events from Tier 5 audit instrumentation — is **not yet emitted in v4.7**. The flag currently renders a placeholder:
 
+```
+------------------------------------------------------------
+PER-SKILL ACTIVATION (SkillOpt principle: drill down, never trust aggregate)
+
+  (per-skill metrics require skill_activated events from Tier 5 audit instrumentation.
+   These events are NOT yet emitted in v4.7 — Tier 5 deliverable. Placeholder for now.)
+```
+
+The target shape, once `skill_activated` events ship in v4.8+, will look like:
+
+```
 SKILL                          ACTIVATIONS  COMPLIANCE  NOTES
 no-silent-deferrals            24×          96%         1 violation: PRO-1158 silent defer
 production-code-standards      47×          100%

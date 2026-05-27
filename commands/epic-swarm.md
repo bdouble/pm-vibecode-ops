@@ -1700,27 +1700,65 @@ For each ticket that completed all phases:
 
 **Append idiom — use flock to serialize with concurrent `/execute-ticket` invocations against the same epic (Tier 4):** `$ORCH_LOG` and `$LOCK_FILE` were resolved in §1.2 using the worktree-safe `$REPO_ROOT` derivation, so `/epic-swarm` (which may run from a worktree) and `/execute-ticket` (running from the main checkout, or from a different worktree) land on the same absolute lock file and the same kernel lock.
 
+**Shared bookkeeping helpers** — these MUST be defined in this `/epic-swarm` shell context (slash commands have independent shells; helpers documented in `commands/execute-ticket.md` Step 1.6.1 are NOT auto-imported here). The orchestrator defines them once before the first §3.4 append and reuses them throughout. The shape is intentionally identical to execute-ticket.md's so a concurrent `/execute-ticket` writing the same `$ORCH_LOG` produces byte-identical Format A/B blocks:
+
+```bash
+# entry_exists — multi-line aware idempotency check. Scans $ORCH_LOG for a
+# block starting with "### <ticket-id> — " and ending at the next "### " or EOF;
+# matches the outcome (and, for FAILED, the halt_phase). A naive line-oriented
+# grep would NEVER match — PASSED/FAILED live on line 2, not on the heading.
+entry_exists() {
+  local id="$1" outcome="$2" halt="${3:-}"
+  [ -f "$ORCH_LOG" ] || return 1
+  awk -v id="$id" -v out="$outcome" -v halt="$halt" '
+    BEGIN { in_block=0; o_ok=0; h_ok=(halt=="") }
+    {
+      if ($0 ~ "^### "id" — ") { in_block=1; o_ok=0; h_ok=(halt==""); next }
+      if (in_block && /^### /) { in_block=0 }
+      if (in_block && index($0, "**Outcome:** " out))     { o_ok=1 }
+      if (in_block && halt!="" && index($0, "**Failure point:** " halt)) { h_ok=1 }
+      if (in_block && o_ok && h_ok) { found=1; exit }
+    }
+    END { exit !found }
+  ' "$ORCH_LOG"
+}
+
+# safe_jq_update — atomic jq+mv for state.json with explicit failure surfacing.
+safe_jq_update() {
+  local target="$1"; shift
+  local tmp
+  tmp="$(mktemp)" || { echo "ERROR: mktemp failed" >&2; return 1; }
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" RETURN
+  if ! jq "$@" "$target" > "$tmp"; then
+    echo "ERROR: jq failed updating $target — leaving original untouched" >&2
+    return 1
+  fi
+  if [ ! -s "$tmp" ]; then
+    echo "ERROR: jq produced empty output for $target — refusing to overwrite" >&2
+    return 1
+  fi
+  mv "$tmp" "$target"
+}
+```
+
+**Append idiom — double-checked locking.** Run `entry_exists` INSIDE the flock subshell. Running it outside (as the prior spec showed) is a TOCTOU race: two concurrent writers both pass the check, both serially acquire the lock, both append, producing duplicate Format A blocks.
+
 ```bash
 ( flock -x 200
-  cat >> "$ORCH_LOG" << 'ENTRY'
-### [TICKET-ID] — [title]
-**Tier:** [N] | **Completed:** [timestamp] | **Outcome:** PASSED
+  # entry_exists MUST run inside the lock — otherwise concurrent writers race.
+  if entry_exists "$TICKET_ID" "PASSED"; then
+    exit 0   # subshell return; outer continues
+  fi
+  cat >> "$ORCH_LOG" << ENTRY
+### $TICKET_ID — $ticket_title
+**Tier:** $tier_num | **Source:** /epic-swarm | **Completed:** $(date -u +%Y-%m-%dT%H:%M:%SZ) | **Outcome:** PASSED
 ...
 ENTRY
 ) 200>"$LOCK_FILE"
 ```
 
-See `commands/execute-ticket.md` Step 3.7.0 for the parallel flock idiom on the `/execute-ticket` side. Both commands use `safe_jq_update` (defined in `commands/execute-ticket.md` Step 1.6.1) for state.json writes so a corrupt input surfaces an error rather than silently leaving a stale file.
-
-**Idempotency on resume — multi-line aware check.** A line-oriented `grep -q "^### $TICKET_ID — .*PASSED"` will NEVER match the multi-line Format A/B blocks (PASSED/FAILED live on the **Tier/Outcome** line, NOT on the heading line). Use `entry_exists` (defined in `commands/execute-ticket.md` Step 1.6.1) which scans the block from `### <ticket-id> — ` to the next `### ` heading or EOF and matches the outcome and (for FAILED) the halt_phase line:
-
-```bash
-if ! entry_exists "$TICKET_ID" "PASSED"; then
-  ( flock -x 200
-    # ... append Format A block ...
-  ) 200>"$LOCK_FILE"
-fi
-```
+See `commands/execute-ticket.md` Step 1.6.1 for the parallel definitions of these helpers and Step 3.7.0 / Step 4 for their use sites on the `/execute-ticket` side. Both commands MUST define these helpers in their own shell scope and use the same double-checked-locking idiom so concurrent execution stays race-free.
 
 If a previous session wrote a FAILED entry and the current session retried and PASSED, `entry_exists` returns false for PASSED (no prior PASSED block exists), so the new block is appended; the audit trail preserves both attempts.
 

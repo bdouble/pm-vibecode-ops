@@ -46,26 +46,38 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ---------- locate stream ----------
+#
+# Three input modes:
+#   1. TARGET is an epic-id (dir at $OBS_ROOT/$TARGET) → epic-wide dashboard
+#   2. TARGET is a solo ticket-id ($OBS_ROOT/_solo/$TARGET.jsonl) → single-ticket dashboard
+#   3. TARGET is a sub-ticket of an epic (found by walking epic dirs) → single-ticket dashboard
+#      scoped to JUST that ticket's stream (NOT the epic's other tickets)
 
-EPIC_DIR=""
-SOLO_FILE=""
+EPIC_DIR=""             # epic-level surface (only set in mode 1)
+TICKET_FILE=""          # specific ticket's jsonl (set in modes 2 and 3)
+MODE=""
 
 if [[ -d "$OBS_ROOT/$TARGET" ]]; then
   EPIC_DIR="$OBS_ROOT/$TARGET"
+  MODE="epic"
 elif [[ -f "$OBS_ROOT/_solo/$TARGET.jsonl" ]]; then
-  SOLO_FILE="$OBS_ROOT/_solo/$TARGET.jsonl"
+  TICKET_FILE="$OBS_ROOT/_solo/$TARGET.jsonl"
+  MODE="ticket-solo"
 else
-  # Walk epic dirs looking for the ticket
+  # Walk epic dirs looking for the ticket. When found, scope to JUST that
+  # ticket's file — do NOT promote to epic mode (would silently expand scope).
   for d in "$OBS_ROOT"/*/; do
     [[ -d "$d" ]] || continue
     if [[ -f "$d$TARGET.jsonl" ]]; then
-      EPIC_DIR="${d%/}"
+      TICKET_FILE="$d$TARGET.jsonl"
+      EPIC_DIR="${d%/}"   # retained for the _epic.jsonl side-stream below
+      MODE="ticket-in-epic"
       break
     fi
   done
 fi
 
-if [[ -z "$EPIC_DIR" && -z "$SOLO_FILE" ]]; then
+if [[ -z "$EPIC_DIR" && -z "$TICKET_FILE" ]]; then
   echo "no observability stream found for '$TARGET'" >&2
   echo "  checked: $OBS_ROOT/$TARGET/" >&2
   echo "  checked: $OBS_ROOT/_solo/$TARGET.jsonl" >&2
@@ -73,49 +85,103 @@ if [[ -z "$EPIC_DIR" && -z "$SOLO_FILE" ]]; then
   exit 2
 fi
 
-# ---------- collect stream into a single concatenated jsonl ----------
+# ---------- collect streams into temp files ----------
+#
+# Two streams maintained separately so per-ticket metrics never see epic-level
+# events (epic_completed, followup_cap_blocked, impact_bar_rejected,
+# boundary_question_answered all land in _epic.jsonl per observability-schema.md).
+#
+#   $STREAM      — per-ticket events (the source for PROFILES, PHASES, DEFERRAL,
+#                  CODEX, ticket lifecycle)
+#   $EPIC_STREAM — epic-level events (the source for EPICS_DONE, CAP_BLOCKED,
+#                  IMPACT_REJ, BOUNDARY counts)
+#
+# Per-ticket mode ("ticket-solo" and "ticket-in-epic") loads only one file into
+# $STREAM. "ticket-in-epic" mode still reads its parent's _epic.jsonl into
+# $EPIC_STREAM so the operator sees epic-level signals that mention this ticket.
 
 STREAM=$(mktemp -t swarm-stats.XXXXXX)
-trap 'rm -f "$STREAM"' EXIT
+EPIC_STREAM=$(mktemp -t swarm-stats-epic.XXXXXX)
+trap 'rm -f "$STREAM" "$EPIC_STREAM"' EXIT
 
-if [[ -n "$EPIC_DIR" ]]; then
-  for f in "$EPIC_DIR"/*.jsonl; do
-    [[ -f "$f" ]] || continue
-    # _epic.jsonl holds epic-level events (epic_completed, followup_cap_blocked) that
-    # are NOT per-ticket events — including it inflates all per-ticket metric counts.
-    [[ "$(basename "$f")" == "_epic.jsonl" ]] && continue
-    cat "$f" >> "$STREAM"
-  done
-elif [[ -n "$SOLO_FILE" ]]; then
-  cat "$SOLO_FILE" >> "$STREAM"
-fi
+case "$MODE" in
+  epic)
+    for f in "$EPIC_DIR"/*.jsonl; do
+      [[ -f "$f" ]] || continue
+      if [[ "$(basename "$f")" == "_epic.jsonl" ]]; then
+        cat "$f" >> "$EPIC_STREAM"
+      else
+        cat "$f" >> "$STREAM"
+      fi
+    done
+    ;;
+  ticket-solo)
+    cat "$TICKET_FILE" >> "$STREAM"
+    ;;
+  ticket-in-epic)
+    cat "$TICKET_FILE" >> "$STREAM"
+    # Pick up the parent epic's _epic.jsonl too (epic-level signals are
+    # operationally relevant when zooming into a single ticket of an epic).
+    if [[ -f "$EPIC_DIR/_epic.jsonl" ]]; then
+      cat "$EPIC_DIR/_epic.jsonl" >> "$EPIC_STREAM"
+    fi
+    ;;
+esac
 
-if [[ ! -s "$STREAM" ]]; then
+if [[ ! -s "$STREAM" && ! -s "$EPIC_STREAM" ]]; then
   echo "stream is empty for '$TARGET'" >&2
   exit 2
 fi
 
 # ---------- detect legacy vs v4.7 ----------
+#
+# Legacy = an existing per-ticket stream contains only profile_assigned events
+# AND nothing else has been emitted. The first jq returning empty (parse error)
+# is NOT legacy — it's a parse failure that should surface, not silently mask
+# as a full-coverage v4.7 stream.
 
 LEGACY=0
-EVENT_TYPES=$(jq -rs '[.[].event] | unique | .[]' "$STREAM" 2>/dev/null || echo "")
-# Count distinct event types that are NOT profile_assigned. grep -v returning no matches
-# yields exit code 1 under pipefail, so guard with `|| true` (intentional under set -e).
-NON_PROFILE=$(printf '%s\n' "$EVENT_TYPES" | grep -cv '^profile_assigned$' || true)
-NON_PROFILE=${NON_PROFILE:-0}
-if [[ "$NON_PROFILE" == "0" ]]; then
-  LEGACY=1
+JQ_PARSED=1
+EVENT_TYPES=$(jq -rs '[.[].event] | unique | .[]' "$STREAM" 2>/dev/null) || JQ_PARSED=0
+
+if [[ "$JQ_PARSED" == "0" ]]; then
+  echo "warning: failed to parse '$STREAM' as JSONL — metrics suppressed" >&2
+  LEGACY=1   # render with all-dashes; do NOT claim full coverage on parse failure
+elif [[ -z "$EVENT_TYPES" ]]; then
+  # Empty stream is a degenerate case but not legacy. Leave LEGACY=0 so the
+  # dashboard renders zeros honestly.
+  :
+else
+  # Use grep -E with newline-separated input. -c counts matching lines; flip to
+  # "non-profile event types" by inverting the regex match in awk to avoid the
+  # pipefail / "no matches → exit 1" trap of grep -v.
+  NON_PROFILE=$(printf '%s\n' "$EVENT_TYPES" | awk '$0 != "profile_assigned" && NF > 0 {n++} END {print n+0}')
+  if [[ "$NON_PROFILE" == "0" ]]; then
+    LEGACY=1
+  fi
 fi
 
 # ---------- header ----------
+#
+# TICKET_COUNT only meaningful in epic mode. Use find (no pipefail trap) instead
+# of the prior ls|grep|wc pipeline that crashes when the directory contains
+# only _epic.jsonl.
 
-if [[ -n "$EPIC_DIR" ]]; then
-  TICKET_COUNT=$(ls "$EPIC_DIR"/*.jsonl 2>/dev/null | grep -v '_epic.jsonl' | wc -l | tr -d ' ')
-  HEADER_LABEL="EPIC $TARGET — $TICKET_COUNT ticket(s)"
-else
-  TICKET_COUNT=1
-  HEADER_LABEL="TICKET $TARGET (standalone /execute-ticket)"
-fi
+case "$MODE" in
+  epic)
+    TICKET_COUNT=$(find "$EPIC_DIR" -maxdepth 1 -type f -name '*.jsonl' ! -name '_epic.jsonl' 2>/dev/null | wc -l | tr -d ' ')
+    HEADER_LABEL="EPIC $TARGET — $TICKET_COUNT ticket(s)"
+    ;;
+  ticket-solo)
+    TICKET_COUNT=1
+    HEADER_LABEL="TICKET $TARGET (standalone /execute-ticket)"
+    ;;
+  ticket-in-epic)
+    TICKET_COUNT=1
+    parent_epic=$(basename "$EPIC_DIR")
+    HEADER_LABEL="TICKET $TARGET (sub-ticket of epic $parent_epic)"
+    ;;
+esac
 
 echo "$HEADER_LABEL"
 if [[ "$LEGACY" == "1" ]]; then
@@ -125,13 +191,18 @@ if [[ "$LEGACY" == "1" ]]; then
 fi
 
 # ---------- aggregations ----------
+#
+# count_event() reads $STREAM (per-ticket events).
+# count_epic_event() reads $EPIC_STREAM (epic-level events).
+# An empty/missing source is gracefully handled by `[ -s "$file" ] && ... || echo 0`.
 
-count_event() { jq -rs --arg e "$1" '[.[] | select(.event==$e)] | length' "$STREAM"; }
+count_event()      { [[ -s "$STREAM"      ]] && jq -rs --arg e "$1" '[.[] | select(.event==$e)] | length' "$STREAM"      || echo 0; }
+count_epic_event() { [[ -s "$EPIC_STREAM" ]] && jq -rs --arg e "$1" '[.[] | select(.event==$e)] | length' "$EPIC_STREAM" || echo 0; }
 
 # .data.profile = execute-ticket envelope format; .profile = epic-swarm legacy top-level format
-PROFILES_MINIMAL=$(jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "MINIMAL"))] | length' "$STREAM")
-PROFILES_STANDARD=$(jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "STANDARD"))] | length' "$STREAM")
-PROFILES_STRICT=$(jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "STRICT"))] | length' "$STREAM")
+PROFILES_MINIMAL=$( [[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "MINIMAL"))]  | length' "$STREAM" || echo 0)
+PROFILES_STANDARD=$([[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "STANDARD"))] | length' "$STREAM" || echo 0)
+PROFILES_STRICT=$(  [[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "STRICT"))]   | length' "$STREAM" || echo 0)
 OVERRIDES=$(count_event profile_overridden)
 
 PHASES_STARTED=$(count_event phase_started)
@@ -141,19 +212,24 @@ PHASES_NA=$(count_event phase_skipped_na)
 REDISPATCH=$(count_event deferral_redispatch)
 ACCEPTED=$(count_event deferral_accepted)
 
-IMPACT_REJ=$(count_event impact_bar_rejected)
-BOUNDARY=$(count_event boundary_question_answered)
-CAP_BLOCKED=$(count_event followup_cap_blocked)
+# impact_bar_rejected and boundary_question_answered are EPIC-LEVEL events
+# emitted by /close-epic Phase 3 (see commands/close-epic.md and
+# commands/references/observability-schema.md). Per-ticket streams will not
+# contain them; read from $EPIC_STREAM.
+IMPACT_REJ=$(count_epic_event impact_bar_rejected)
+BOUNDARY=$(count_epic_event boundary_question_answered)
+CAP_BLOCKED=$(count_epic_event followup_cap_blocked)
 
 CODEX_RES=$(count_event codex_finding_resolved)
-CODEX_AUTO=$(jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="auto_fixed")] | length' "$STREAM")
-CODEX_USER=$(jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="user_decision")] | length' "$STREAM")
-CODEX_LOG=$(jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="closure_log")] | length' "$STREAM")
+CODEX_AUTO=$([[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="auto_fixed")]    | length' "$STREAM" || echo 0)
+CODEX_USER=$([[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="user_decision")] | length' "$STREAM" || echo 0)
+CODEX_LOG=$( [[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="closure_log")]   | length' "$STREAM" || echo 0)
 CODEX_ESCAPE=$(count_event codex_scope_escape)
 
 TICKETS_DONE=$(count_event ticket_completed)
 TICKETS_FAILED=$(count_event ticket_failed)
-EPICS_DONE=$(count_event epic_completed)
+# epic_completed lands in _epic.jsonl per close-epic.md Step 6 — read from epic stream.
+EPICS_DONE=$(count_epic_event epic_completed)
 
 # ---------- render core dashboard ----------
 
@@ -234,13 +310,24 @@ if [[ "$AUDIT_DELTAS" == "1" ]]; then
 fi
 
 # ---------- one-line headline ----------
+#
+# Each headline expresses a SINGLE counter and what it means — no derived ratios.
+# The earlier "deferral acceptance rate ACCEPTED*100/REDISPATCH" was mathematically
+# wrong: deferral_accepted and deferral_redispatch are INDEPENDENT events per
+# observability-schema.md §3.6, so the ratio is not a rate and can exceed 100%.
+# Prefer absolute counts with a deferral-discipline interpretation.
 
 if [[ "$LEGACY" == "0" ]]; then
-  if [[ "$REDISPATCH" -gt 0 ]]; then
-    acceptance=$(( ACCEPTED * 100 / REDISPATCH ))
-    echo "Headline: deferral acceptance rate $acceptance% ($ACCEPTED of $REDISPATCH)."
+  TOTAL_DEFERRALS=$(( ACCEPTED + REDISPATCH ))
+  if [[ "$TOTAL_DEFERRALS" -gt 0 ]]; then
+    # Of all deferral attempts (= accepted + rejected-and-redispatched), what
+    # fraction were rejected? Rising rejection rate = discipline holding.
+    rej_pct=$(( REDISPATCH * 100 / TOTAL_DEFERRALS ))
+    echo "Headline: $TOTAL_DEFERRALS deferral attempt(s) — $REDISPATCH rejected ($rej_pct%), $ACCEPTED accepted as catastrophic-justified."
   elif [[ "$IMPACT_REJ" -gt 0 ]]; then
     echo "Headline: $IMPACT_REJ closure-log entries — sprawl-reduction discipline active."
+  elif [[ "$EPICS_DONE" -gt 0 ]]; then
+    echo "Headline: $EPICS_DONE epic(s) closed, $TICKETS_DONE ticket(s) completed."
   elif [[ "$TICKETS_DONE" -gt 0 ]]; then
     echo "Headline: $TICKETS_DONE ticket(s) completed cleanly."
   else

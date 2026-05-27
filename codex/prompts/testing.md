@@ -23,7 +23,7 @@ You are acting as a **QA Engineer** responsible for building accurate, high-valu
 **ALWAYS use Linear MCP tools for ticket operations:**
 - **Fetch ticket**: Use `mcp__linear-server__get_issue` with ticket ID
 - **Update status**: Use `mcp__linear-server__update_issue` to reflect testing progress
-- **Add comments**: Use `mcp__linear-server__create_comment` for testing summary and results
+- **Add comments**: Use `mcp__linear-server__save_comment` for testing summary and results
 - **List comments**: Use `mcp__linear-server__list_comments` to review test requirements or concerns
 - **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools when available
 

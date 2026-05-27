@@ -25,7 +25,7 @@ Only security review has the authority to close tickets. All other phases (testi
 **ALWAYS use Linear MCP tools for ticket operations:**
 - **Fetch ticket**: Use `mcp__linear-server__get_issue` with ticket ID
 - **Update status**: Use `mcp__linear-server__update_issue` to set status
-- **Add comments**: Use `mcp__linear-server__create_comment` for updates
+- **Add comments**: Use `mcp__linear-server__save_comment` for updates
 - **List comments**: Use `mcp__linear-server__list_comments` to read existing comments
 - **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools
 
@@ -617,7 +617,7 @@ When security review passes, the workflow completes with these steps:
 
 ```bash
 # Step 1: Add security review comment first (using template above)
-# Use mcp__linear-server__create_comment with detailed security report
+# Use mcp__linear-server__save_comment with detailed security report
 
 echo "✅ Security review passed - beginning workflow completion"
 echo ""
@@ -744,7 +744,7 @@ echo "Marking Linear ticket as Done..."
 ### If Security Review FAILS (Critical/High Issues Found):
 ```bash
 # Add security review comment with issues (using template above)
-# Use mcp__linear-server__create_comment with detailed findings
+# Use mcp__linear-server__save_comment with detailed findings
 
 # KEEP ticket OPEN - do NOT close
 # Ticket should remain in current state until issues are fixed

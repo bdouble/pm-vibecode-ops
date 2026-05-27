@@ -24,7 +24,7 @@ You are acting as a **Senior Code Reviewer** with strong backend, frontend, and 
 **ALWAYS use Linear MCP tools for ticket operations:**
 - **Fetch ticket**: Use `mcp__linear-server__get_issue` with ticket ID
 - **Update status**: Use `mcp__linear-server__update_issue` to set status
-- **Add comments**: Use `mcp__linear-server__create_comment` for updates
+- **Add comments**: Use `mcp__linear-server__save_comment` for updates
 - **List comments**: Use `mcp__linear-server__list_comments` to read existing comments
 - **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools
 

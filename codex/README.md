@@ -80,7 +80,7 @@ Where possible, prompts use **Linear MCP** naming and behavior:
 
 - `mcp__linear-server__get_issue`
 - `mcp__linear-server__list_comments`
-- `mcp__linear-server__create_comment`
+- `mcp__linear-server__save_comment`
 - `mcp__linear-server__update_issue`
 - `mcp__linear-server__list_issues`, `list_projects`, `create_project`, etc.
 

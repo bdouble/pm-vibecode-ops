@@ -5,6 +5,58 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.1] - 2026-05-27
+
+Patch release fixing 15 defects surfaced by an extra-high-recall code review of the v4.7.0 ship. Every fix has a concrete failure scenario in the regression / review notes — these aren't latent issues, they're things that broke or would have broken on the next operator session.
+
+### Fixed — Observability stack
+
+- **`scripts/swarm-stats.sh` — EPICS_DONE / CAP_BLOCKED / IMPACT_REJ / BOUNDARY counters always 0.** The script excluded `_epic.jsonl` from its stream concatenation but then read events emitted only to that file. Refactored to maintain TWO streams (per-ticket → `$STREAM`, epic-level → `$EPIC_STREAM`) so every counter reads from the file that actually contains its events.
+- **`scripts/swarm-stats.sh` — TICKET_COUNT pipefail crash.** `ls | grep -v '_epic.jsonl' | wc -l` exited 1 under `set -euo pipefail` whenever the directory contained only `_epic.jsonl`, aborting the script silently. Replaced with `find` (no pipeline, no trap).
+- **`scripts/swarm-stats.sh` — ticket-id input rendered epic-wide dashboard.** Walking epic dirs to find a ticket-id silently promoted to epic mode. Now distinguishes three modes (`epic` / `ticket-solo` / `ticket-in-epic`) and scopes per-ticket queries to the actual ticket file.
+- **`scripts/swarm-stats.sh` — deferral acceptance rate math nonsensical.** `ACCEPTED * 100 / REDISPATCH` treated independent events as numerator/denominator and produced ratios > 100%. Replaced headline with absolute counts and a true rejection rate over the actual deferral-attempt universe (`ACCEPTED + REDISPATCH`).
+- **`scripts/swarm-stats.sh` — empty event-types misclassified as v4.7 (no legacy banner).** Empty `printf` + `grep -cv` counted the empty line as 1, producing a non-legacy verdict. Replaced with `awk` that ignores empty lines + explicit JQ_PARSED flag so parse failures surface instead of masking as full-coverage.
+
+### Fixed — `/close-epic`
+
+- **`commands/close-epic.md` — frontmatter blocked `epic_completed` JSONL emission.** `allowed-tools` was git-only Bash with no `Write` and no `Bash(mkdir|jq|cat|...)`, so Step 6's append-to-`_epic.jsonl` instruction structurally couldn't run. Added the bash sub-commands + `Write`.
+- **`commands/close-epic.md` — closure-log dedup contradicted skills/closure-log-aggregation/SKILL.md.** Pseudocode said "deduplicate by >80% text similarity"; skill said "byte-identical only." Aligned the command pseudocode with the skill (verbatim, byte-identical-only).
+- **`commands/close-epic.md` — `impact_bar_rejected` and `boundary_question_answered` had no emission point.** `commands/references/observability-schema.md` declared three commands emit these; grep found zero call sites. Added concrete emission instructions to Phase 3 with full envelope shapes.
+
+### Fixed — `/execute-ticket`
+
+- **`commands/execute-ticket.md` — `--strict` flag skipped idempotency gate.** Algorithm step 1 stopped before step 3 fetched comments; the gate then ran against an empty comment list and posted a duplicate Profile Assignment on resume — the exact A3 regression v4.7.0 claimed to fix. Restructured the algorithm so the resume-check fetch ALWAYS runs first, and the gate applies uniformly across every selection_source.
+- **`commands/execute-ticket.md` — LOCK_FILE / orch-log / state.json collision when epic_id is literal `"null"`.** `${epic_id:-fallback}` doesn't trigger on the 4-character string `"null"`. Step 1 prose explicitly said "set epic_id=null" — a literal-minded reader produces `null.lock`, `orchestrator-log-null.md`, etc., shared across every parent-less ticket. Added defensive `[ "$epic_id" = "null" ] && epic_id=""` plus prose clarifying that empty/unset is the convention.
+- **`commands/execute-ticket.md` — Step 1.5 wrote JSONL before Step 1.6 mkdir.** First `profile_assigned` event on a fresh epic failed "no such file or directory" because the parent dir didn't exist yet. Moved the directory-creation block from Step 1.6 into the end of Step 1, ahead of any JSONL emission.
+- **`commands/execute-ticket.md` — TOCTOU race in `write_passed_entry` / `write_failed_entry`.** `entry_exists` ran OUTSIDE the flock; two concurrent writers both passed the check, both serially appended a Format A/B block. Moved the existence check INSIDE the flock subshell (double-checked locking, matching the seed pattern at Step 1.6.2).
+
+### Fixed — Cross-platform consistency
+
+- **`codex/prompts/*.md` + `codex/README.md` — 16 stale `mcp__linear-server__create_comment` refs.** Tier 1's C9 rename swept the Claude Code commands but stopped at the codex/ tree. Migrated all 9 codex files. The OpenAI Codex platform's audit-trail contract now actually works.
+- **`TECHNICAL_REFERENCE.md` — stale `--skip-retrofit` (3 occurrences) + stale `.swarm/orchestrator-log.md` path.** v4.6's flag rename to `--skip-followups` and v4.7 Tier 4's path canonicalization to `orchestrator-log-<epic-id>.md` missed this primary technical-reference doc. Updated both, plus refreshed the seven-phase workflow listing and Key Features to reflect the v4.6/v4.7 follow-up discipline rename.
+
+### Fixed — Skill / SkillOpt infrastructure
+
+- **`skills/closure-log-aggregation/SKILL.md` — field name mismatch.** Skill emitted `data.closure_log_entries_aggregated`; canonical schema and writer use `closure_log_items`. Renamed in both prose mentions.
+- **`skills/closure-log-aggregation/SKILL.md` + `skills/swarm-observability/SKILL.md` — `@protected` envelope shape diverged from convention.** Both new skills wrapped only the foundational sentence, omitting the spirit-over-letter sentence and the `### Slow/Meta Update Log` subsection that every carry-forward skill includes inside the envelope. Updated to match — the SkillOpt §3.6 protection now extends to the spirit-sentence and the audit-pass log surface in both new skills.
+- **`agents/epic-closure-agent.md` h4 closure-log template.** Template emitted `#### Considered but not pursued (closure-log)` which the aggregator regex `(##|###)` didn't match. Expanded the regex to `(##|###|####)` in both close-epic.md pseudocode AND closure-log-aggregation/SKILL.md so all three heading levels aggregate.
+- **`commands/epic-swarm.md` — `entry_exists` / `safe_jq_update` undefined in `/epic-swarm` shell scope.** Both commands referenced helpers "defined in commands/execute-ticket.md Step 1.6.1" but slash commands have independent shell scopes. Inlined the helper definitions into `/epic-swarm` alongside execute-ticket's so concurrent execution produces byte-identical Format A/B blocks. Same double-checked-locking idiom applied at the §3.4 use site.
+- **`scripts/validate-skill-invariants.sh` — `extract_protected_ranges` exit-code 3 silently swallowed.** Command substitution drops the exit code under `set -e`, so malformed `@protected` regions silently bypassed validation. Captured stderr + exit code explicitly so malformed skills now block the gate as documented.
+- **`scripts/validate-skill-invariants.sh` — advertised as "CI gate" but wired into nothing.** Added `.github/workflows/validate-skills.yml` to run the script on every PR that touches `skills/**/SKILL.md` or the validator itself, against the merge-base of the PR's base ref. The 22-point SkillOpt §3.6 safeguard is now actually enforced.
+
+### Fixed — Documentation
+
+- **`commands/swarm-stats.md` — documented dashboard layout didn't match script output.** "Wall clock" header, "EPIC CLOSURE" section, "Re-dispatched / Failed phases" labels appeared in docs but the script never emitted them. Rewrote the layout to match what the script actually produces, including the new headline format.
+- **`commands/swarm-stats.md` — wrapper instruction quoted `"$ARGUMENTS"` defeating flag parsing.** `/swarm-stats PRO-1156 --per-skill` collapsed into a single TARGET string. Updated the wrapper instruction to word-split argv before passing to the script.
+- **`commands/swarm-stats.md` — `--per-skill` flag advertised but not implemented.** Slash command doc described a populated per-skill table; the script renders a placeholder because `skill_activated` events don't exist in v4.7. Updated the doc to clearly mark the current placeholder state and the target shape post-Tier-5f.
+- **`commands/references/observability-schema.md` — `_epic.jsonl` missing from file-layout diagram.** The third surface (epic-level events) was never documented despite three event types landing there. Added to the diagram + "three audiences" prose + the "Where each event is emitted" table now has an explicit `File` column.
+
+### Changed
+
+- **Version bump**: 4.7.0 → 4.7.1 (patch — no spec changes, all fixes are corrections to v4.7.0's intended behavior).
+
+---
+
 ## [4.7.0] - 2026-05-27
 
 The v4.5/v4.6 releases shipped working discipline (deferral prevention, workflow profiles, model tiering) and working judgment scaffolding (impact bar, closure log, hands-off codex, ≤3 follow-up cap). What was broken underneath was the **bookkeeping layer** — orchestrator logs silently stopping, observability capturing one event type, closure logs without aggregation, `/execute-ticket` not updating epic-level artifacts, hooks contradicting skills, stale tool names. v4.7 fixes the bookkeeping and adopts SkillOpt (Yang et al., 2026) discipline for the skill suite. **17 regressions cataloged in `context/regression-analysis-v4.5-v4.6.md` are addressed.**
@@ -2146,6 +2198,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.7.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.7.1
 [4.7.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.7.0
 [4.6.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.6.0
 [4.5.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.5.0

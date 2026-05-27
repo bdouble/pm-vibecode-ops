@@ -412,30 +412,30 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 
 #### `/close-epic`
 
-**Purpose**: Formally closes completed epics with comprehensive closure analysis including retrofit recommendations, downstream impact propagation, and CLAUDE.md updates.
+**Purpose**: Formally closes completed epics with impact-bar-disciplined follow-up tickets (capped at 3), boundary-fix-or-propagation analysis for cross-cutting concerns, Considered-but-not-pursued closure-log, downstream impact propagation, and CLAUDE.md updates.
 
-**Usage**: `/close-epic <epic-id> [--skip-retrofit] [--skip-downstream]`
+**Usage**: `/close-epic <epic-id> [--skip-deferred-review] [--skip-followups] [--skip-downstream]`
 
 **Examples**:
 ```bash
 # Basic epic closure
 /close-epic EPIC-123
 
-# Skip retrofit analysis (faster closure)
-/close-epic EPIC-123 --skip-retrofit
+# Skip the follow-up discipline phase (faster closure; closure-log aggregation still runs)
+/close-epic EPIC-123 --skip-followups
 
 # Skip downstream impact propagation
 /close-epic EPIC-123 --skip-downstream
 
-# Minimal closure (skip both optional phases)
-/close-epic EPIC-123 --skip-retrofit --skip-downstream
+# Minimal closure (skip multiple optional phases)
+/close-epic EPIC-123 --skip-deferred-review --skip-followups --skip-downstream
 ```
 
 **Key Features**:
 - **Scalable Context Gathering**: For epics with 7+ tickets, spawns parallel `ticket-context-agent` instances to gather and summarize ticket context, preventing context exhaustion
 - **Completion Verification (BLOCKING)**: Validates ALL sub-tickets are Done or Cancelled
-- **Retrofit Analysis**: Identifies patterns worth propagating backward to existing code
-- **Retrofit Ticket Creation**: Automatically creates detailed Linear tickets for each retrofit recommendation with full specifications (context, implementation guidance, acceptance criteria)
+- **Closure-Log Aggregation (v4.7)**: Pulls every `### Considered but not pursued` section (h2/h3/h4 tolerated) from every sub-ticket's phase comments and aggregates them into the epic closure under `## Aggregated Closure-Log Across Sub-Tickets` — verbatim, byte-identical-only dedup, preserving attribution
+- **Follow-Up Discipline (was Retrofit)**: Candidates pass through impact-bar + boundary question; absolute cap of 3 filed tickets; everything else lands in the closure-log. Ticket titles use `[Follow-up]` (not `[Retrofit]`)
 - **Downstream Impact**: Propagates guidance to dependent/related epics
 - **Documentation Audit**: Maps implemented features against CLAUDE.md coverage
 - **CLAUDE.md Updates**: Proposes and applies documentation updates
@@ -446,15 +446,15 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 - **Large Epics (7+ tickets)**: Parallel `ticket-context-agent` instances process batches of 5-6 tickets each, returning summarized context to prevent context overflow
 
 **Seven-Phase Workflow**:
-1. Completion Verification - Validate all sub-tickets complete (blocking)
-2. Deferred Work Recovery - Surface and triage deferred items across tickets (skippable with `--skip-deferred-review`)
-3. Retrofit Analysis - Find patterns to propagate backward (skippable)
-4. Downstream Impact - Add guidance to dependent epics (skippable)
-5. Documentation Audit - Check CLAUDE.md coverage
-6. CLAUDE.md Updates - Apply documentation changes
-7. Closure Summary - Create final epic closure report
+1. Late Findings Scan (REQUIRED — check for workarounds, disabled tests, TODOs)
+2. Deferred Work Recovery — surface and triage deferred items across tickets (skippable with `--skip-deferred-review`)
+3. Follow-Up Discipline — boundary question, impact bar, ≤3 follow-ups cap (skippable with `--skip-followups`)
+4. Downstream Impact — guidance to dependent epics (skippable with `--skip-downstream`)
+5. Documentation Audit — check CLAUDE.md coverage
+6. CLAUDE.md Updates — apply documentation changes
+7. Closure Summary — final epic closure report including the aggregated closure-log
 
-**Output**: Epic marked as Done, closure report added as comment, deferred recovery tickets and retrofit tickets created in Linear, CLAUDE.md updated.
+**Output**: Epic marked as Done, closure report added as comment, deferred recovery tickets and follow-up tickets (≤3) created in Linear, CLAUDE.md updated, `epic_completed` observability event emitted to `.swarm/observability/<epic-id>/_epic.jsonl`.
 
 **Time**: 10-20 minutes depending on epic size and options selected
 
@@ -483,7 +483,7 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 - **Ticket-Sequential Full Pipeline**: Each ticket runs ALL 7 phases (adaptation → implementation → testing → documentation → code review → codex review → security scan) before the next ticket starts. This ensures every ticket's adaptation examines code built by all prior tickets.
 - **Hard Checkpoint Before Merge**: After all 7 phases complete, the orchestrator fetches all Linear comments and verifies all 7 required report headers exist. Missing reports = HARD STOP. This prevents the phase-skipping failure observed in prior production runs.
 - **Dependency-Aware Tier Scheduling**: Topological sort assigns tickets to tiers based on dependency depth. Tickets in later tiers see all prior tier code in their worktrees.
-- **Orchestrator Notes**: Persistent `.swarm/orchestrator-log.md` records files created, interfaces defined, and patterns used per ticket. Read during subsequent tickets' adaptation phases for cross-ticket context.
+- **Orchestrator Notes**: Persistent `.swarm/orchestrator-log-<epic-id>.md` (or `.swarm/orchestrator-log-tickets/<ticket-id>.md` for solo `/execute-ticket` runs) records files created, interfaces defined, and patterns used per ticket. Read during subsequent tickets' adaptation phases for cross-ticket context. Both `/epic-swarm` and `/execute-ticket` write to the same file under a shared `flock` on `.swarm/.locks/<epic-id>.lock` (v4.7 Tier 4).
 - **Generic Worktree Setup**: Auto-detects build system from lockfiles (npm/pnpm/yarn/bun/pip/cargo/go/bundler), runs install + generate commands. No hardcoded tech-stack references.
 - **Per-Ticket Merge**: Each ticket merges to the epic branch immediately after passing the hard checkpoint, so the next ticket's worktree includes all prior work.
 - **Dual Security Review**: Pre-merge per-ticket scan catches individual vulnerabilities; post-merge comprehensive review on the integrated codebase catches cross-ticket security issues.

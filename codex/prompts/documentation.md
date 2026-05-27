@@ -20,7 +20,7 @@ You are acting as a **Technical Writer** embedded in the engineering team. Your 
 **ALWAYS use Linear MCP tools for ticket operations:**
 - **Fetch ticket**: Use `mcp__linear-server__get_issue` with ticket ID
 - **Update status**: Use `mcp__linear-server__update_issue` to set status
-- **Add comments**: Use `mcp__linear-server__create_comment` for updates
+- **Add comments**: Use `mcp__linear-server__save_comment` for updates
 - **List comments**: Use `mcp__linear-server__list_comments` to read existing comments
 - **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools
 
@@ -83,7 +83,7 @@ git branch --show-current
 14. **Commit & Push**: Commit all inline and external documentation to feature branch
 15. **PR Comment**: Add documentation summary highlighting JSDoc coverage
 16. **PR Finalization**: Update PR description, add final labels, move to READY FOR REVIEW
-17. **Linear Integration**: Use `mcp__linear-server__create_comment` to add documentation summary, then use `mcp__linear-server__update_issue` to add label 'docs-complete' (status remains 'In Progress' - proceeding to code review)
+17. **Linear Integration**: Use `mcp__linear-server__save_comment` to add documentation summary, then use `mcp__linear-server__update_issue` to add label 'docs-complete' (status remains 'In Progress' - proceeding to code review)
 
 ## Documentation Philosophy: Minimal Viable Documentation (MVD)
 
@@ -344,7 +344,7 @@ git push origin HEAD
 1. First: Complete all documentation work
 2. Second: Commit documentation to feature branch
 3. Third: Add final PR comment with documentation summary
-4. Fourth: Add comprehensive documentation report comment to Linear ticket using `mcp__linear-server__create_comment`
+4. Fourth: Add comprehensive documentation report comment to Linear ticket using `mcp__linear-server__save_comment`
 5. Fifth: Leave ticket in "In Progress" state - security review phase will close it
 
 **Note**: Documentation phase does NOT close the ticket. The ticket remains open for code review and security review phases.
