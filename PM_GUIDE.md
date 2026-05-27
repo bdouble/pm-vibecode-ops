@@ -77,7 +77,9 @@ The workflow includes **skills**—quality standards that AI enforces automatica
 
 **Why this matters for PMs**: Issues are prevented during development, not just caught at review. Fewer problems make it to code review and security review phases.
 
-**Learn more**: [SKILLS.md](SKILLS.md) | [Official Skills Documentation](https://code.claude.com/docs/en/skills)
+**Maintaining the skill suite over time** (v4.7): the workflow's 15-event observability stream measures whether each skill is doing its job. After shipping a few epics, run `/swarm-stats <epic-id> --per-skill` to surface per-skill activation and compliance rates. When a skill drifts (rising deferral acceptance, dropping codex auto-fix rate, or per-skill compliance under 90%), the [Skill Audit Playbook](docs/SKILL_AUDIT_PLAYBOOK.md#the-operator-loop) walks you through a bounded-edit audit pass to fix the drift. Audits aren't on a calendar — they're triggered by signal.
+
+**Learn more**: [SKILLS.md](SKILLS.md) | [Skill Audit Playbook](docs/SKILL_AUDIT_PLAYBOOK.md) | [Official Skills Documentation](https://code.claude.com/docs/en/skills)
 
 ### Key Terminology (PM Translation)
 

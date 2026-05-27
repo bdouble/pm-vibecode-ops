@@ -16,6 +16,57 @@ How to run a manual SkillOpt-style audit on a pm-vibecode-ops skill. This is the
 
 ---
 
+## The Operator Loop
+
+Audits aren't on a calendar — they're driven by signal from the observability stream. The loop is:
+
+1. **Ship.** Run `/execute-ticket` and `/epic-swarm` on real work. Every ticket emits to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` automatically — no extra step.
+2. **Measure.** After each epic (or at your weekly/monthly review cadence), run `/swarm-stats <epic-id>` for the headline dashboard, and `/swarm-stats <epic-id> --per-skill` for per-skill activation and compliance rates.
+3. **Diagnose.** Map dashboard signals to audit candidates using the table below.
+4. **Audit.** When a signal crosses threshold (cadence rule: *discipline-skill audits quarterly OR triggered by 3+ observed compliance failures in the wild*), pick that skill and run the 11-step pass below.
+5. **Re-measure.** Next epic's dashboard tells you whether the audit moved the needle. If yes, audit budget consumed for that skill; if no, the next pass starts from the REFACTOR-phase rationalizations you logged at Step 8.
+
+### Diagnostic signals → audit candidates
+
+| Dashboard signal | Likely cause | Audit candidate |
+|---|---|---|
+| Deferral acceptance rate rising past 30% across consecutive epics | Padded justifications slipping through; orchestrator being permissive. Read 2-3 raw `data.items[].catastrophic_condition` payloads to confirm. | `no-silent-deferrals` |
+| Few closure-log entries + many follow-up filings | Impact-bar discipline not firing — agents defaulting to "file ticket" without considering the bar | `no-silent-deferrals` Part 2 (impact bar) and/or `epic-closure-validation` |
+| Codex auto-fix rate <50% | Humans doing too much of codex's job; disposition discipline drifting | `codex-finding-resolution` |
+| Closure-log roll-up suspiciously low + mixed h2/h3 headings observed in sub-tickets | Aggregator dropping entries at the heading-drift boundary | `closure-log-aggregation` |
+| Per-skill compliance <90% on `--per-skill` view | That specific skill is observably failing in the wild | Audit THAT skill, whatever it is |
+| `phase_skipped_na` count doesn't match the profile's expected skip set | Phases being skipped without N/A justification | Usually `testing-philosophy`; sometimes profile-classifier logic (not a skill audit) |
+| Falling N/A rate on MINIMAL tickets without a ticket-mix shift | Profile classifier mis-routing — observability surfaces it first | `execute-ticket.md` profile selection (not a skill audit) |
+
+**Healthy patterns** (audit NOT needed): codex auto-fix rate ≥70%, deferral acceptance <30%, non-zero closure-log volume paired with low follow-up volume, phase skips matching the profile spec. The workflow is doing what it was designed to do — audit only when one of these moves materially against you across **2-3 consecutive epics**, not on a single bad epic.
+
+### Worked example
+
+Q1 review across three epics shipped through `/epic-swarm`. The aggregated dashboard shows:
+
+```
+DEFERRAL DISCIPLINE
+  deferral_redispatch: 14
+  deferral_accepted:   11
+  Acceptance rate:     44%   ← target <30%
+```
+
+Acceptance is high and rising. Read three random `deferral_accepted` events' `data.items[].catastrophic_condition` field. Two of three contain time/effort phrasings — "would require significant testing", "edge case that's tricky" — rather than the four enumerated catastrophic conditions. **Diagnosis: `no-silent-deferrals` is drifting** — the orchestrator is letting padded justifications through.
+
+Run the 11-step audit on `no-silent-deferrals`:
+
+- **Step 2 (scenarios):** pull 5 train scenarios verbatim from the three Linear sessions where padded justifications were accepted; author 3 selection + 3 test scenarios from related but unseen sessions; lock the test split.
+- **Step 3 (RED baseline):** 4 of 5 train scenarios produce the same padded phrasing without the skill loaded.
+- **Step 4 (bounded edits):** 2 edits — add the two new padded phrasings to the Rationalization Prevention table; add "tricky" and "would require significant" to the Red-Flag Phrases list. (Edit budget used: 2 of 4.)
+- **Step 6 (selection gate):** all 3 selection scenarios improve; no regression. Accept.
+- **Step 8 (REFACTOR):** one new rationalization appears ("the spec is ambiguous on this case") — logged for the next pass, not closed this pass.
+- **Step 9 (TEST):** 3/3 pass after edits; 1/3 passed before the change. Generalization confirmed.
+- **Ship.** SKILL.md change wrapped in `<!-- @override approved-by="brian" reason="Q1 audit — see .swarm/skill-audits/no-silent-deferrals/" -->`; `bash scripts/validate-skill-invariants.sh main` passes; commit.
+
+Next epic's dashboard: `deferral_accepted: 3, deferral_redispatch: 18, acceptance rate 14%`. The audit landed.
+
+---
+
 ## Step 1: Decide discipline vs reference
 
 The first decision: is this a discipline skill or a reference skill? The full SkillOpt-style audit (tripartite scenarios + bounded edits + rejected-edit buffer + edit-apply-report) applies only to discipline skills. Reference skills get a lighter pass.
@@ -209,9 +260,12 @@ The audit is a heavy tool. Use it when the skill is observably failing, not as a
 
 ## Audit pass cadence
 
-A reasonable cadence:
+Quick reference (see [The Operator Loop](#the-operator-loop) above for the full signal-driven trigger flow):
+
 - **Light audits:** once per minor release (every 2-3 months)
 - **Discipline-skill audits:** once per quarter, OR triggered by 3+ observed compliance failures in the wild, whichever is sooner
 - **New-skill authoring:** treat as audit pass 0 — author the train/selection/test splits when the skill is created so future audits start from a known baseline
+
+"Observed compliance failures" means signal from `/swarm-stats --per-skill`, not gut feel. The Operator Loop's diagnostic-signals table is the routing layer between observability and audit.
 
 The infrastructure (`.swarm/skill-audits/`, the schemas, this playbook) is built in v4.7. The first FULL audit using it is a v4.8 effort. v4.7's contribution is the scaffold + the two new skills built to the spec (`swarm-observability`, `closure-log-aggregation`).
