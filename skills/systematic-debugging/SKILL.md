@@ -11,7 +11,12 @@ description: Use when a test fails, a build errors, a runtime exception appears,
 
 When a bug appears, the instinct is to guess at a fix and try it. Resist. Systematic debugging is faster than thrashing—a methodical approach achieves first-time resolution far more often than iterative guessing.
 
+<!-- @protected reason="foundational principle from v4.5 plus Iron Law of root-cause-before-fix; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** "I'm just exploring" while editing code is guessing. A "small experiment" that changes three files at once is multi-fix. Going to Fix #4 after disguising Fix #3 as something else is still Fix #4. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## The 4-Phase Process
 

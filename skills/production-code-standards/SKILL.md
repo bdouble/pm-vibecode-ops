@@ -7,7 +7,12 @@ description: Use when writing, editing, or reviewing production code — especia
 
 All production code must be permanent, complete, and production-grade.
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** A `WORKAROUND:` comment is the same violation as `TODO`. `value ?? default` used to silently mask absence is the same violation as `value || default`. A new prohibited pattern with a friendlier name is the same prohibited pattern. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## Enforcement Workflow
 

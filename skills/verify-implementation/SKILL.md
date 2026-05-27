@@ -9,7 +9,12 @@ description: Use when about to write "should work", "probably passes", "tests pa
 
 **Every status claim requires proof. No exceptions.**
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this rule is violating the spirit of this rule.** Rephrasing, paraphrasing, or using different words to imply completion without evidence is the same violation. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 "Done," "fixed," "passing," or "complete" are factual assertions requiring evidence. Without executing the verification command and observing output, the claim is speculation—not reporting.
 

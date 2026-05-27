@@ -7,7 +7,12 @@ description: Use when about to call Edit, MultiEdit, or Write on a file not yet 
 
 This skill enforces disciplined development practices that ensure code quality and efficiency across all Claude models.
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Skimming a file instead of fully reading it, "I'll Read it later in this session", or claiming the change is small enough to skip the discovery procedure — all violate the spirit. The procedure is not a checklist to game; it's the minimum due diligence before any modification. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## Pre-Change Verification
 
