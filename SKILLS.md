@@ -179,6 +179,53 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 **Example trigger**: "This edge case is tricky, I'll create a follow-up ticket" or "Adding TODO for the rate limit"
 
+### 13. codex-finding-resolution
+
+**Activates when**: A Codex review report is open and findings need triage; an agent is about to file a follow-up ticket from a Codex review; or the operator asks how to handle a specific finding.
+
+**Enforces**:
+- P1/P2 default disposition is fix-now in the current branch (no follow-up sprawl)
+- P3 findings go to the closure-log, never to a standalone ticket
+- `SCOPE_EXPANSION_ESCAPE` (file a ticket instead of fixing) requires touching a different module entirely OR 3+ files outside the ticket's AC scope, with an impact-bar rationale — "complex", "tricky", "would take a while" are disqualifying
+- Findings are paired to a disposition record (`codex_finding_resolved` or `codex_scope_escape`) in the observability stream for auditability
+
+**Example trigger**: "Codex flagged a P2 missing-null-check in three places — should I file a follow-up?"
+
+### 14. swarm-phase-reporting
+
+**Activates when**: Inside `/epic-swarm` after a phase completes for a ticket; the orchestrator is about to advance to the next phase without posting the prior phase's Linear comment.
+
+**Enforces**:
+- Every phase posts its structured report to the sub-ticket as a Linear comment BEFORE the next phase begins
+- Phase reports follow the canonical template (Status / Summary / Files Changed / Issues / Recommendations)
+- The hard checkpoint at the end of the per-ticket pipeline verifies all 7 phase reports exist; a missing report blocks the ticket from advancing to merge
+
+**Example trigger**: Phase transition inside `/epic-swarm` after testing completes for a sub-ticket
+
+### 15. swarm-observability (v4.7)
+
+**Activates when**: Operator asks any meta-question about workflow performance ("is the workflow working", "are we deferring too much", "what's our profile mix", "did the impact bar help", "how many follow-ups did this epic file", "what's the codex auto-fix rate"). Also when about to count Linear comments by hand to answer one of those questions or about to grep `.swarm/observability/*.jsonl` directly.
+
+**Enforces**:
+- Consult the observability stream FIRST — not Linear comments, not orchestrator logs, not memory
+- Use `/swarm-stats` or `scripts/swarm-stats.sh`, never ad-hoc `jq` on the JSONL (re-introduces bugs the dashboard already fixed)
+- Map the user's question to the dashboard section that answers it; don't dump the whole dashboard for one question
+- Pre-v4.7 epics get a legacy badge; do NOT infer or backfill missing v4.5/v4.6 data
+
+**Example trigger**: "Did the impact bar reduce sprawl on the last epic?" or "Are we deferring too aggressively this quarter?"
+
+### 16. closure-log-aggregation (v4.7)
+
+**Activates when**: Running `/close-epic`; about to file the epic closure comment; the operator asks "what did we consider but not pursue in this epic"; or about to summarize the surfaced-but-deferred work.
+
+**Enforces**:
+- Fetch the closure-log section from every sub-ticket's phase comments — no "I'll grep for it" shortcut
+- Recognize BOTH `##` and `###` heading levels (v4.6.0 vs v4.6.1+ drift); aggregating only one form drops entries silently
+- Aggregate verbatim with per-ticket attribution stamps; deduplicate ONLY when entries are byte-identical
+- Empty is empty — never invent placeholder content; many sub-tickets with zero closure-log entries is a discipline signal, not a clean result
+
+**Example trigger**: `/close-epic EPIC-456` reaches Step 3 (closure-log aggregation)
+
 ## Skills vs Commands vs Agents
 
 | Aspect | Skills | Commands | Agents |
@@ -190,7 +237,7 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 ## How Skills Complement the Workflow
 
-The pm-vibecode-ops workflow has 11 phases (4 project-level + 6 ticket-level + 1 epic-level). Twelve skills add a proactive enforcement layer:
+The pm-vibecode-ops workflow has 11 phases (4 project-level + 6 ticket-level + 1 epic-level). Sixteen skills add a proactive enforcement layer:
 
 ```
 Traditional:
@@ -230,7 +277,7 @@ Skills are automatically installed when you install the PM workflow plugin:
 /plugin install pm-vibecode-ops@pm-vibecode-ops
 ```
 
-This installs all 11 skills automatically along with commands, agents, and hooks.
+This installs all 16 skills automatically along with commands, agents, and hooks.
 
 ### Manual Installation (Not Recommended)
 
@@ -263,29 +310,31 @@ For manual installation, skills should be in:
 In this repository, skill definitions are stored in:
 ```
 skills/
+├── closure-log-aggregation/    # v4.7 — aggregate considered-but-not-pursued entries at epic close
+├── codex-finding-resolution/   # P1/P2 fix-now, P3 closure-log, scope-expansion escape gate
 ├── divergent-exploration/
-│   └── SKILL.md
-├── model-aware-behavior/
-│   └── SKILL.md
-├── mvd-documentation/
-│   └── SKILL.md
-├── production-code-standards/
-│   └── SKILL.md
-├── security-patterns/
-│   └── SKILL.md
-├── service-reuse/
-│   └── SKILL.md
-├── testing-philosophy/
-│   └── SKILL.md
-├── using-pm-workflow/
-│   └── SKILL.md
-├── verify-implementation/
-│   └── SKILL.md
 ├── epic-closure-validation/
-│   └── SKILL.md
-└── systematic-debugging/
-    └── SKILL.md
+├── model-aware-behavior/
+├── mvd-documentation/
+├── no-silent-deferrals/        # impact bar + four-catastrophic-condition deferral gate
+├── production-code-standards/
+├── security-patterns/
+├── service-reuse/
+├── swarm-observability/        # v4.7 — when to consult /swarm-stats vs reconstruct from Linear
+├── swarm-phase-reporting/      # per-phase Linear comment posting + hard-checkpoint
+├── systematic-debugging/
+├── testing-philosophy/
+├── using-pm-workflow/
+└── verify-implementation/
 ```
+
+## SkillOpt Protected Regions (v4.7)
+
+Thirteen skills carry a `<!-- @protected -->` envelope around their foundational "Violating the letter is violating the spirit" principle. Per SkillOpt §3.6 (Yang et al., 2026), protected regions are the highest-ablation safety mechanism for skill files — removing the analog cost SpreadsheetBench 22 points (77.5 → 55.0).
+
+CI gate: `bash scripts/validate-skill-invariants.sh main` fails (exit 2) if a protected region is modified without an adjacent `<!-- @override approved-by="<name>" reason="<one-line>" -->` marker in the same diff hunk. The validator aligns to the merge-base (so PR validation isn't fooled by main moving forward), detects pure insertions inside protected regions, and pairs each override marker to its specific hunk so a single marker cannot silence multiple unrelated edits.
+
+Three reference skills are intentionally NOT wrapped (no foundational principle to protect): `using-pm-workflow`, `codex-finding-resolution`, `swarm-phase-reporting`. See `docs/SKILL_AUDIT_PLAYBOOK.md` for the discipline-vs-reference classification and the operator workflow for proposing audit-driven changes.
 
 ## Creating Custom Skills
 

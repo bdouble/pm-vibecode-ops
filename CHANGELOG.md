@@ -71,7 +71,7 @@ The release shipped in three PRs:
 
 #### Tier 5 — Skill description audit
 
-- All 14 skills audited against the Anthropic + Superpowers checklist. Descriptions confirmed under 1024 chars and following "Use when..." pattern (carryover from v4.5 hardening). No description rewrites required this release — the v4.5 pass got it right.
+- All 16 skills (14 carried forward from v4.6 + 2 new in v4.7) audited against the Anthropic + Superpowers checklist. Descriptions confirmed under 1024 chars and following "Use when..." pattern (carryover from v4.5 hardening). No description rewrites required this release — the v4.5 pass got it right and the 2 new skills were authored to that contract.
 - Token efficiency pass on frequently-loaded skills deferred to a future audit cycle per `docs/SKILL_AUDIT_PLAYBOOK.md` "When NOT to audit" — most skills are already below the Anthropic 5,000-word ceiling and per-skill compliance signal is needed before targeted trimming.
 
 #### Workflow documentation
@@ -89,6 +89,19 @@ The release shipped in three PRs:
 - `execute-ticket.md` Step 1: explicit instruction to extract `epic_id` from `parentId` BEFORE Step 1.5's JSONL emission (avoids writing `profile_assigned` events to the wrong path).
 - `observability-schema.md`: `impact_bar_rejected` and `boundary_question_answered` emission rules clarified — both must be emitted at the discrete decision point (not post-hoc section parsing) so the `why_below_bar` / `outcome` payload fields are populated from live context.
 - `commands/swarm-stats.md`: removed invalid `Bash(scripts/swarm-stats.sh:*)` allowed-tools pattern (would never match a real shell invocation; bare `Bash` provides the needed permission).
+
+#### PR #3 review fixes (6 findings addressed before Tier 5 merge)
+
+Six findings from the extra-high-effort review on PR #3 — two confirmed-CI-bypass bugs in the new validator, reproduced live in a clean `/tmp` repo and proven closed by the fix:
+
+- `scripts/validate-skill-invariants.sh`: **main-divergence bypass** — `git show BASE_REF:file` (BASE_REF tip snapshot) vs `git diff BASE_REF...HEAD` (three-dot, merge-base based) used different line spaces. Whenever main moved forward since the PR forked, the two reference points diverged and protected-region edits silently passed validation. Fixed by resolving both content read and diff to `git merge-base "$BASE_REF" HEAD`.
+- `scripts/validate-skill-invariants.sh`: **pure-insertion bypass** — `parse_old_hunk_lines` returned early when old-side count was 0, so a hunk inserting new content inside an existing protected region (`@@ -N,0 +M,K @@`) was never checked. Fixed with a new `insertion_point_in_protected` helper using the `s ≤ N < e` rule (insertion lands strictly between two in-range lines).
+- `scripts/validate-skill-invariants.sh`: **@override marker not paired with violation** — script previously accepted any `@override` anywhere in the per-file diff, so one marker silenced unlimited unrelated protected-region edits. Restructured the diff walker to track state hunk-by-hunk: each violating hunk now requires its own `@override` on its added lines.
+- `scripts/validate-skill-invariants.sh`: **malformed @protected silently dropped ranges** — the awk extractor overwrote `start` on every opener match, losing earlier ranges when a file had nested or unclosed markers. The new extractor errors with line numbers and propagates exit code 3 for nested/unclosed `@protected` or orphan `@end-protected`.
+- `scripts/validate-skill-invariants.sh`: **dead helpers removed** — `extract_new_changed_lines` (byte-identical to its old-side sibling) and `parse_new_hunk_lines` (defined but never called) were leftover refactor scaffolding.
+- `docs/SKILL_AUDIT_PLAYBOOK.md`: **playbook/implementation classification mismatch** — the playbook said "light audits don't get protected regions added — those are a discipline-skill feature," but six Reference-classified skills carry wraps. Decoupled the two dimensions: classification governs audit depth (full vs light); a new Protected column on the classification table tracks whether the SKILL.md carries a foundational principle that needs a `<!-- @protected -->` wrap. The two criteria are now explicitly orthogonal.
+
+Verified six `/tmp` scenarios end-to-end: main-divergence + protected mod (exit 2), pure insertion inside protected (exit 2), modification with adjacent `@override` (exit 0), malformed base content (exit 3), two protected mods with one `@override` (exit 2), brand-new protected region (exit 0). `bash scripts/validate-skill-invariants.sh main` on the merge commit returns exit 0 (13 skills scanned, no violations).
 
 ### Not Yet Done — Tracked for v4.8+
 

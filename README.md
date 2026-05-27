@@ -202,6 +202,12 @@ For cases requiring phase-by-phase control:
 | `/close-epic` | Close completed epic with deferred work recovery and retrofit analysis |
 | `/epic-swarm [epic-id]` | Execute all tickets in an epic sequentially through the full 7-phase pipeline with dependency ordering, hard checkpoints, and dual security review |
 
+### Observability (v4.7)
+
+| Command | Purpose |
+|---------|---------|
+| `/swarm-stats [epic-id-or-ticket-id]` | Render the per-epic or per-ticket workflow dashboard from the 15-event JSONL observability stream. Backs meta-questions ("are we deferring too much", "did the impact bar help", "what's the codex auto-fix rate"). Pre-v4.7 epics render with a legacy badge. |
+
 **Best practice:** Run each command in a fresh Claude Code session to prevent context overflow.
 
 ---
@@ -237,10 +243,11 @@ The plugin system automatically provides all components:
 
 | Component | What It Does |
 |-----------|-------------|
-| **Commands** | 11 workflow phases you invoke (`/adaptation`, `/implementation`, `/execute-ticket`, `/epic-swarm`, etc.) |
+| **Commands** | 15 workflow phases you invoke (`/adaptation`, `/implementation`, `/execute-ticket`, `/epic-swarm`, `/swarm-stats`, etc.) |
 | **Agents** | 10 specialized AI roles (architect, backend engineer, QA, security engineer, etc.) |
-| **Skills** | 11 auto-activated quality standards (production code, security patterns, testing philosophy, etc.) |
+| **Skills** | 16 auto-activated quality standards (production code, security patterns, testing philosophy, observability, etc.) |
 | **Hooks** | Session automation for workflow context |
+| **Scripts** | `swarm-stats.sh` (observability dashboard) and `validate-skill-invariants.sh` (CI gate for SkillOpt protected regions) |
 
 **Scope options:** User (recommended, all projects), Project (all collaborators), Local (this project only).
 

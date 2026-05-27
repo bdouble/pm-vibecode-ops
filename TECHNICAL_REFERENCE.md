@@ -764,7 +764,8 @@ Each phase adds quality labels to PRs:
 ```
 pm-vibecode-ops/
 ├── .claude-plugin/
-│   └── plugin.json              # Plugin manifest configuration
+│   ├── plugin.json              # Plugin manifest configuration
+│   └── marketplace.json         # Marketplace metadata
 │
 ├── agents/                      # Specialized AI agent configurations (10 agents)
 │   ├── architect-agent.md
@@ -776,58 +777,78 @@ pm-vibecode-ops/
 │   ├── qa-engineer-agent.md
 │   ├── security-engineer-agent.md
 │   ├── technical-writer-agent.md
-│   └── ticket-context-agent.md
+│   ├── ticket-context-agent.md
+│   └── references/              # Extracted reference material (OWASP, SaaS patterns, etc.)
 │
-├── commands/                    # Workflow slash commands
+├── commands/                    # Workflow slash commands (15)
 │   ├── README.md                # Commands documentation
 │   ├── adaptation.md
+│   ├── close-epic.md
 │   ├── codereview.md
+│   ├── codex-review.md
 │   ├── discovery.md
 │   ├── documentation.md
 │   ├── epic-planning.md
+│   ├── epic-swarm.md            # Full-epic orchestrator (sequential 7-phase pipeline)
+│   ├── execute-ticket.md        # Single-ticket orchestrator (RECOMMENDED)
 │   ├── generate-service-inventory.md
 │   ├── implementation.md
 │   ├── planning.md
 │   ├── security-review.md
+│   ├── swarm-stats.md           # v4.7 — observability dashboard
 │   ├── testing.md
-│   └── close-epic.md
+│   └── references/              # Canonical schemas (observability-schema.md, skill-audit-schema.md)
 │
-├── skills/                      # Auto-activated quality enforcement (10 skills)
+├── skills/                      # Auto-activated quality enforcement (16 skills)
+│   ├── closure-log-aggregation/ # v4.7 — verbatim closure-log roll-up at epic close
+│   ├── codex-finding-resolution/  # P1/P2 fix-now, P3 closure-log, scope-expansion gate
 │   ├── divergent-exploration/   # Explore alternative approaches before converging
 │   ├── epic-closure-validation/ # Validate all tickets complete before epic closure
 │   ├── model-aware-behavior/    # Read all files before proposing changes
 │   ├── mvd-documentation/       # Document why, not what
+│   ├── no-silent-deferrals/     # Impact bar + four-catastrophic-condition deferral gate
 │   ├── production-code-standards/  # Block workarounds, temporary code
 │   ├── security-patterns/       # OWASP patterns during code writing
 │   ├── service-reuse/           # Check inventory before creating services
+│   ├── swarm-observability/     # v4.7 — when to consult /swarm-stats vs reconstruct from Linear
+│   ├── swarm-phase-reporting/   # Per-phase Linear comment posting + hard checkpoint
+│   ├── systematic-debugging/    # 4-phase root cause process, 3-fix stop
 │   ├── testing-philosophy/      # Fix broken tests before writing new tests
 │   ├── using-pm-workflow/       # Guide through workflow phases
-│   └── verify-implementation/  # Verify work before marking complete
+│   └── verify-implementation/   # Verify work before marking complete
 │
 ├── hooks/
 │   └── hooks.json               # Event-triggered automation
 │
 ├── scripts/
-│   └── session-start.sh         # Session initialization
+│   ├── session-start.sh         # Session initialization
+│   ├── swarm-stats.sh           # v4.7 — observability dashboard backend (used by /swarm-stats)
+│   └── validate-skill-invariants.sh  # v4.7 — CI gate for SkillOpt protected regions
 │
 ├── codex/
 │   └── prompts/                 # Platform-agnostic prompts (OpenAI Codex compatible)
 │
 ├── docs/                        # Advanced documentation
 │   ├── INSTALLATION.md          # Comprehensive installation guide
-│   ├── SETUP_GUIDE.md           # Terminal basics for beginners
 │   ├── MCP_SETUP.md             # MCP server configuration
+│   ├── SETUP_GUIDE.md           # Terminal basics for beginners
+│   ├── SKILL_AUDIT_PLAYBOOK.md  # v4.7 — operator handoff for SkillOpt-style audits
 │   └── TROUBLESHOOTING.md       # Common issues and solutions
+│
+├── context/                     # Working materials (release plans, regression analyses)
 │
 ├── PM_GUIDE.md                  # Non-technical guide for Product Managers
 ├── GET_STARTED.md               # Quick start and navigation
 ├── TECHNICAL_REFERENCE.md       # This file - complete technical documentation
+├── QUICK_REFERENCE.md           # One-page cheat sheet
 ├── SKILLS.md                    # Skills documentation
 ├── AGENTS.md                    # Agents documentation
 ├── EXAMPLES.md                  # Real-world case studies
 ├── FAQ.md                       # Common questions answered
 ├── GLOSSARY.md                  # Technical terms explained
 ├── CHANGELOG.md                 # Version history
+├── CONTRIBUTING.md              # Contribution guidelines
+├── CLAUDE.md                    # Project instructions for Claude Code
 ├── LICENSE                      # CC BY 4.0
 └── README.md                    # Value-oriented overview
 ```
@@ -883,7 +904,7 @@ Commands track and report:
 | **Agents** | Specialized via Agent tool | Platform-agnostic |
 | **Installation** | Plugin: Install from marketplace | Clone repo, reference prompts |
 | **Git Strategy** | Feature branches | Feature branches |
-| **Skills** | Auto-activated (10 skills) | Not supported |
+| **Skills** | Auto-activated (16 skills) | Not supported |
 | **Hooks** | Session automation | Not supported |
 | **Best For** | Full workflow with quality enforcement | Flexibility, custom integration |
 

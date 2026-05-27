@@ -55,6 +55,14 @@ Use individual phases when debugging a specific phase or needing manual interven
 
 Processes each ticket through ALL 7 phases (adaptation → security scan) before starting the next. Every ticket's adaptation examines code built by prior tickets. Hard checkpoint verifies all 7 phase reports exist before merge. Dual security review. Persistent swarm state enables resume. Parallelism available via `--parallel` flag (opt-in, user confirms).
 
+### Observability (v4.7)
+
+| Command | Purpose | Your Action |
+|---------|---------|-------------|
+| `/swarm-stats [epic-id-or-ticket-id]` | **Workflow dashboard** — deferral rate, impact-bar hits, follow-up filings, codex auto-fix rate, profile mix, phase outcomes | Read the dashboard before acting on intuition |
+
+Backed by the 15-event JSONL stream at `.swarm/observability/<epic-id>/<ticket-id>.jsonl`. Use this instead of grepping Linear or recalling from memory. Pre-v4.7 epics render with a legacy badge.
+
 ---
 
 ## Quality Gates Checklist
@@ -82,6 +90,8 @@ Before merging, verify:
 | **Quality Gates** | Automated checks | Ensures production-ready code |
 | **Epic Swarm** | Parallel ticket execution | Faster epic completion |
 | **Cross-Model Review** | Codex reviews Claude's code | Catches different bugs |
+| **Observability Stream** | 15-event JSONL log of what the workflow did | Answer "is it working" from data, not intuition |
+| **Protected Region** | `<!-- @protected -->` envelope around skill foundational principles | Prevents silent rewrites of the rules the workflow depends on |
 
 ---
 

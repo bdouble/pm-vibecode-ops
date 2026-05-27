@@ -859,6 +859,79 @@ Code Review → Security Review → Documentation → Ship
 
 ---
 
+## v4.7 Terms
+
+### Observability Stream
+**PM Definition**: A structured log of what the workflow actually did, written as one event per JSON line.
+
+**Why it matters**: Workflows can drift — Linear comments say one thing, the underlying execution did another. The observability stream is the single source of truth. When you ask "are we deferring too much?" or "did the impact bar help?", the answer comes from the stream, not from skimming Linear by hand.
+
+**How to use**: Run `/swarm-stats [epic-id]` for a formatted dashboard. Don't grep the JSONL files yourself — the dashboard already handles known edge cases (legacy badges, epic vs ticket events, profile envelope variations).
+
+**Location**: `.swarm/observability/<epic-id>/<ticket-id>.jsonl` and `.swarm/observability/_solo/<ticket-id>.jsonl`.
+
+---
+
+### Protected Region
+**PM Definition**: A fenced section in a skill file that marks the "foundational principle" — the one rule that, if removed, defeats the skill's purpose.
+
+**Looks like**:
+```
+<!-- @protected reason="why this matters" -->
+**Violating the letter of this skill is violating the spirit.** ...
+<!-- @end-protected -->
+```
+
+**Why it matters**: AI-driven skill rewrites tend to soften the rules that matter most. Protected regions force any change to come with an explicit operator decision (an `@override` marker) — they cannot be silently rewritten.
+
+**Source**: SkillOpt §3.6 (Yang et al., 2026) — the highest-ablation safety mechanism in the paper. Removing the analog cost SpreadsheetBench 22 points.
+
+**CI enforcement**: `scripts/validate-skill-invariants.sh` fails any PR that modifies a protected region without a paired `@override` marker.
+
+---
+
+### Skill Audit
+**PM Definition**: A structured pass that measures whether a skill is actually doing its job and proposes bounded edits when it's not.
+
+**Two paths**:
+- **Discipline skills** get the full audit: tripartite scenarios (train/selection/test splits with the test split LOCKED), baseline measurement, bounded edits (max 4 per pass), selection-gate validation, single-touch test measurement.
+- **Reference skills** get a light audit: structural checklist (filename, frontmatter, description style, token budget) and an optional description rewrite.
+
+**Operator handoff**: `docs/SKILL_AUDIT_PLAYBOOK.md`.
+
+**Cadence**: light audits per minor release; discipline-skill audits quarterly or triggered by 3+ observed compliance failures.
+
+---
+
+### SkillOpt
+**PM Definition**: The methodology v4.7 adopts for evolving the skill suite — Yang et al., *SkillOpt: Executive Strategy for Self-Evolving Agent Skills* (Microsoft, May 2026).
+
+**Key mechanics the workflow uses**:
+- Tripartite train/selection/test scenario splits (§3.1)
+- Strictly-greater-than selection gate — no ties merge (§3.2)
+- Bounded edits per audit pass, max 4 (§3.3)
+- Cosine-decay edit budget across passes (§3.4)
+- Rejected-edit buffer for negative-feedback continuity (§3.5)
+- Protected regions to safeguard foundational content (§3.6 — the highest-ablation mechanism)
+
+**Why it matters**: Skills are how the workflow keeps AI honest. SkillOpt is how the workflow keeps the skills themselves from drifting under repeated edits.
+
+---
+
+### @override Marker
+**PM Definition**: An inline approval record that lets a PR modify a protected region in a skill file.
+
+**Looks like**:
+```
+<!-- @override approved-by="brian" reason="v4.7 audit pass — see context/skill-audits/no-silent-deferrals.md" -->
+```
+
+**Why it matters**: Protected regions are mutable, but never silently. The `@override` marker is the equivalent of a security exception — the operator who approved the change is on the record, and the reason is in the diff history forever.
+
+**CI enforcement**: each `@override` marker pairs to exactly one diff hunk. Two unrelated protected-region edits in the same PR need two separate markers.
+
+---
+
 ## Still Confused?
 
 **For more context**: See [PM_GUIDE.md](PM_GUIDE.md) for detailed explanations with examples.
