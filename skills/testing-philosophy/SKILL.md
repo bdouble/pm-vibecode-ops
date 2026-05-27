@@ -7,7 +7,12 @@ description: Use when writing new tests, when existing tests are failing, when C
 
 Fix broken tests BEFORE writing new tests. Accurate running tests > high coverage with broken tests.
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Marking a test `.skip()` instead of fixing it, writing a test that always passes (`expect(result).toBeDefined()` as the only assertion), or asserting on the workaround behavior instead of the correct behavior — all bypass the gates. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## Mandatory Gate Sequence
 

@@ -12,7 +12,12 @@ description: Use when an agent is about to defer in-scope work or file a follow-
 
 **The default in both cases is: complete the work.** Across the last 100+ tickets in this workflow, 80-90% of deferrals should never have happened, AND the closure phase routinely produced more follow-up tickets than the epic had sub-tickets. Most of those follow-ups had no concrete operational, cost, user-perceived, or compliance impact — they were observations the agent had no legal way to acknowledge without filing a ticket. This skill fixes that.
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Rephrasing "follow-up ticket" as "subsequent iteration", inventing a fifth catastrophic condition, padding the impact-bar sentence with load-bearing-sounding generalities ("maintainability changes for developers"), declaring scope where none exists, or describing the same deferral with friendlier words is the same violation. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ---
 

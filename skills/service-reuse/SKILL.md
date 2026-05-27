@@ -7,7 +7,12 @@ description: Use when about to write `class NewService`, `export function`, new 
 
 Before creating ANYTHING new, check existing inventory first.
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Searching with one keyword and concluding "nothing exists", creating a parallel utility with slightly different naming, or "extending the inventory after the fact" instead of before — all violate the spirit. The default is reuse; new code is the exception. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## Enforcement Workflow
 

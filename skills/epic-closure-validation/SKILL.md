@@ -7,7 +7,12 @@ description: Use when about to call /close-epic, when about to mark an epic stat
 
 Validates that ALL sub-tickets are complete before an epic can be closed, AND that the closure comment honestly accounts for items considered during the epic — without producing a fan-out of low-value follow-up tickets.
 
+<!-- @protected reason="foundational principle from v4.6; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Closing an epic with one sub-ticket left "almost done", auto-cancelling unfinished work to clear the queue, accepting an `AC-DEFERRED` without justification, marking a workaround "good enough for now", filing per-surface retrofit tickets to look thorough, or padding the closure-log with non-candidates — all bypass the spirit. Closure requires the work to be done or explicitly descoped, follow-up tickets to clear the impact bar, and the closure-log to reflect honest rejections, not theater. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## Pre-Closure Assessment Process
 

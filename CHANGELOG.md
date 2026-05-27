@@ -5,6 +5,103 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.0] - 2026-05-27
+
+The v4.5/v4.6 releases shipped working discipline (deferral prevention, workflow profiles, model tiering) and working judgment scaffolding (impact bar, closure log, hands-off codex, ≤3 follow-up cap). What was broken underneath was the **bookkeeping layer** — orchestrator logs silently stopping, observability capturing one event type, closure logs without aggregation, `/execute-ticket` not updating epic-level artifacts, hooks contradicting skills, stale tool names. v4.7 fixes the bookkeeping and adopts SkillOpt (Yang et al., 2026) discipline for the skill suite. **17 regressions cataloged in `context/regression-analysis-v4.5-v4.6.md` are addressed.**
+
+The release shipped in three PRs:
+- **PR #1 — Tiers 1-3** (merged 2026-05-27): mechanical fixes, bookkeeping reliability, observability schema overhaul
+- **PR #2 — Tier 4**: `/execute-ticket` epic-awareness
+- **PR #3 — Tier 5**: skill suite hardening + 2 new skills + SkillOpt infrastructure + version bump
+
+### Added
+
+#### Tier 3 — Observability schema overhaul
+
+- **15-event JSONL schema** in `.swarm/observability/<epic-id>/<ticket-id>.jsonl` (epic context) or `.swarm/observability/_solo/<ticket-id>.jsonl` (standalone). Replaces the pre-v4.7 single-event (`profile_assigned`-only) stream that left five v4.5/v4.6 intents unmeasurable. Common envelope `{ts, epic_id, ticket_id, phase, event, data}` across all events. Canonical reference: `commands/references/observability-schema.md`.
+- **Event types:** `profile_assigned`, `profile_overridden`, `phase_started`, `phase_completed`, `phase_skipped_na`, `deferral_redispatch`, `deferral_accepted`, `impact_bar_rejected`, `boundary_question_answered`, `followup_cap_blocked`, `codex_finding_resolved`, `codex_scope_escape`, `ticket_completed`, `ticket_failed`, `epic_completed`. Emission points are documented in the schema reference.
+- **New `/swarm-stats` slash command** (`commands/swarm-stats.md`) plus shell-script backend (`scripts/swarm-stats.sh`). Single-epic dashboard with optional `--per-skill` and `--audit-deltas` flags. Pre-v4.7 epics render with a legacy badge — no backfill, no crash.
+- **`_epic.jsonl` per-epic event stream** (separate from per-ticket streams) for epic-level events like `epic_completed` and `followup_cap_blocked`. `swarm-stats.sh` filters this file out of per-ticket aggregation.
+
+#### Tier 4 — `/execute-ticket` epic-awareness
+
+- `/execute-ticket` now writes to epic-level artifacts when its target ticket has a Linear parent that is an epic. This closes regression A1 (the dominant cause of "orchestrator log not getting updated" since v4.4 made `/execute-ticket` the recommended path — PRO-1156's fingerprint of "10 tickets shipped, orch-log says '(none yet)'").
+  - `.swarm/orchestrator-log-<epic-id>.md` — append PASSED/FAILED entries
+  - `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` — phase report persistence
+  - `.swarm/observability/<epic-id>/<ticket-id>.jsonl` — 15-event schema
+  - `.swarm/state/<epic-id>.json` — ticket row upsert
+  - Solo tickets write to `_solo`/`-tickets/` parallel paths
+- **Shared `flock` on `.swarm/.locks/<epic-id>.lock`** serializes concurrent `/execute-ticket` runs against the same epic, and serializes `/execute-ticket` against `/epic-swarm` if both target the same epic. The sidecar lock-file pattern lets the architect-agent's reads in Step 3.1.0 proceed unblocked by writers.
+- **Path canonicalization** in `/epic-swarm`: aligned the orchestrator-log path from `.swarm/orchestrator-log.md` (pre-v4.7 spec) to `.swarm/orchestrator-log-<epic-id>.md` (matches on-disk evidence and Tier 4 design).
+
+#### Tier 5 — Skill suite hardening + SkillOpt infrastructure
+
+- **Two new skills:**
+  - `skills/swarm-observability/SKILL.md` — teaches operators when and how to consult the new JSONL observability stream instead of reconstructing metrics from Linear/orch-log/memory. Triggers on meta-questions about workflow performance ("are we deferring too much", "did the impact bar help", "what's the codex auto-fix rate"). Cross-references `closure-log-aggregation` and the canonical schema reference.
+  - `skills/closure-log-aggregation/SKILL.md` — handles the cross-cutting closure-log aggregation that v4.6.0 introduced but didn't operationalize across heading-level drift (`##` vs `###`). Enforces verbatim aggregation with per-ticket attribution, BOTH heading-level recognition, and no premature deduplication. Required cross-reference from `epic-closure-validation`.
+- **Protected region annotations across 13 skills.** Per SkillOpt §3.6 — removing the analog cost SpreadsheetBench 22 points (77.5 → 55.0), the single highest-ablation mechanism in the paper. Each discipline skill's "Violating the letter is violating the spirit" foundational principle is wrapped in `<!-- @protected reason="..." -->` ... `<!-- @end-protected -->` markers, with a `### Slow/Meta Update Log` subsection inside the protected envelope (initially empty) for longitudinal lessons accumulated across audit passes.
+- **`scripts/validate-skill-invariants.sh`** — CI-runnable bash script that diffs SKILL.md files against a base ref and fails (exit 2) if a protected region was modified without an adjacent `<!-- @override approved-by="..." reason="..." -->` marker. Set `-euo pipefail` discipline; structured exit codes (0/1/2/3); same idiom as `swarm-stats.sh`.
+- **Audit infrastructure schemas** (`commands/references/skill-audit-schema.md`):
+  - `rejected-edits.md` — SkillOpt's rejected-edit buffer (§3.5); negative feedback for future audit passes
+  - `edit-apply-report.jsonl` — recoverable audit log (§3.6); one record per proposed edit, accepted or rejected, with selection-set and locked-test-set deltas
+  - `slow-meta-log.md` — longitudinal lessons across audit passes; mirrored into SKILL.md protected regions
+  - Per-skill directory layout `.swarm/skill-audits/<skill>/scenarios/{train,selection,test}/`
+- **`docs/SKILL_AUDIT_PLAYBOOK.md`** — operator handoff for running a SkillOpt-style audit on a single skill. Covers discipline-vs-reference classification, tripartite scenario authoring with locked test split, baseline RED, bounded-edit drafting (max 4 per pass), selection-gate validation, REFACTOR pass for new rationalizations, single-touch TEST measurement, slow/meta log update. Light-audit alternate path for reference skills.
+
+### Changed
+
+#### Tier 1 — Mechanical fixes (PR #1)
+
+- `execute-ticket.md` Step 2: resume logic now recognizes `Status: N/A` as a valid completion status with a profile-aware guard. Fixes B1 — MINIMAL tickets were silently re-running skipped phases on resume.
+- `execute-ticket.md` Step 3.6.1a: deferral re-dispatch now posts a `## Deferral Rejected` Linear comment in addition to the JSONL event. Fixes B5 — orchestrator intervention is now visible in Linear, not buried in observability files.
+- `hooks/hooks.json` rule 5: removed v4.5 "50% retrofit cap" (which contradicted the v4.6 absolute ≤3 cap), installed the absolute cap directly, renamed retrofit → follow-up to match v4.6 skill semantics. Fixes C1.
+- `close-epic.md`: removed orphan `# was --skip-followups` comment. Fixes C5.
+- Mechanical sweep across 16 files: `mcp__linear-server__create_comment` → `mcp__linear-server__save_comment` (within-namespace rename, confirmed by transcript audit). Fixes C9.
+
+#### Tier 2 — Bookkeeping reliability (PR #1)
+
+- `epic-swarm.md` §3.4: orchestrator-log append now runs unconditionally in a finally-style block with explicit PASSED/FAILED formats. Even a failed ticket logs `## Ticket FAILED — <reason>` instead of silently dropping. Fixes A2 — the primary cause of PRO-1156's "(none yet)" regression.
+- `execute-ticket.md` Step 1.5: Profile Assignment posting now checks for an existing comment first and skips with a terminal log on resume. Fixes A3 — prevents duplicate Profile Assignment comments.
+- `close-epic.md` Step 3: now aggregates `### Considered but not pursued` closure-log sections from every sub-ticket (handles BOTH h2 legacy and h3 canonical heading levels). Adds `## Aggregated Closure-Log Across Sub-Tickets` section to the epic-closure-agent prompt structure. Fixes B3 — the 176-occurrence-zero-rollup regression.
+- `execute-ticket.md`: gains Step 0 "Anchor to the Structured Phase Pipeline (MANDATORY)" forbidding exploratory work outside a named phase. Fixes B6 — the b224fca9 fingerprint where 5 tickets shipped without ever entering the phase pipeline.
+- `close-epic.md` Step 3 example structure: gains `Def/Log` column + fetch-closure-log instruction when count > 0. Fixes C2.
+- Phase artifact filename canonicalization: `security-scan.md` → `security-review.md` everywhere internally (the Linear comment header `## Security Scan Report (Pre-Merge)` is preserved verbatim — header text is the user-visible audit anchor, the phase name is the internal config identifier; the gap is intentional and documented). Fixes C6.
+- `epic-swarm.md` state schema: documents `deferred_to: PRO-XXXX` field with `status: closed` as the canonical normalization of the previously-undocumented `closed-deferred-to-X` status string. Fixes C8.
+- `no-silent-deferrals/SKILL.md`: adds "Title Prefix for Any Filed Ticket: `[Follow-up]`" normalization rule covering all filing flows. Fixes Intent-7 — v4.6 changed the prefix in closure flow only; mid-flow filings like PRO-1170 retained the stale `[Retrofit]` prefix.
+
+#### Tier 5 — Skill description audit
+
+- All 14 skills audited against the Anthropic + Superpowers checklist. Descriptions confirmed under 1024 chars and following "Use when..." pattern (carryover from v4.5 hardening). No description rewrites required this release — the v4.5 pass got it right.
+- Token efficiency pass on frequently-loaded skills deferred to a future audit cycle per `docs/SKILL_AUDIT_PLAYBOOK.md` "When NOT to audit" — most skills are already below the Anthropic 5,000-word ceiling and per-skill compliance signal is needed before targeted trimming.
+
+#### Workflow documentation
+
+- `CLAUDE.md` (gitignored): adds "Epic-aware bookkeeping (v4.7 Tier 4)" section under Workflow Phases documenting the per-epic artifact propagation.
+- `TECHNICAL_REFERENCE.md`: adds "Epic-aware bookkeeping (v4.7)" bullet under `/execute-ticket` key features.
+
+### Fixed
+
+#### PR #1 review fixes (10 findings addressed before Tier 1-3 merge)
+
+- `agents/security-engineer-agent.md`: report header changed from `## Security Review Report` to `## Security Scan Report (Pre-Merge)` to match the epic-swarm §3.3 hard-checkpoint pattern. Critical fix — without it, every swarm security phase would have triggered a hard-stop merge failure.
+- `execute-ticket.md` §3.6.0b: same fix for the N/A security-review header — a MINIMAL ticket processed standalone and later resumed via `/epic-swarm` would have posted the wrong header.
+- `scripts/swarm-stats.sh`: excluded `_epic.jsonl` from per-ticket stream collection (epic-level events were inflating per-ticket counts); fixed `PROFILES_*` jq queries to handle both top-level `.profile` envelope (epic-swarm format) and nested `.data.profile` envelope (execute-ticket format) via `(.data.profile // .profile)`; added in-progress fallback headline so the dashboard doesn't truncate silently when counters are zero.
+- `execute-ticket.md` Step 1: explicit instruction to extract `epic_id` from `parentId` BEFORE Step 1.5's JSONL emission (avoids writing `profile_assigned` events to the wrong path).
+- `observability-schema.md`: `impact_bar_rejected` and `boundary_question_answered` emission rules clarified — both must be emitted at the discrete decision point (not post-hoc section parsing) so the `why_below_bar` / `outcome` payload fields are populated from live context.
+- `commands/swarm-stats.md`: removed invalid `Bash(scripts/swarm-stats.sh:*)` allowed-tools pattern (would never match a real shell invocation; bare `Bash` provides the needed permission).
+
+### Not Yet Done — Tracked for v4.8+
+
+These appeared in the v4.7 plan (`context/v4.7-release-plan.md`) but are intentionally deferred. The infrastructure to enable them is in v4.7; the audit cycles themselves are forward work.
+
+- **Per-skill audit passes against the SKILL_AUDIT_PLAYBOOK.** v4.7 ships the playbook + schemas + protected-regions + validator. The first FULL audit using the infrastructure is a v4.8 effort. Cadence: light audits per minor release; discipline-skill audits quarterly or triggered by 3+ observed compliance failures.
+- **Token efficiency trim of frequently-loaded skills.** Bodies are within the Anthropic 5,000-word ceiling. Targeted trim toward the Superpowers <200-words goal needs per-skill compliance signal first (from the audit infrastructure landed in this release).
+- **Tripartite scenario authoring per discipline skill.** Scenarios will be authored during the first audit pass per skill. v4.7 ships the directory structure documentation but not the scenarios themselves.
+- **Automated SkillOpt-style optimization loop.** Blocked on the auto-grader problem (cited as out-of-scope in `context/v4.7-release-plan.md`). v4.7 builds the scaffold (protected regions, rejected-edit buffer, edit-apply-report) so v4.8+ can plug in an optimizer model once auto-graders exist for workflow tasks.
+- **Model exploration (Haiku-tier for specific phases).** v4.7 keeps the v4.5 6-opus / 4-sonnet / 0-haiku distribution. SkillOpt validates "frozen smaller model + trained skill" as a real adaptation strategy; that experiment is a v4.8+ research thread.
+
+---
+
 ## [4.6.0] - 2026-05-25
 
 ### Added
@@ -2036,6 +2133,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.7.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.7.0
 [4.6.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.6.0
 [4.5.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.5.0
 [4.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.4.0

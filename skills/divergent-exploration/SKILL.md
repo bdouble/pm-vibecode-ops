@@ -7,7 +7,12 @@ description: Use when facing an architecture choice, schema design, or implement
 
 Creative work demands divergent thinking before convergent decisions. This skill enforces structured exploration to prevent premature commitment to the first idea that seems reasonable.
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Generating three options where two are obvious dead-ends and the third is your pre-selected answer is not divergence — it's anchoring with extra steps. Three *genuinely distinct* approaches with different core mechanisms is the minimum. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## The Three Phases
 

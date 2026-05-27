@@ -7,7 +7,12 @@ description: Use when about to write authentication, authorization, user input h
 
 Shift security left - prevent vulnerabilities while writing code, not at review time.
 
+<!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Using a slightly different injection sink, naming the secret variable differently, or skipping authorization on the "internal" route — all violate the spirit. Defense applies at every boundary, every time, regardless of how the code is dressed up. Spirit over letter, always.
+
+### Slow/Meta Update Log
+<!-- Append one bullet per audit pass capturing what stayed true across iterations. Initially empty. -->
+<!-- @end-protected -->
 
 ## Enforcement Checklist
 
