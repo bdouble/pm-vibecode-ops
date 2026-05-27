@@ -224,8 +224,19 @@ Skip tickets already in Todo, In Progress, Done, or Cancelled.
 
 ### 1.2 Check for Existing Swarm State
 
+**Resolve canonical paths (worktree-safe)** so the swarm and any concurrent `/execute-ticket` invocation share the same absolute lock file. `git rev-parse --show-toplevel` returns the worktree root when called from inside a worktree, which would put `.swarm/.locks/...` in the worktree and break the shared lock with `/execute-ticket` running from the main checkout. Using `git-common-dir` (which points at the shared `.git` for the main repo even from a worktree) keeps all swarm bookkeeping in the main checkout regardless of cwd.
+
 ```bash
-state_file=".swarm/state/[epic-id].json"
+git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null)"
+git_common_dir="$(cd "$git_common_dir" 2>/dev/null && pwd)"
+REPO_ROOT="${git_common_dir%/.git}"
+REPO_ROOT="${REPO_ROOT%/.git/}"
+[ -z "$REPO_ROOT" ] && REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+state_file="$REPO_ROOT/.swarm/state/[epic-id].json"
+ORCH_LOG="$REPO_ROOT/.swarm/orchestrator-log-[epic-id].md"
+LOCK_FILE="$REPO_ROOT/.swarm/.locks/[epic-id].lock"
+
 if [ -f "$state_file" ]; then
   echo "Existing swarm state found for [epic-id]."
   echo "Current tier: N, Completed tickets: X/Y"
@@ -233,6 +244,8 @@ fi
 ```
 
 If state exists, ask user: **Resume from where it left off?** or **Start fresh?**
+
+**Note on `/execute-ticket`-seeded state.** When a user runs `/execute-ticket` against a sub-ticket of this epic before this swarm session ever runs, `/execute-ticket` Step 1.6.3 seeds `state_file` with a minimal skeleton (`{epicId, created, source:"execute-ticket", tickets:{...}, config:{seededBy:"execute-ticket"}}`). The `[ -f "$state_file" ]` check above will treat that skeleton as an existing session and prompt the user. Choose **Resume** — the swarm will read this state in §1.7 (guarded by `[ ! -f ]`) and merge tier-plan/dependency data without overwriting the `tickets` map that `/execute-ticket` already wrote.
 
 **When resuming: auto-close prior-session tickets that completed but weren't closed.**
 
@@ -636,12 +649,19 @@ echo "Epic branch '$epic_branch' created and active."
 ### 1.7 Create Swarm State File
 
 ```bash
-mkdir -p .swarm/state
-git check-ignore .swarm/ || echo ".swarm/" >> .gitignore
+mkdir -p "$REPO_ROOT/.swarm/state"
+git check-ignore "$REPO_ROOT/.swarm/" || echo ".swarm/" >> "$REPO_ROOT/.gitignore"
 ```
 
-Initialize state:
-```json
+**Initialize state if absent; otherwise enrich the existing file.** A prior `/execute-ticket` invocation against a sub-ticket of this epic may have seeded `state_file` with a minimal skeleton (`{epicId, created, source:"execute-ticket", tickets:{...}}`). The unconditional write below would clobber that `tickets` map. Use a `[ ! -f ]` guard for fresh init, and `jq` for the enrichment path when the file already exists.
+
+```bash
+mkdir -p "$REPO_ROOT/.swarm/.locks"
+
+if [ ! -f "$state_file" ]; then
+  ( flock -x 200
+    if [ ! -f "$state_file" ]; then
+      cat > "$state_file" << 'EOF'
 {
   "epicId": "[epic-id]",
   "epicBranch": "epic/[epic-id]",
@@ -652,45 +672,70 @@ Initialize state:
   "contextBundlePath": ".swarm/context/[epic-id]/",
   "detectedBuildSystem": null,
   "detectedTestCommand": null,
+  "tickets": {},
   "config": {
     "maxParallel": 4,
     "autoMerge": false,
-    "conflictStrategy": "stop"
+    "conflictStrategy": "stop",
+    "seededBy": "epic-swarm"
   }
 }
-```
-
-### 1.8 Initialize Orchestrator Notes
-
-Create `.swarm/orchestrator-log-[epic-id].md` — a persistent file the orchestrator updates after each ticket completes the hard checkpoint. This provides cross-ticket context for adaptation phases in later tiers.
-
-**Concurrency note (Tier 4):** A `/execute-ticket` invocation against a sub-ticket of this epic ALSO writes to `.swarm/orchestrator-log-[epic-id].md` (per `commands/execute-ticket.md` Step 1.6 + Step 3.7.0 + Step 4). Both surfaces use the shared lock file `.swarm/.locks/[epic-id].lock` via the `( flock -x 200 ... ) 200>"$LOCK_FILE"` idiom. Seed the file only if it does not exist (a prior `/execute-ticket` against this epic may have seeded it already).
-
-```bash
-LOCK_DIR=".swarm/.locks"
-LOCK_FILE="$LOCK_DIR/[epic-id].lock"
-ORCH_LOG=".swarm/orchestrator-log-[epic-id].md"
-mkdir -p "$LOCK_DIR"
-
-if [ ! -f "$ORCH_LOG" ]; then
-  ( flock -x 200
-    if [ ! -f "$ORCH_LOG" ]; then
-      cat > "$ORCH_LOG" << 'EOF'
-# Orchestrator Notes — Epic [epic-id]
-Generated: [timestamp]
-
-## Completed Tickets
-(none yet)
-
-## Cross-Ticket Observations
-(none yet)
 EOF
+    fi
+  ) 200>"$LOCK_FILE"
+else
+  # State already exists — likely seeded by /execute-ticket or a prior swarm session.
+  # Enrich the file in place: add any fields the swarm needs (epicBranch, tiers, etc.)
+  # WITHOUT touching .tickets or .config.seededBy that an earlier writer set.
+  ( flock -x 200
+    tmp=$(mktemp)
+    trap "rm -f '$tmp'" EXIT
+    if jq --arg branch "epic/[epic-id]" --arg ts "[timestamp]" '
+         . + {
+           epicBranch: (.epicBranch // $branch),
+           startedAt:  (.startedAt  // $ts),
+           currentTier: (.currentTier // 1),
+           tiers:        (.tiers        // []),
+           pendingCodexReviews: (.pendingCodexReviews // []),
+           contextBundlePath:   (.contextBundlePath   // ".swarm/context/[epic-id]/"),
+           detectedBuildSystem: (.detectedBuildSystem // null),
+           detectedTestCommand: (.detectedTestCommand // null),
+           tickets:      (.tickets      // {}),
+           config:       ((.config // {}) + {
+             maxParallel:      ((.config // {}).maxParallel      // 4),
+             autoMerge:        ((.config // {}).autoMerge        // false),
+             conflictStrategy: ((.config // {}).conflictStrategy // "stop")
+           })
+         }
+       ' "$state_file" > "$tmp" && [ -s "$tmp" ]; then
+      mv "$tmp" "$state_file"
+    else
+      echo "ERROR: jq enrichment of $state_file failed — leaving original untouched" >&2
     fi
   ) 200>"$LOCK_FILE"
 fi
 ```
 
-**Purpose:** When ticket B's adaptation phase runs after ticket A is complete, the orchestrator includes the orchestrator notes in the adaptation prompt so the architect-agent can examine what was built and plan accordingly.
+### 1.8 Initialize Orchestrator Notes
+
+`$ORCH_LOG` (resolved in §1.2 to `$REPO_ROOT/.swarm/orchestrator-log-[epic-id].md`) is a persistent file the orchestrator updates after each ticket completes the hard checkpoint. This provides cross-ticket context for adaptation phases in later tiers.
+
+**Concurrency note (Tier 4):** A `/execute-ticket` invocation against a sub-ticket of this epic ALSO writes to `$ORCH_LOG` (per `commands/execute-ticket.md` Step 1.6 + Step 3.7.0 + Step 4). Both surfaces use the shared lock file `$LOCK_FILE` (`.swarm/.locks/[epic-id].lock`, resolved via the same worktree-safe `$REPO_ROOT` derivation on both sides) via the `( flock -x 200 ... ) 200>"$LOCK_FILE"` idiom. Seed the file only if it does not exist — a prior `/execute-ticket` against this epic may have seeded it already.
+
+**Seed template:** the header + a "Generated" timestamp + an explanatory line. No `## Completed Tickets / (none yet)` or `## Cross-Ticket Observations / (none yet)` placeholders: PASSED/FAILED entries are appended at file end (§3.4 Format A/B), which would leave the `(none yet)` placeholder sitting above the actual entries permanently.
+
+```bash
+if [ ! -f "$ORCH_LOG" ]; then
+  ( flock -x 200
+    if [ ! -f "$ORCH_LOG" ]; then
+      printf '# Orchestrator Notes — Epic %s\nGenerated: %s\n\nEntries below append in chronological order as tickets complete (Format A for PASSED, Format B for FAILED, one-line tails for per-phase events). Both `/epic-swarm` and `/execute-ticket` write here; both use `flock` on `.swarm/.locks/%s.lock`.\n' \
+        "[epic-id]" "[timestamp]" "[epic-id]" > "$ORCH_LOG"
+    fi
+  ) 200>"$LOCK_FILE"
+fi
+```
+
+**Purpose:** When ticket B's adaptation phase runs after ticket A is complete, the orchestrator includes the orchestrator notes in the adaptation prompt (§3.2.1 item 8) so the architect-agent can examine what was built and plan accordingly. `/execute-ticket`'s adaptation phase reads the same `$ORCH_LOG` (per its Step 3.3 item 7) when running against an epic sub-ticket, so the cross-ticket continuity benefit is symmetric across both commands.
 
 ---
 
@@ -1653,12 +1698,9 @@ For each ticket that completed all phases:
 
 **Why both formats matter:** Subsequent tickets' adaptation phases read this log (Step 3.2.1 item 8). A failed ticket's partial work is just as relevant to the architect-agent as a passed ticket's complete work — it surfaces "this surface was attempted and blocked, here's what was built before the halt." Silent dropping of failed tickets from the log was the original bug.
 
-**Append idiom — use flock to serialize with concurrent `/execute-ticket` invocations against the same epic (Tier 4):**
+**Append idiom — use flock to serialize with concurrent `/execute-ticket` invocations against the same epic (Tier 4):** `$ORCH_LOG` and `$LOCK_FILE` were resolved in §1.2 using the worktree-safe `$REPO_ROOT` derivation, so `/epic-swarm` (which may run from a worktree) and `/execute-ticket` (running from the main checkout, or from a different worktree) land on the same absolute lock file and the same kernel lock.
 
 ```bash
-ORCH_LOG=".swarm/orchestrator-log-[epic-id].md"
-LOCK_FILE=".swarm/.locks/[epic-id].lock"
-
 ( flock -x 200
   cat >> "$ORCH_LOG" << 'ENTRY'
 ### [TICKET-ID] — [title]
@@ -1668,9 +1710,19 @@ ENTRY
 ) 200>"$LOCK_FILE"
 ```
 
-Both `/epic-swarm` and `/execute-ticket` share the same lock file (`.swarm/.locks/[epic-id].lock`), so an `/execute-ticket` invocation that lands mid-swarm against a different sub-ticket cannot interleave its append with the swarm's append on the orch-log. See `commands/execute-ticket.md` Step 3.7.0 for the parallel flock idiom on the `/execute-ticket` side.
+See `commands/execute-ticket.md` Step 3.7.0 for the parallel flock idiom on the `/execute-ticket` side. Both commands use `safe_jq_update` (defined in `commands/execute-ticket.md` Step 1.6.1) for state.json writes so a corrupt input surfaces an error rather than silently leaving a stale file.
 
-**Idempotency on resume:** Before appending, check if an entry for this ticket-id + outcome already exists. If a previous session wrote a FAILED entry and the current session retried and PASSED, append a NEW entry rather than editing the old one — the audit trail preserves both attempts.
+**Idempotency on resume — multi-line aware check.** A line-oriented `grep -q "^### $TICKET_ID — .*PASSED"` will NEVER match the multi-line Format A/B blocks (PASSED/FAILED live on the **Tier/Outcome** line, NOT on the heading line). Use `entry_exists` (defined in `commands/execute-ticket.md` Step 1.6.1) which scans the block from `### <ticket-id> — ` to the next `### ` heading or EOF and matches the outcome and (for FAILED) the halt_phase line:
+
+```bash
+if ! entry_exists "$TICKET_ID" "PASSED"; then
+  ( flock -x 200
+    # ... append Format A block ...
+  ) 200>"$LOCK_FILE"
+fi
+```
+
+If a previous session wrote a FAILED entry and the current session retried and PASSED, `entry_exists` returns false for PASSED (no prior PASSED block exists), so the new block is appended; the audit trail preserves both attempts.
 
 ### 3.5 Per-Ticket Merge to Epic Branch
 

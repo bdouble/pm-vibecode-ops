@@ -88,13 +88,56 @@ Use mcp__linear-server__get_issue to fetch ticket: $ARGUMENTS
 - Ticket is not already Done or Cancelled
 - Ticket has an assigned agent type (check labels for `backend`, `frontend`, or description metadata)
 
-**Extract `epic_id` now:** Check the response for a `parentId` field. If present, set `epic_id = parentId` (used for all JSONL observability paths in Step 1.5+, the orch-log append path in Step 3.7.x and Step 4, the phase report persistence path in Step 3.3, and the state.json upsert path in Step 4). If absent, `epic_id = null` and bookkeeping goes to `_solo/` (observability) or `orchestrator-log-tickets/` (orch-log). Do NOT defer this extraction to Step 3.1.0 — Step 1.5's JSONL append and Step 1.6's bookkeeping initialization both need it.
-
-**Resolve canonical local-artifact paths from `epic_id`:** Stash these four paths once at the top so every subsequent Step references them consistently. **Use absolute paths** — the orchestrator may chdir between phases (worktree mode, tool sandboxing).
+**Extract `TICKET_ID` from `$ARGUMENTS`** (sanitize away flag tokens like `--strict` / `--profile <name>` that Step 1.5 accepts):
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-TICKET_ID="$ARGUMENTS"
+# Pick the first non-flag, non-flag-value token. Linear ticket IDs look like PRJ-123.
+TICKET_ID=""
+skip_next=0
+for tok in $ARGUMENTS; do
+  if [ "$skip_next" = "1" ]; then skip_next=0; continue; fi
+  case "$tok" in
+    --strict)            ;;
+    --profile)           skip_next=1 ;;
+    --profile=*)         ;;
+    --*)                 ;;
+    *)                   TICKET_ID="$tok"; break ;;
+  esac
+done
+[ -z "$TICKET_ID" ] && { echo "ERROR: no ticket ID found in arguments: $ARGUMENTS" >&2; exit 1; }
+```
+
+This avoids paths and grep patterns being contaminated by flag tokens (e.g. an unsanitized `$ARGUMENTS="PRO-123 --strict"` would create `orchestrator-log-tickets/PRO-123 --strict.md`).
+
+**Extract `epic_id` — and verify the parent is actually an epic.** Linear's `parentId` points at any parent issue, not specifically epics. A sub-task of a Story carries a `parentId` but should NOT route into epic bookkeeping. Probe the parent before treating it as an epic.
+
+```
+Read the parentId from the ticket fetched above. If null/absent, set epic_id=null and skip to path resolution.
+
+If parentId is present:
+  1. Fetch the parent via mcp__linear-server__get_issue(parentId)
+  2. Treat parentId as an epic ONLY IF ALL of the following hold:
+     - parent.parentId is null (epics are top-level — a sub-sub-ticket's grandparent is the epic, not its direct parent)
+     - parent has children other than this ticket (a real epic has multiple sub-tickets; if the only child is this ticket, prefer solo and revisit when peer tickets appear)
+     - OR the parent has a label matching ^(epic|type:epic|epic:.*)$ (explicit signal overrides the heuristic)
+  3. If those checks fail: set epic_id=null and treat as a solo run. Log to terminal:
+     "Parent <parentId> is not an epic (no epic label, or has its own parent, or has fewer than 2 children). Routing to solo bookkeeping."
+  4. If they pass: set epic_id=parentId.
+```
+
+`epic_id` is used downstream for: all JSONL observability paths (Step 1.5+), the orch-log append path (Step 3.7.x and Step 4), the phase report persistence path (Step 3.3), and the state.json upsert path (Step 4). When `epic_id=null`, bookkeeping routes to `_solo/` (observability/reports) or `orchestrator-log-tickets/` (orch-log) instead.
+
+**Resolve canonical local-artifact paths from `epic_id`:** Stash these four paths once at the top so every subsequent Step references them consistently. **Use absolute paths derived from the main repo's git-common-dir** — `git rev-parse --show-toplevel` returns the worktree root when called from inside a worktree, which would put locks/orch-logs/state in the worktree (different inode from the main checkout) and break the shared-lock contract with `/epic-swarm`. Using `git-common-dir` keeps all bookkeeping in the main checkout regardless of cwd.
+
+```bash
+# git-common-dir returns the main repo's .git (even from a worktree it points at the
+# shared .git, not the worktree's .git directory). Resolve to absolute and strip /.git
+# to get the main-checkout root.
+git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null)"
+git_common_dir="$(cd "$git_common_dir" 2>/dev/null && pwd)"
+REPO_ROOT="${git_common_dir%/.git}"
+REPO_ROOT="${REPO_ROOT%/.git/}"
+[ -z "$REPO_ROOT" ] && REPO_ROOT="$(git rev-parse --show-toplevel)"  # fallback for non-git contexts
 
 if [ -n "$epic_id" ]; then
   ORCH_LOG="$REPO_ROOT/.swarm/orchestrator-log-${epic_id}.md"
@@ -111,7 +154,7 @@ LOCK_DIR="$REPO_ROOT/.swarm/.locks"
 LOCK_FILE="$LOCK_DIR/${epic_id:-solo-$TICKET_ID}.lock"
 ```
 
-These four (or three, for solo) paths are the **canonical bookkeeping surface** for the whole execution. They replace ad-hoc paths previously scattered through Steps 3.3, 3.6, 4.1, 4.2.
+These four (or three, for solo) paths are the **canonical bookkeeping surface** for the whole execution. They replace ad-hoc paths previously scattered through Steps 3.3, 3.6, 4.1, 4.2. `/epic-swarm` resolves `REPO_ROOT` the same way (see `commands/epic-swarm.md` §1.8) so both commands land on the same absolute paths and share the same kernel lock even when one runs inside a worktree.
 
 If validation fails, report the error and stop.
 
@@ -275,17 +318,155 @@ mkdir -p "$LOCK_DIR"
 [ -n "$STATE_PATH" ] && mkdir -p "$(dirname "$STATE_PATH")"
 ```
 
-**Seed orch-log if missing.** Both epic and solo orch-logs use the same header template; the difference is the title and the audience for the file.
+### 1.6.1 Shared bookkeeping helpers (define once, call from every Step)
 
-For **epic context** (file `orchestrator-log-<epic_id>.md`): the orch-log is potentially shared with `/epic-swarm` and other concurrent `/execute-ticket` instances against the same epic. If the file does not exist, seed it with the canonical epic header (verbatim match to `/epic-swarm` §1.8 so a later swarm session reads/writes the same shape):
+These helpers centralize idempotency checking, safe jq updates, and Format A/B entry writes so Step 3.7.0, Step 4.1, Step 4.2, and any non-security halt path (Step 3.5 merge conflicts, Step 3.6.1a redispatch exhaustion) all use the same code path. Define them now in the orchestrator's shell context before any phase work begins.
+
+```bash
+# --- entry_exists: multi-line aware idempotency check ----------------------
+# Returns 0 (true) if an entry block with the given outcome (and optional
+# halt_phase match) already exists in $ORCH_LOG. The block starts with
+# "### <ticket-id> — " and ends at the next "### " heading or EOF.
+# Outcome is read from the "**Outcome:** PASSED|FAILED" line inside the block.
+# halt_phase, when provided, is matched against the "**Failure point:**" line.
+# This replaces the buggy line-oriented grep that could never match the
+# multi-line Format A/B entries (PASSED/FAILED live on line 2 of the block,
+# not on the heading line).
+entry_exists() {
+  local id="$1" outcome="$2" halt="${3:-}"
+  [ -f "$ORCH_LOG" ] || return 1
+  awk -v id="$id" -v out="$outcome" -v halt="$halt" '
+    BEGIN { in_block=0; o_ok=0; h_ok=(halt=="") }
+    {
+      if ($0 ~ "^### "id" — ") { in_block=1; o_ok=0; h_ok=(halt==""); next }
+      if (in_block && /^### /) { in_block=0 }
+      if (in_block && index($0, "**Outcome:** " out))     { o_ok=1 }
+      if (in_block && halt!="" && index($0, "**Failure point:** " halt)) { h_ok=1 }
+      if (in_block && o_ok && h_ok) { found=1; exit }
+    }
+    END { exit !found }
+  ' "$ORCH_LOG"
+}
+
+# --- safe_jq_update: jq+mv with trap-cleanup and error surfacing -----------
+# Runs jq against $STATE_PATH and atomically replaces it. On jq failure the
+# temp file is removed and the error is surfaced to stderr rather than
+# silently leaving a stale state file and a leaked /tmp file.
+safe_jq_update() {
+  local target="$1"; shift
+  local tmp
+  tmp="$(mktemp)" || { echo "ERROR: mktemp failed" >&2; return 1; }
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" RETURN
+  if ! jq "$@" "$target" > "$tmp"; then
+    echo "ERROR: jq failed updating $target — leaving original untouched" >&2
+    return 1
+  fi
+  if [ ! -s "$tmp" ]; then
+    echo "ERROR: jq produced empty output for $target — refusing to overwrite" >&2
+    return 1
+  fi
+  mv "$tmp" "$target"
+}
+
+# --- phase_tail: one-line phase tail row written under flock ---------------
+# All four positional args MUST be set by the caller from the agent's report
+# (Step 3.4 parses the report and binds these). See "Variable bindings" below.
+phase_tail_append() {
+  local phase="$1" status="$2" writes="$3" report_path="$4"
+  ( flock -x 200
+    printf -- '- %s  %s/%s  [%s]  writes=%s  report=%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TICKET_ID" "$phase" "$status" "$writes" "$report_path" \
+      >> "$ORCH_LOG"
+  ) 200>"$LOCK_FILE"
+}
+
+# --- write_passed_entry: append Format A block under flock with idempotency ---
+# Shape matches /epic-swarm §3.4 Format A (Tier + Files Created/Modified + Key
+# Interfaces + Patterns + Cross-Ticket Observations) plus a Source/Profile
+# header line so a /epic-swarm-resuming-from-/execute-ticket-work reads the
+# same semantic sections its architect-agent expects in §3.2.1 item 8.
+# Caller MUST have bound: $ticket_title, $ticket_profile, $phases_run_live,
+# $phases_na, $implementation_files_block, $key_interfaces_block,
+# $patterns_used_block, $cross_ticket_observations_block (use "— none —" for
+# any block that has no entries; never leave a variable empty).
+write_passed_entry() {
+  if entry_exists "$TICKET_ID" "PASSED"; then
+    return 0  # already recorded by a prior session
+  fi
+  ( flock -x 200
+    {
+      printf '\n### %s — %s\n' "$TICKET_ID" "$ticket_title"
+      printf '**Tier:** %s | **Source:** /execute-ticket | **Completed:** %s | **Outcome:** PASSED\n\n' \
+        "${ticket_tier:-N/A}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      printf '**Profile:** %s | **Phases run live:** %s | **Phases N/A:** %s\n\n' \
+        "$ticket_profile" "$phases_run_live" "$phases_na"
+      printf '**Files Created/Modified:**\n%s\n\n' "$implementation_files_block"
+      printf '**Key Interfaces Defined:**\n%s\n\n' "$key_interfaces_block"
+      printf '**Patterns Used:**\n%s\n\n' "$patterns_used_block"
+      printf '**Cross-Ticket Observations:**\n%s\n\n' "$cross_ticket_observations_block"
+      printf '**Reports:** %s/\n' "$REPORTS_DIR"
+    } >> "$ORCH_LOG"
+  ) 200>"$LOCK_FILE"
+}
+
+# --- write_failed_entry: append Format B block under flock with idempotency ---
+# Used by Step 4.2 (security CRITICAL/HIGH) AND every non-security halt path:
+# Step 3.5 merge-conflict halts, Step 3.6.1a deferral-redispatch exhaustion,
+# hard-checkpoint failures. Caller MUST have bound: $ticket_title, $halt_phase,
+# $halt_reason, $phases_done.
+write_failed_entry() {
+  if entry_exists "$TICKET_ID" "FAILED" "$halt_phase"; then
+    return 0  # already recorded for this halt_phase
+  fi
+  ( flock -x 200
+    {
+      printf '\n### %s — %s\n' "$TICKET_ID" "$ticket_title"
+      printf '**Tier:** %s | **Source:** /execute-ticket | **Halted:** %s | **Outcome:** FAILED\n\n' \
+        "${ticket_tier:-N/A}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      printf '**Failure point:** %s\n' "$halt_phase"
+      printf '**Reason:** %s\n\n' "$halt_reason"
+      printf '**Phases completed before halt:** %s\n\n' "$phases_done"
+      printf '**Reports:** %s/\n' "$REPORTS_DIR"
+    } >> "$ORCH_LOG"
+  ) 200>"$LOCK_FILE"
+}
+```
+
+**Variable bindings — the orchestrator (you, Claude) is responsible for setting these shell variables before invoking the helpers above.** They are not auto-populated; the helpers will write empty fields if you forget.
+
+| Variable | Bound at | Source |
+|---|---|---|
+| `TICKET_ID` | Step 1 | sanitized from `$ARGUMENTS` |
+| `epic_id` | Step 1 | Linear `parentId` after epic verification |
+| `ticket_title` | Step 1 | Linear `title` field |
+| `ticket_profile` | Step 1.5 | profile chosen by the algorithm (MINIMAL / STANDARD / STRICT) |
+| `ticket_tier` | Step 1.5 (epic context only) | read from `$STATE_PATH` `.tickets[id].tier` if `/epic-swarm` previously assigned one; otherwise `"N/A"` |
+| `branch_name` | Step 1.3 | Linear `gitBranchName` |
+| `pr_number` | Step 3.6.1 | captured after `gh pr create` |
+| `current_phase` | Step 3.3 (top of phase loop) | name of the phase being dispatched |
+| `report_status` | Step 3.4 | parsed from agent report `Status:` line |
+| `write_count` | Step 3.4 | parsed from agent report Status block (`write_calls + edit_calls`) |
+| `phases_run_live`, `phases_na` | Step 1.5 | comma-separated lists derived from `PHASES_BY_PROFILE` |
+| `phases_done` | top of Step 3 phase loop, updated as each phase completes | running list of completed phases |
+| `implementation_files_block` | end of implementation phase | bullet list from the implementation agent's `Files Changed:` section, or `"— none —"` |
+| `key_interfaces_block`, `patterns_used_block`, `cross_ticket_observations_block` | end of implementation / adaptation phase | bullet lists from agent reports' corresponding sections (the adaptation report's Patterns/Interfaces, the implementation report's Cross-Ticket Observations); use `"— none —"` if absent |
+| `halt_phase`, `halt_reason` | bound at any halt path before calling `write_failed_entry` | the phase that halted; one-line reason |
+
+A consistent convention: **never leave a variable empty before calling a helper** — explicitly assign `"— none —"` if the upstream report had no content for that section. This keeps Format A/B entries visually consistent and prevents an empty header from being misread as missing data.
+
+### 1.6.2 Seed orch-log if missing
+
+The seed template uses a header + a "Generated" timestamp + an explanatory line. **No placeholder sections like `## Completed Tickets / (none yet)` — those were misleading because PASSED/FAILED entries are appended at file end, which would leave the `(none yet)` placeholder sitting above the actual entries forever.**
+
+For **epic context** (file `orchestrator-log-<epic_id>.md`): the orch-log is potentially shared with `/epic-swarm` and other concurrent `/execute-ticket` instances against the same epic. Seed under flock so a concurrent `/epic-swarm` doesn't double-seed:
 
 ```bash
 if [ ! -f "$ORCH_LOG" ]; then
-  # Seed via flock so a concurrent /epic-swarm doesn't double-seed.
   ( flock -x 200
     if [ ! -f "$ORCH_LOG" ]; then
-      printf '# Orchestrator Notes — Epic %s\nGenerated: %s\n\n## Completed Tickets\n(none yet)\n\n## Cross-Ticket Observations\n(none yet)\n' \
-        "$epic_id" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$ORCH_LOG"
+      printf '# Orchestrator Notes — Epic %s\nGenerated: %s\n\nEntries below append in chronological order as tickets complete (Format A for PASSED, Format B for FAILED, one-line tails for per-phase events). Both `/epic-swarm` and `/execute-ticket` write here; both use `flock` on `.swarm/.locks/%s.lock`.\n' \
+        "$epic_id" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$epic_id" > "$ORCH_LOG"
     fi
   ) 200>"$LOCK_FILE"
 fi
@@ -295,12 +476,14 @@ For **solo context** (file `orchestrator-log-tickets/<ticket_id>.md`): no concur
 
 ```bash
 if [ ! -f "$ORCH_LOG" ]; then
-  printf '# Orchestrator Notes — Ticket %s\nGenerated: %s\n\n## Phase Trail\n(none yet)\n\n## Outcome\n(in progress)\n' \
+  printf '# Orchestrator Notes — Ticket %s\nGenerated: %s\n\nEntries below append in chronological order as phases run and the ticket completes.\n' \
     "$TICKET_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$ORCH_LOG"
 fi
 ```
 
-**Seed state.json if missing (epic context only).** When `/execute-ticket` runs against an epic sub-ticket but `/epic-swarm` has not yet run for that epic, the state file does not exist. Seed a minimal skeleton — `/epic-swarm` will enrich it (tier plan, dependencies, etc.) the first time it runs.
+### 1.6.3 Seed state.json if missing (epic context only)
+
+When `/execute-ticket` runs against an epic sub-ticket but `/epic-swarm` has not yet run for that epic, the state file does not exist. Seed a minimal skeleton — `/epic-swarm` §1.7 has a complementary `[ ! -f ]` guard so it will read this skeleton rather than overwrite it the first time the swarm runs.
 
 ```bash
 if [ -n "$STATE_PATH" ] && [ ! -f "$STATE_PATH" ]; then
@@ -313,25 +496,28 @@ if [ -n "$STATE_PATH" ] && [ ! -f "$STATE_PATH" ]; then
 fi
 ```
 
-**Upsert this ticket's row in state.json (epic context only).** The orchestrator must always have a row for the ticket it owns — even on first invocation. Use the file-locking helper (see "File-locking helper" subsection of Step 3.7.0 below) so concurrent `/execute-ticket` instances against the same epic don't race.
+### 1.6.4 Upsert this ticket's row in state.json (epic context only)
+
+The orchestrator must always have a row for the ticket it owns — even on first invocation. Use `safe_jq_update` so any jq failure surfaces to stderr rather than silently zeroing the temp file.
 
 ```bash
 if [ -n "$STATE_PATH" ]; then
   ( flock -x 200
-    tmp=$(mktemp)
-    jq --arg t "$TICKET_ID" --arg p "$ticket_profile" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-       --arg src "execute-ticket" \
-       '.tickets[$t] = ((.tickets[$t] // {}) + {profile:$p, lastSeen:$ts, source:$src, status:(.tickets[$t].status // "in_progress")})' \
-       "$STATE_PATH" > "$tmp" && mv "$tmp" "$STATE_PATH"
+    safe_jq_update "$STATE_PATH" \
+      --arg t "$TICKET_ID" --arg p "$ticket_profile" \
+      --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg src "execute-ticket" \
+      '.tickets[$t] = ((.tickets[$t] // {}) + {profile:$p, lastSeen:$ts, source:$src, status:(.tickets[$t].status // "in_progress")})'
   ) 200>"$LOCK_FILE"
 fi
 ```
 
-Where `$ticket_profile` is the value selected in Step 1.5.
+`$ticket_profile` MUST be bound (see Step 1.5 — it is the value chosen by the profile-selection algorithm).
 
-**Why seed here, not lazily on first use:** Lazy initialization across four artifact paths creates four "does this directory exist yet" checks scattered through the code. Seeding once at Step 1.6 means every later Step can `cat >> $ORCH_LOG` or `jq ... > $STATE_PATH` without guard logic, and the failure mode for a missing path becomes obvious (Step 1.6 didn't run) rather than diffuse.
+**Why seed everything in Step 1.6, not lazily on first use:** Lazy initialization across four artifact paths creates four "does this directory exist yet" checks scattered through the code. Seeding once at Step 1.6 means every later Step can `>> "$ORCH_LOG"` or `safe_jq_update "$STATE_PATH" ...` without guard logic, and the failure mode for a missing path becomes obvious (Step 1.6 didn't run) rather than diffuse.
 
 **Solo runs skip state.json.** The state file is the epic's coordination surface (tier graph, dependencies, cross-ticket interface contracts). A solo ticket has no peers, so no state file is created. The orch-log alone is sufficient for solo-run audit trail.
+
+**Solo orch-logs are audit-only by design.** Solo `.swarm/orchestrator-log-tickets/<ticket_id>.md` files are written by `/execute-ticket` and read by operators (or by future tooling). No automated consumer currently scans them — that is intentional, not an oversight. If a solo ticket is later attached to a new epic, the operator can copy relevant Format A sections into the new epic's orch-log; no automatic ingestion path exists.
 
 ---
 
@@ -791,6 +977,19 @@ Agent tool parameters:
   4. Expected output format (structured report, under 6,000 characters; include tool-call counts in Status block)
   5. Current branch name (so agent can verify it is on the correct branch)
   6. Referenced project documents and external content from Step 3.1.1 (formatted per Step E)
+  7. **Orchestrator notes (ADAPTATION PHASE ONLY, epic context only):** include the full content of `$ORCH_LOG` (`.swarm/orchestrator-log-<epic_id>.md`) under a header so the architect-agent can examine what prior tickets in this epic built. Mirrors `/epic-swarm` §3.2.1 item 8.
+
+     ```
+     ## Prior Ticket Work in This Epic
+     The following tickets have already been completed (or attempted) in this
+     epic. Their code already exists on the epic branch. Reference these when
+     planning your implementation approach — look for existing patterns,
+     services, and interfaces you can reuse or extend.
+
+     [full $ORCH_LOG content]
+     ```
+
+     Skip this item entirely in solo context (no epic, no cross-ticket continuity to share) and for phases other than adaptation (later phases work from their own prior phase reports, not the cross-ticket log).
 ```
 
 **SHELL COMMAND POLICY block (item 0 above) — include verbatim at top of every agent prompt:**
@@ -1346,28 +1545,27 @@ gh pr edit [pr-number] --add-label "security-approved"
 
 After Linear posting (Step 3.6) and any PR-side commenting (Step 3.6.2), append a one-line phase-tail entry to `$ORCH_LOG`. This runs **in a finally-style block — even on blocking pause, deferral re-dispatch, or report-validation failure**, the orch-log must record what happened.
 
-**The append is one line per phase per ticket.** Multiple `/execute-ticket` invocations against the same epic each append their own lines; the orch-log accumulates phase tails from all sessions.
+**The append is one line per phase per ticket.** Multiple `/execute-ticket` invocations against the same epic each append their own lines; the orch-log accumulates phase tails from all sessions. (The PASSED/FAILED Format A/B blocks in Step 4 use `entry_exists` to dedupe; phase tails do not — every dispatch is its own line in the audit trail, which is the intended behavior.)
+
+**Before calling, bind the four variables** the helper reads (see Step 1.6.1's "Variable bindings" table):
+- `current_phase` — the phase that just ran (`adaptation`, `implementation`, etc.)
+- `report_status` — parsed from the agent's `Status:` line (`DONE`, `DONE_WITH_CONCERNS`, `N/A`, `BLOCKED`, `FAILED`)
+- `write_count` — `write_calls + edit_calls` from the agent's Status block (use `0` for N/A or BLOCKED)
+- and `$REPORTS_DIR` / `$TICKET_ID` / `$ORCH_LOG` / `$LOCK_FILE` (resolved in Step 1)
+
+Then call:
 
 ```bash
-phase_tail() {
-  local phase="$1"
-  local status="$2"        # DONE | DONE_WITH_CONCERNS | N/A | BLOCKED | FAILED
-  local writes="$3"        # write_calls + edit_calls from the agent report (or 0 for N/A/BLOCKED)
-  local report_path="$4"   # absolute path to $REPORTS_DIR/<phase>.md (or "—" if N/A)
-  printf -- '- %s  %s/%s  [%s]  writes=%s  report=%s\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TICKET_ID" "$phase" "$status" "$writes" "$report_path"
-}
-
-( flock -x 200
-  phase_tail "$current_phase" "$report_status" "$write_count" "$REPORTS_DIR/$current_phase.md" >> "$ORCH_LOG"
-) 200>"$LOCK_FILE"
+phase_tail_append "$current_phase" "$report_status" "$write_count" "$REPORTS_DIR/$current_phase.md"
 ```
 
-**The flock idiom.** All orch-log appends (and state.json updates) use the same `( flock -x 200 ... ) 200>"$LOCK_FILE"` pattern. The subshell opens FD 200 against the lock file, `flock -x 200` acquires an exclusive lock on that descriptor, the body runs while the lock is held, and the subshell exit releases it. Two `/execute-ticket` invocations against the same epic serialize through `$LOCK_FILE = .swarm/.locks/<epic_id>.lock`; solo runs serialize against `.swarm/.locks/solo-<ticket_id>.lock` (effectively never contended).
+`phase_tail_append` (defined in Step 1.6.1) wraps the append in `( flock -x 200 ... ) 200>"$LOCK_FILE"` so concurrent `/execute-ticket` runs against the same epic serialize correctly.
 
-Why a sidecar lock file (`.lock`) instead of locking the target file directly: locking the orch-log itself would block any concurrent reads (the architect-agent in Step 3.1.0 reads it), making readers wait on writers. The sidecar pattern lets writers serialize among themselves while readers proceed unblocked.
+**The flock idiom.** All orch-log appends (and state.json updates) use the same `( flock -x 200 ... ) 200>"$LOCK_FILE"` pattern defined once in Step 1.6.1's helpers. The subshell opens FD 200 against the lock file, `flock -x 200` acquires an exclusive lock on that descriptor, the body runs while the lock is held, and the subshell exit releases it. Two `/execute-ticket` invocations against the same epic serialize through `$LOCK_FILE = .swarm/.locks/<epic_id>.lock`; `/epic-swarm` resolves the same absolute lock file via its own worktree-safe `$REPO_ROOT` derivation (see `commands/epic-swarm.md` §1.8); solo runs serialize against `.swarm/.locks/solo-<ticket_id>.lock` (effectively never contended).
 
-**Why a one-line tail per phase, not a full report dump.** The orch-log is the cross-ticket adaptation context (`/epic-swarm` §3.2.1 item 8 includes it in the architect-agent's prompt). Bulk content belongs in `$REPORTS_DIR/<phase>.md` — the orch-log just records *that the phase happened, when, with what status*, and links to the file for full content. A 40-line phase-tail block per phase per ticket would balloon the orch-log past usable adaptation context for later tiers.
+**Why a sidecar lock file (`.lock`) instead of locking the orch-log directly:** locking the orch-log itself would block any concurrent reads. The orch-log is read by `/epic-swarm`'s architect-agent prompt at §3.2.1 item 8 and (per Step 3.3 item 7 below) by `/execute-ticket`'s own adaptation-phase agent when an epic context is active. Sidecar locking lets readers proceed unblocked while writers serialize among themselves.
+
+**Why a one-line tail per phase, not a full report dump.** The orch-log is the cross-ticket adaptation context. Bulk content belongs in `$REPORTS_DIR/<phase>.md` — the orch-log just records *that the phase happened, when, with what status*, and links to the file for full content. A 40-line phase-tail block per phase per ticket would balloon the orch-log past usable adaptation context for later tiers.
 
 #### 3.7 Continue to Next Phase
 
@@ -1588,36 +1786,27 @@ When the active profile's final phase completes:
    {"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":null,"event":"ticket_completed","data":{"profile":"<MINIMAL|STANDARD|STRICT>","phases_run_live":["<list>"],"phases_na":["<list>"],"wall_clock_seconds":<n>}}
    ```
 
-3. **Append PASSED entry to `$ORCH_LOG`** (Tier 4 — epic-aware bookkeeping). Use Format A (success), identical shape to `/epic-swarm` §3.4 Format A so a swarm session resuming later sees a consistent log. The entry runs under the same flock as Step 3.7.0. **Idempotency on resume:** before appending, grep `$ORCH_LOG` for `### $TICKET_ID — ` lines; if a prior PASSED entry exists for this ticket, do NOT append a duplicate (the prior session already recorded it). If a prior FAILED entry exists and this session is now passing, DO append the PASSED entry as a NEW section — the audit trail preserves both attempts (mirrors `/epic-swarm` §3.4 idempotency rule).
+3. **Append PASSED entry to `$ORCH_LOG`** (Tier 4 — epic-aware bookkeeping). Format A shape matches `/epic-swarm` §3.4 Format A so a swarm session resuming later sees a consistent log. Idempotency is enforced by `entry_exists` (defined in Step 1.6.1) which scans multi-line blocks rather than single lines — earlier line-oriented grep patterns could never match the multi-block format and produced duplicate entries on every resume.
+
+   **Before calling, bind:** `ticket_title`, `ticket_profile`, `ticket_tier` (or leave unset to default to "N/A"), `phases_run_live`, `phases_na`, `implementation_files_block`, `key_interfaces_block`, `patterns_used_block`, `cross_ticket_observations_block`. Use `"— none —"` for any block with no entries (see Step 1.6.1 Variable bindings).
 
    ```bash
-   if ! grep -q "^### $TICKET_ID — .*PASSED" "$ORCH_LOG" 2>/dev/null; then
-     ( flock -x 200
-       {
-         printf '\n### %s — %s\n' "$TICKET_ID" "$ticket_title"
-         printf '**Source:** /execute-ticket | **Completed:** %s | **Outcome:** PASSED\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-         printf '**Profile:** %s\n' "$ticket_profile"
-         printf '**Phases run live:** %s\n' "$phases_run_live"
-         printf '**Phases N/A:** %s\n\n' "$phases_na"
-         printf '**Files Created/Modified:**\n%s\n\n' "$implementation_files_block"
-         printf '**Reports:** %s/\n' "$REPORTS_DIR"
-       } >> "$ORCH_LOG"
-     ) 200>"$LOCK_FILE"
-   fi
+   write_passed_entry
    ```
 
-   Solo-context `$ORCH_LOG` (`.swarm/orchestrator-log-tickets/<ticket_id>.md`) uses the same append shape. The file is single-ticket, so the grep guard against duplicates still applies on resume.
+   On resume: if a prior session already wrote a PASSED entry for this `TICKET_ID`, the helper returns early and does NOT append a duplicate. If a prior FAILED entry exists and this session is now passing, the helper DOES append the new PASSED entry as a new block — the audit trail preserves both attempts.
 
-4. **Upsert this ticket's row in `$STATE_PATH`** (epic context only). Mark status `done`, record merge-relevant metadata, and stamp the completion timestamp. Skip for solo runs (no state file).
+   Solo-context `$ORCH_LOG` (`.swarm/orchestrator-log-tickets/<ticket_id>.md`) uses the same helper, same idempotency behavior. The file is single-ticket, so duplicates are unlikely anyway, but the guard still applies on resume.
+
+4. **Upsert this ticket's row in `$STATE_PATH`** (epic context only). Mark status `done`, record merge-relevant metadata, and stamp the completion timestamp. Skip for solo runs (no state file). Uses `safe_jq_update` (defined in Step 1.6.1) so any jq failure surfaces to stderr rather than silently leaving a stale file.
 
    ```bash
    if [ -n "$STATE_PATH" ]; then
      ( flock -x 200
-       tmp=$(mktemp)
-       jq --arg t "$TICKET_ID" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          --arg pr "${pr_number:-}" --arg branch "$branch_name" \
-          '.tickets[$t] = ((.tickets[$t] // {}) + {status:"done", closedAt:$ts, pr:$pr, branch:$branch})' \
-          "$STATE_PATH" > "$tmp" && mv "$tmp" "$STATE_PATH"
+       safe_jq_update "$STATE_PATH" \
+         --arg t "$TICKET_ID" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+         --arg pr "${pr_number:-}" --arg branch "${branch_name:-}" \
+         '.tickets[$t] = ((.tickets[$t] // {}) + {status:"done", closedAt:$ts, pr:$pr, branch:$branch})'
      ) 200>"$LOCK_FILE"
    fi
    ```
@@ -1654,40 +1843,43 @@ When the active profile's final phase completes:
   ```json
   {"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"security-review","event":"ticket_failed","data":{"halt_phase":"security-review","halt_reason":"<CRITICAL|HIGH finding summary>","recovery_options_offered_to_user":["retry phase","manual review","reduce scope"]}}
   ```
-- **Append FAILED entry to `$ORCH_LOG`** (Tier 4 — finally-style). Use Format B (failure), shape identical to `/epic-swarm` §3.4 Format B. **Idempotency on resume:** before appending, grep `$ORCH_LOG` for an existing `FAILED` entry that names the same `halt_phase`. If found, do NOT duplicate. If a prior PASSED entry exists and this session is now failing (rare — usually means the prior pass was incorrect or a regression was introduced), DO append the FAILED entry as a NEW section — the audit trail preserves both.
+- **Append FAILED entry to `$ORCH_LOG`** (Tier 4 — finally-style). Format B shape matches `/epic-swarm` §3.4 Format B. Idempotency on resume is enforced by `entry_exists` (defined in Step 1.6.1) which now matches the `Outcome: FAILED` line and `Failure point: <halt_phase>` line across the multi-line block (the prior single-line grep could never match).
+
+  **Before calling, bind:** `ticket_title`, `halt_phase`, `halt_reason`, `phases_done`, and (optionally) `ticket_tier`.
 
   ```bash
-  if ! grep -q "^### $TICKET_ID — .*FAILED.*$halt_phase" "$ORCH_LOG" 2>/dev/null; then
-    ( flock -x 200
-      {
-        printf '\n### %s — %s\n' "$TICKET_ID" "$ticket_title"
-        printf '**Source:** /execute-ticket | **Halted:** %s | **Outcome:** FAILED\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        printf '**Failure point:** %s\n' "$halt_phase"
-        printf '**Reason:** %s\n\n' "$halt_reason"
-        printf '**Phases completed before halt:** %s\n' "$phases_done"
-        printf '**Reports:** %s/\n' "$REPORTS_DIR"
-      } >> "$ORCH_LOG"
-    ) 200>"$LOCK_FILE"
-  fi
+  write_failed_entry
   ```
+
+  On resume: if a prior session already wrote a FAILED entry for this `TICKET_ID` with the same `halt_phase`, the helper returns early. If the prior failure was at a different phase, or a prior PASSED entry exists and this session is now failing (rare — usually a regression), the helper appends a new block so both attempts survive in the audit trail.
 
 - **Upsert this ticket's row in `$STATE_PATH`** (epic context only). Mark status `failed`, stamp the halt phase and reason for the next session/operator to inspect.
 
   ```bash
   if [ -n "$STATE_PATH" ]; then
     ( flock -x 200
-      tmp=$(mktemp)
-      jq --arg t "$TICKET_ID" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-         --arg phase "$halt_phase" --arg reason "$halt_reason" \
-         '.tickets[$t] = ((.tickets[$t] // {}) + {status:"failed", failedAt:$ts, haltPhase:$phase, haltReason:$reason})' \
-         "$STATE_PATH" > "$tmp" && mv "$tmp" "$STATE_PATH"
+      safe_jq_update "$STATE_PATH" \
+        --arg t "$TICKET_ID" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg phase "$halt_phase" --arg reason "$halt_reason" \
+        '.tickets[$t] = ((.tickets[$t] // {}) + {status:"failed", failedAt:$ts, haltPhase:$phase, haltReason:$reason})'
     ) 200>"$LOCK_FILE"
   fi
   ```
 
 - PAUSE for user decision (standard blocking behavior)
 
-**`ticket_failed` is also emitted from any other halt path** — hard-checkpoint failure, merge conflict the user can't resolve, deferral re-dispatch loop exhausted after Pass 2. Use the same envelope with `halt_phase` set to the phase that triggered the halt. **Both bookkeeping appends above (orch-log Format B + state.json `failed` row) also run on those non-security halt paths.** Wrap them in whatever closure block surfaces the halt (Step 3.5 blocking-condition pause, Step 3.6.1a redispatch-exhausted pause, etc.) so no halt path silently skips the audit-trail write.
+**`ticket_failed` and its bookkeeping run from every halt path, not just security-review.** Use the same envelope with `halt_phase` set to the phase that triggered the halt. The four call sites that MUST invoke `write_failed_entry` + the state.json upsert above before pausing are:
+
+| Halt source | Halt-phase value | Where in this command |
+|---|---|---|
+| Security-review CRITICAL/HIGH (the §4.2 case above) | `"security-review"` | this block |
+| Codereview CHANGES_REQUESTED that the user does not resolve | `"codereview"` | Step 3.5 blocking-conditions table (the `PAUSE for user decision` branch) |
+| Deferral re-dispatch loop exhausted at Pass 2 | `"<phase that exhausted retries>"` | Step 3.6.1a final `PAUSE the ticket` branch |
+| Implementation/testing compile-or-gate failure that the user does not resolve | `"<phase>"` | Step 3.5 blocking-conditions table |
+| Merge conflict the user cannot resolve | `"merge"` | Step 3.6.1 (when not in `WORKTREE_MODE`) |
+| Hard-checkpoint failure on resume | `"hard-checkpoint"` | wherever the resume-detection logic decides the run cannot continue |
+
+Each call site binds `halt_phase`, `halt_reason`, `phases_done`, `ticket_title` (if not already bound), then calls `write_failed_entry` followed by the `safe_jq_update` block above. This is the shared-function contract that prevents any halt path from silently skipping the audit-trail write — the original B6 silent-shipping fingerprint.
 
 ---
 
