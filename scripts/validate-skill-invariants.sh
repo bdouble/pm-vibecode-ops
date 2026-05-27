@@ -11,34 +11,42 @@
 #   scripts/validate-skill-invariants.sh <base-ref>         # validate against arbitrary ref (e.g., origin/release)
 #
 # Exit codes:
-#   0 — no violations (no protected-region changes, OR all changes have @override markers, OR the change was a
-#       fresh introduction of a new protected region)
+#   0 — no violations (no protected-region changes, OR every violating hunk carries a paired @override marker, OR
+#       the change was a fresh introduction of a new protected region)
 #   1 — usage error
-#   2 — pre-existing protected region modified without @override marker (CI blocker)
-#   3 — runtime error (git unavailable, malformed skill file)
+#   2 — protected region modified without paired @override marker (CI blocker)
+#   3 — runtime error (git unavailable, malformed skill file: nested/unclosed @protected)
 #
-# What counts as a violation:
-#   - A line that EXISTED inside a <!-- @protected ... --> ... <!-- @end-protected --> block in the base ref
-#     was added, modified, or deleted in HEAD
-#   - AND the PR does not introduce an adjacent <!-- @override approved-by="<name>" reason="<text>" --> marker
+# What counts as a violation (per hunk):
+#   - A line that EXISTED inside a <!-- @protected ... --> ... <!-- @end-protected --> block in the MERGE-BASE
+#     of HEAD and the given base ref is added, modified, or deleted in HEAD
+#   - OR a pure insertion lands strictly inside the base protected range (between two in-range lines)
+#   - AND the same hunk does not contain an added <!-- @override approved-by="<name>" reason="<text>" --> marker
+#
+#   Pairing is per-hunk: one @override marker satisfies one hunk. Two separate hunks that each touch protected
+#   content require two separate @override markers. This is the script-enforced analog of SkillOpt's "one
+#   bounded-edit decision per operator approval."
 #
 # What does NOT count as a violation:
-#   - A brand-new protected region introduced by this PR (no pre-existing content to protect)
+#   - A brand-new protected region introduced by this PR (no merge-base content to protect)
 #   - Whitespace-only changes outside protected regions
-#   - Changes outside protected regions (the whole rest of the SKILL.md is mutable freely)
+#   - Changes outside protected regions (the rest of the SKILL.md is mutable freely)
+#
+# Why merge-base, not BASE_REF tip:
+#   `git diff BASE_REF...HEAD` uses the MERGE-BASE for old-side line numbers, but `git show BASE_REF:file` returns
+#   the tip snapshot. When main moves forward (the normal case during a PR's lifetime), those two line spaces
+#   diverge, and protected-region modifications slip through unflagged. We resolve both to the merge-base.
 #
 # Override marker grammar:
 #   <!-- @override approved-by="brian" reason="v4.7 audit pass — see context/skill-audits/no-silent-deferrals.md" -->
 #
 # Portability:
-#   - Uses POSIX-ish awk (no gawk extensions). Tested on macOS BWK awk and GNU gawk.
+#   - bash 3.2+ (macOS default) and POSIX-ish awk (no gawk extensions).
 #   - Requires git and grep. No jq, sed -i, or Python.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Validate the repo the user is INSIDE, not the repo where the script lives. This lets the same script
-# operate on any consumer repo without per-install pathing.
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$REPO_ROOT" ]]; then
   REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -56,81 +64,54 @@ if ! git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   exit 1
 fi
 
-# Helper: extract protected ranges (start_line end_line pairs, one per line) from stdin.
-# Portable awk — no match($0, regex, arr).
+# Resolve to the merge-base so BASE_CONTENT line numbers and diff old-side line numbers
+# share the same line space. Without this, protected-region edits silently pass whenever
+# the base ref has moved forward since the branch forked.
+MERGE_BASE="$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD 2>/dev/null || true)"
+if [[ -z "$MERGE_BASE" ]]; then
+  echo "could not compute merge-base of '$BASE_REF' and HEAD" >&2
+  exit 3
+fi
+
+# Helper: extract protected ranges from stdin.
+# Emits one "start end" pair per closed @protected ... @end-protected block.
+# Exits 3 on malformed input (nested/unclosed @protected, orphan @end-protected).
 extract_protected_ranges() {
   awk '
-    /<!-- @protected/ { start = NR; next }
-    /<!-- @end-protected/ { if (start) { print start " " NR; start = 0 } }
+    /<!-- @protected/ {
+      if (start) {
+        printf "ERROR: nested or unclosed @protected at line %d (previous opener at line %d)\n", NR, start > "/dev/stderr"
+        exit 3
+      }
+      start = NR
+      next
+    }
+    /<!-- @end-protected/ {
+      if (!start) {
+        printf "ERROR: orphan @end-protected at line %d (no matching opener)\n", NR > "/dev/stderr"
+        exit 3
+      }
+      print start " " NR
+      start = 0
+    }
+    END {
+      if (start) {
+        printf "ERROR: unclosed @protected (opener at line %d, no closing @end-protected)\n", start > "/dev/stderr"
+        exit 3
+      }
+    }
   '
 }
 
-# Helper: from a unified-diff (-U0) on stdin, extract NEW-side line numbers that were added or modified.
-# Hunk header format: @@ -<old_start>[,<old_count>] +<new_start>[,<new_count>] @@
-# Portable approach: grep the @@ lines, then awk-parse the +N,M token without using gawk's match-with-array.
-extract_new_changed_lines() {
-  grep '^@@ ' || true
-}
-
-# Helper: from a unified-diff on stdin, extract OLD-side line numbers that were modified or deleted.
-extract_old_changed_lines() {
-  grep '^@@ ' || true
-}
-
-# Helper: parse the "+start,count" token from a single hunk header line.
-# Echoes one line number per affected NEW-side line.
-parse_new_hunk_lines() {
-  local hunk="$1"
-  # Grab the "+N" or "+N,M" token (the second numeric token after @@).
-  local token
-  token=$(printf '%s\n' "$hunk" | grep -oE '\+[0-9]+(,[0-9]+)?' | head -1)
-  [[ -z "$token" ]] && return
-  local start count
-  start=$(printf '%s' "$token" | sed 's/^+//' | cut -d, -f1)
-  if [[ "$token" == *","* ]]; then
-    count=$(printf '%s' "$token" | cut -d, -f2)
-  else
-    count=1
-  fi
-  # count==0 means pure deletion — no NEW-side lines to flag (handled separately via old-side scan).
-  [[ "$count" == "0" ]] && return
-  local i=0
-  while (( i < count )); do
-    echo $((start + i))
-    i=$((i + 1))
-  done
-}
-
-# Helper: parse the "-start,count" token from a single hunk header line.
-parse_old_hunk_lines() {
-  local hunk="$1"
-  local token
-  token=$(printf '%s\n' "$hunk" | grep -oE '\-[0-9]+(,[0-9]+)?' | head -1)
-  [[ -z "$token" ]] && return
-  local start count
-  start=$(printf '%s' "$token" | sed 's/^-//' | cut -d, -f1)
-  if [[ "$token" == *","* ]]; then
-    count=$(printf '%s' "$token" | cut -d, -f2)
-  else
-    count=1
-  fi
-  [[ "$count" == "0" ]] && return
-  local i=0
-  while (( i < count )); do
-    echo $((start + i))
-    i=$((i + 1))
-  done
-}
-
-# Helper: check whether a line number falls inside any of the provided ranges.
-# Returns 0 (true) on match, 1 (false) otherwise.
+# Helper: an EXISTING line falls inside any protected range (inclusive of marker lines).
 line_in_any_range() {
   local line="$1"
   local ranges="$2"
+  local range range_start range_end
   while IFS= read -r range; do
     [[ -z "$range" ]] && continue
-    local range_start="${range%% *}"
-    local range_end="${range##* }"
+    range_start="${range%% *}"
+    range_end="${range##* }"
     if (( line >= range_start && line <= range_end )); then
       return 0
     fi
@@ -138,8 +119,27 @@ line_in_any_range() {
   return 1
 }
 
-# Find all SKILL.md files changed against the base.
-CHANGED_SKILLS=$(git -C "$REPO_ROOT" diff --name-only "$BASE_REF"...HEAD -- 'skills/*/SKILL.md' || true)
+# Helper: an INSERTION point lands strictly inside a protected range.
+# Convention: a diff hunk "@@ -N,0 +M,K @@" inserts content AFTER old line N.
+# The insertion is "inside" range [s,e] iff s <= N < e — the point sits between
+# two lines that are both within the protected envelope.
+insertion_point_in_protected() {
+  local line="$1"
+  local ranges="$2"
+  local range range_start range_end
+  while IFS= read -r range; do
+    [[ -z "$range" ]] && continue
+    range_start="${range%% *}"
+    range_end="${range##* }"
+    if (( line >= range_start && line < range_end )); then
+      return 0
+    fi
+  done <<<"$ranges"
+  return 1
+}
+
+# Find SKILL.md files this branch changed relative to the merge-base.
+CHANGED_SKILLS=$(git -C "$REPO_ROOT" diff --name-only "$MERGE_BASE" HEAD -- 'skills/*/SKILL.md' || true)
 
 if [[ -z "$CHANGED_SKILLS" ]]; then
   echo "No SKILL.md files changed against $BASE_REF — nothing to validate."
@@ -149,78 +149,104 @@ fi
 VIOLATIONS=0
 SCANNED=0
 
+# Hunk-scoped state (mutated by walk_diff and read by close_hunk).
+hunk_violated=0
+hunk_has_override=0
+hunk_old_start=0
+hunk_old_count=0
+in_hunk=0
+
+close_hunk() {
+  if (( in_hunk && hunk_violated && ! hunk_has_override )); then
+    echo "✗ $SKILL_NAME — protected region modified without paired @override marker" >&2
+    echo "    file: $skill" >&2
+    echo "    hunk: old line $hunk_old_start (count $hunk_old_count)" >&2
+    echo "    fix:  add inside the same hunk:" >&2
+    echo "          <!-- @override approved-by=\"<your-name>\" reason=\"<one-line justification>\" -->" >&2
+    echo "" >&2
+    VIOLATIONS=$((VIOLATIONS + 1))
+  fi
+  hunk_violated=0
+  hunk_has_override=0
+}
+
 while IFS= read -r skill; do
   [[ -z "$skill" ]] && continue
   SCANNED=$((SCANNED + 1))
   SKILL_NAME=$(basename "$(dirname "$skill")")
 
-  # Skip if the file was deleted (no need to check protected regions on a removed file).
+  # Skip deletions — nothing to validate on a removed file.
   if [[ ! -f "$REPO_ROOT/$skill" ]]; then
     continue
   fi
 
-  # The KEY rule: only flag changes that touch protected regions that EXISTED IN THE BASE REF.
-  # A brand-new protected region added by this PR is fine — there was nothing to protect before.
-  BASE_CONTENT=$(git -C "$REPO_ROOT" show "$BASE_REF:$skill" 2>/dev/null || true)
+  # Pull merge-base content so its line numbers match the diff's old side.
+  BASE_CONTENT=$(git -C "$REPO_ROOT" show "$MERGE_BASE:$skill" 2>/dev/null || true)
   if [[ -z "$BASE_CONTENT" ]]; then
-    continue   # New skill — no base content to validate against, no protection invariants to enforce.
+    continue   # New skill in this branch — no merge-base content to protect.
   fi
 
   BASE_PROTECTED_RANGES=$(printf '%s\n' "$BASE_CONTENT" | extract_protected_ranges)
   if [[ -z "$BASE_PROTECTED_RANGES" ]]; then
-    continue   # No protected regions in the base version — nothing to enforce.
+    continue   # No protected regions in the merge-base version — nothing to enforce.
   fi
 
-  # Pull the diff hunks for this file (unified=0 for tight line ranges).
-  DIFF=$(git -C "$REPO_ROOT" diff -U0 "$BASE_REF"...HEAD -- "$skill" || true)
+  DIFF=$(git -C "$REPO_ROOT" diff -U0 "$MERGE_BASE" HEAD -- "$skill" || true)
   if [[ -z "$DIFF" ]]; then
     continue
   fi
 
-  # Collect all hunk headers, then expand them to per-line OLD-side numbers.
-  HUNKS=$(printf '%s\n' "$DIFF" | grep '^@@ ' || true)
-  if [[ -z "$HUNKS" ]]; then
-    continue
-  fi
+  # Walk the diff one hunk at a time. Each hunk must carry its OWN @override marker
+  # (added on the new side) when it touches a base protected range. This pairing
+  # closes the loophole where a single @override marker silently covered multiple
+  # unrelated protected-region edits in the same file.
+  in_hunk=0
+  hunk_violated=0
+  hunk_has_override=0
+  hunk_old_start=0
+  hunk_old_count=0
 
-  OLD_TOUCHED_LINES=""
-  while IFS= read -r hunk; do
-    [[ -z "$hunk" ]] && continue
-    expanded=$(parse_old_hunk_lines "$hunk")
-    if [[ -n "$expanded" ]]; then
-      OLD_TOUCHED_LINES+="${expanded}"$'\n'
-    fi
-  done <<<"$HUNKS"
+  while IFS= read -r dline; do
+    if [[ "$dline" =~ ^@@\ -([0-9]+)(,([0-9]+))?\ \+([0-9]+)(,([0-9]+))? ]]; then
+      # Close the previous hunk (if any) before starting a new one.
+      close_hunk
+      hunk_old_start="${BASH_REMATCH[1]}"
+      hunk_old_count="${BASH_REMATCH[3]:-1}"
+      in_hunk=1
 
-  # Check whether any OLD-side touched line falls inside a BASE protected range.
-  REGION_VIOLATED=0
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    if line_in_any_range "$line" "$BASE_PROTECTED_RANGES"; then
-      REGION_VIOLATED=1
-      break
+      if (( hunk_old_count == 0 )); then
+        # Pure insertion at point old_start. Flag if the insertion point is strictly
+        # inside a protected range (between two in-range lines).
+        if insertion_point_in_protected "$hunk_old_start" "$BASE_PROTECTED_RANGES"; then
+          hunk_violated=1
+        fi
+      else
+        # Lines [hunk_old_start, hunk_old_start + hunk_old_count) are touched.
+        i=0
+        while (( i < hunk_old_count )); do
+          if line_in_any_range "$((hunk_old_start + i))" "$BASE_PROTECTED_RANGES"; then
+            hunk_violated=1
+            break
+          fi
+          i=$((i + 1))
+        done
+      fi
+    elif (( in_hunk )) && [[ "$dline" == "+"* ]] && [[ "$dline" != "+++"* ]]; then
+      # Added line — does it carry an @override marker?
+      if printf '%s' "$dline" | grep -qE '<!-- @override approved-by="[^"]+" reason="[^"]+" -->'; then
+        hunk_has_override=1
+      fi
     fi
-  done <<<"$OLD_TOUCHED_LINES"
+  done <<<"$DIFF"
 
-  if [[ "$REGION_VIOLATED" == "1" ]]; then
-    # Check whether the diff also introduces an @override marker for this skill.
-    OVERRIDE_FOUND=$(printf '%s\n' "$DIFF" | grep -E '^\+.*<!-- @override approved-by="[^"]+" reason="[^"]+" -->' || true)
-    if [[ -z "$OVERRIDE_FOUND" ]]; then
-      VIOLATIONS=$((VIOLATIONS + 1))
-      echo "✗ $SKILL_NAME — pre-existing protected region modified without @override marker" >&2
-      echo "    file: $skill" >&2
-      echo "    fix:  add a marker adjacent to the change, e.g.:" >&2
-      echo "          <!-- @override approved-by=\"<your-name>\" reason=\"<one-line justification>\" -->" >&2
-      echo "" >&2
-    else
-      echo "✓ $SKILL_NAME — pre-existing protected region modified, @override marker present"
-    fi
-  fi
+  # Close the final hunk for this skill.
+  close_hunk
+  in_hunk=0
 done <<<"$CHANGED_SKILLS"
 
 if (( VIOLATIONS > 0 )); then
   echo "" >&2
-  echo "validate-skill-invariants.sh: $VIOLATIONS skill(s) modified pre-existing protected regions without @override markers." >&2
+  echo "validate-skill-invariants.sh: $VIOLATIONS protected-region modification(s) without paired @override markers." >&2
   echo "Per SkillOpt §3.6, protected regions enforce bounded-edit discipline. Each change requires an explicit" >&2
   echo "operator decision recorded inline. See docs/SKILL_AUDIT_PLAYBOOK.md for the audit process." >&2
   exit 2

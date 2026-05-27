@@ -24,24 +24,26 @@ The first decision: is this a discipline skill or a reference skill? The full Sk
 
 **Reference skill heuristic:** the skill exists to provide saturated DOCUMENTATION agents look up on demand. The body contains tables of correct values, templates, schemas, or canonical patterns.
 
-| Skill | Classification | Why |
-|---|---|---|
-| no-silent-deferrals | Discipline | Counters the default-to-defer instinct; foundational principle + impact bar |
-| production-code-standards | Discipline | Counters the temporary-fix instinct; prohibits patterns |
-| service-reuse | Discipline | Counters the create-new instinct; check-first procedure |
-| testing-philosophy | Discipline | Counters the skip-broken-tests instinct; gate sequence |
-| verify-implementation | Discipline | Counters the assume-it-works instinct; evidence requirement |
-| epic-closure-validation | Discipline | Counters the close-with-pending-work instinct; closure gates |
-| systematic-debugging | Discipline | Counters the guess-and-try instinct; Iron Law + 4-phase process |
-| mvd-documentation | Reference | Decision matrix lookup |
-| security-patterns | Reference | OWASP pattern catalog lookup |
-| model-aware-behavior | Reference | Pre-change verification checklist |
-| using-pm-workflow | Reference | Workflow phase routing table |
-| divergent-exploration | Reference | Three-phase template |
-| codex-finding-resolution | Reference | Finding-disposition flowchart |
-| swarm-phase-reporting | Reference | Report template + posting checklist |
-| swarm-observability | Reference | Dashboard interpretation guide |
-| closure-log-aggregation | Reference | Aggregation algorithm |
+| Skill | Classification | Protected | Why |
+|---|---|---|---|
+| no-silent-deferrals | Discipline | Yes | Counters the default-to-defer instinct; foundational principle + impact bar |
+| production-code-standards | Discipline | Yes | Counters the temporary-fix instinct; prohibits patterns |
+| service-reuse | Discipline | Yes | Counters the create-new instinct; check-first procedure |
+| testing-philosophy | Discipline | Yes | Counters the skip-broken-tests instinct; gate sequence |
+| verify-implementation | Discipline | Yes | Counters the assume-it-works instinct; evidence requirement |
+| epic-closure-validation | Discipline | Yes | Counters the close-with-pending-work instinct; closure gates |
+| systematic-debugging | Discipline | Yes | Counters the guess-and-try instinct; Iron Law + 4-phase process |
+| mvd-documentation | Reference | Yes | Decision matrix lookup (carries a "letter ≠ spirit" foundational principle) |
+| security-patterns | Reference | Yes | OWASP pattern catalog lookup (carries a "letter ≠ spirit" foundational principle) |
+| model-aware-behavior | Reference | Yes | Pre-change verification checklist (carries a "letter ≠ spirit" foundational principle) |
+| divergent-exploration | Reference | Yes | Three-phase template (carries a "letter ≠ spirit" foundational principle) |
+| swarm-observability | Reference | Yes | Dashboard interpretation guide (carries a "letter ≠ spirit" foundational principle) |
+| closure-log-aggregation | Reference | Yes | Aggregation algorithm (carries a "letter ≠ spirit" foundational principle) |
+| using-pm-workflow | Reference | No | Pure workflow phase routing table — no foundational principle to protect |
+| codex-finding-resolution | Reference | No | Finding-disposition flowchart — no foundational principle to protect |
+| swarm-phase-reporting | Reference | No | Report template + posting checklist — no foundational principle to protect |
+
+**Two orthogonal dimensions.** Classification (Discipline vs Reference) governs **audit depth**: discipline skills get the full tripartite-scenario pass below; reference skills get the [light audit](#the-light-audit-path-reference-skills) checklist. The Protected column is independent: it tracks whether the SKILL.md contains a `<!-- @protected -->` envelope around a "Violating the letter is violating the spirit" foundational principle. A reference skill can carry such a principle (and the wrap that protects it) even though its audit cadence is lighter. The wrap criterion is presence of a foundational principle, not classification.
 
 A gray-zone skill (`divergent-exploration`, `codex-finding-resolution`, `swarm-phase-reporting`) can be audited as discipline if you want the rigor; otherwise treat as reference. The audit playbook below covers both; sections marked **[discipline only]** apply to the full audit.
 
@@ -190,7 +192,7 @@ Reference skills skip Steps 2-9 in favor of a single-pass checklist. The whole p
 2. **5b description rewrite** — pass the description through the rule: "Does this sentence describe WHEN to load, or HOW the skill works?" If it describes HOW, rewrite as "Use when [symptom/situation/context]."
 3. **5c token efficiency** — if frequently loaded (`using-pm-workflow`, `mvd-documentation`, `security-patterns`, `model-aware-behavior` qualify), trim body toward <200 words. Push detail to `references/`.
 
-Light audits don't get protected regions added — those are a discipline-skill feature. Light audits also don't author scenarios; the cost is too high for the marginal value.
+Light audits don't author scenarios; the cost is too high for the marginal value. Light audits also don't, by themselves, introduce protected regions — but a reference skill that already carries a "Violating the letter is violating the spirit" foundational principle DOES get a `<!-- @protected -->` wrap around that principle (see the Protected column in Step 1). The wrap criterion is presence of a foundational principle, not classification; the audit-depth criterion is classification, not the wrap.
 
 ---
 
