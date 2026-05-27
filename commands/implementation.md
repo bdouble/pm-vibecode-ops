@@ -1,6 +1,6 @@
 ---
 description: Execute code implementation based on adaptation guide, focusing on delivering functionality strictly within ticket scope following established patterns.
-allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(gh pr comment:*), NotebookEdit, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
+allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(gh pr comment:*), NotebookEdit, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 argument-hint: [ticket-id] (e.g., /implementation LIN-456)
 workflow-phase: implementation
 closes-ticket: false
@@ -105,7 +105,7 @@ Use the Task tool to invoke the appropriate engineer agent with ALL context embe
 After the agent returns its report:
 
 1. **Parse the agent's report** - Extract files changed, services used, implementation details
-2. **Write the completion comment** - Use `mcp__linear-server__create_comment` with the structured implementation report
+2. **Write the completion comment** - Use `mcp__linear-server__save_comment` with the structured implementation report
 3. **Update ticket status if needed** - Use `mcp__linear-server__update_issue` (keep as "In Progress")
 4. **Verify success** - Confirm the comment was added
 5. **Report to user** - Summarize what was completed (files, PR if created, next steps)
@@ -158,7 +158,7 @@ Before running:
 **Tools you will use:**
 - **Fetch ticket**: `mcp__linear-server__get_issue` - YOU fetch before agent invocation
 - **Fetch comments**: `mcp__linear-server__list_comments` - YOU fetch before agent invocation (adaptation report is here!)
-- **Add comments**: `mcp__linear-server__create_comment` - YOU write after agent returns
+- **Add comments**: `mcp__linear-server__save_comment` - YOU write after agent returns
 - **Update status**: `mcp__linear-server__update_issue` - YOU update after agent returns
 
 Execute the actual code implementation for ticket **$1** based on the adaptation guide from the previous phase.
@@ -384,7 +384,7 @@ If any violations are detected:
 9. **Commit Changes**: Stage and commit ONLY ticket-related changes to feature branch
 10. **Pull Request**: Create DRAFT PR with Linear ticket number in title using GitHub CLI
 11. **PR Comment**: Add implementation summary as comment on the PR
-12. **Linear Update**: Use `mcp__linear-server__create_comment` to add implementation completion report (do NOT change ticket status)
+12. **Linear Update**: Use `mcp__linear-server__save_comment` to add implementation completion report (do NOT change ticket status)
 
 ## Post-Implementation Data Flow Verification
 

@@ -1,6 +1,6 @@
 ---
 description: Cross-model code review using OpenAI Codex for bug detection, security analysis, and surgical fixes
-allowed-tools: Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment
+allowed-tools: Read, Grep, Glob, Bash, Bash(git:*), Bash(gh:*), mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix, mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__save_comment
 argument-hint: <ticket-id>
 workflow-phase: cross-model-review
 closes-ticket: false
@@ -251,7 +251,7 @@ git push origin HEAD
 Post the cross-model review report as a comment on the Linear ticket:
 
 ```
-Use mcp__linear-server__create_comment with:
+Use mcp__linear-server__save_comment with:
   issueId: [ticket ID]
   body: [report below]
 ```

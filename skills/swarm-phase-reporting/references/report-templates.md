@@ -6,7 +6,7 @@ These templates define the MINIMUM structure for each phase report. Reports may 
 
 Every report is posted via:
 ```
-mcp__linear-server__create_comment:
+mcp__linear-server__save_comment:
   - issue_id: [ticket-id]
   - body: [formatted report]
 ```

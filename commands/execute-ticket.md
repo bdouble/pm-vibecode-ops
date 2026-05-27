@@ -1,6 +1,6 @@
 ---
 description: Orchestrate all ticket workflow phases (adaptation → implementation → testing → documentation → codereview → codex-review → security-review) automatically
-allowed-tools: Task, Agent, Read, Write, Edit, MultiEdit, Grep, Glob, LS, WebFetch, Bash, Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(npx:*), Bash(node:*), Bash(cd:*), Bash(mkdir:*), Bash(chmod:*), Bash(mv:*), Bash(cp:*), Bash(ln:*), Bash(touch:*), Bash(rm:*), Bash(test:*), Bash(cat:*), Bash(ls:*), Bash(find:*), Bash(rg:*), Bash(head:*), Bash(tail:*), Bash(pwd:*), Bash(echo:*), Bash(printf:*), Bash(which:*), Bash(jq:*), Bash(sed:*), Bash(awk:*), Bash(tr:*), Bash(sort:*), Bash(uniq:*), Bash(wc:*), Bash(xargs:*), Bash(docker:*), Bash(docker compose:*), Bash(tsc:*), Bash(vitest:*), Bash(jest:*), Bash(biome:*), Bash(eslint:*), Bash(prettier:*), mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
+allowed-tools: Task, Agent, Read, Write, Edit, MultiEdit, Grep, Glob, LS, WebFetch, Bash, Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(npx:*), Bash(node:*), Bash(cd:*), Bash(mkdir:*), Bash(chmod:*), Bash(mv:*), Bash(cp:*), Bash(ln:*), Bash(touch:*), Bash(rm:*), Bash(test:*), Bash(cat:*), Bash(ls:*), Bash(find:*), Bash(rg:*), Bash(head:*), Bash(tail:*), Bash(pwd:*), Bash(echo:*), Bash(printf:*), Bash(which:*), Bash(jq:*), Bash(sed:*), Bash(awk:*), Bash(tr:*), Bash(sort:*), Bash(uniq:*), Bash(wc:*), Bash(xargs:*), Bash(docker:*), Bash(docker compose:*), Bash(tsc:*), Bash(vitest:*), Bash(jest:*), Bash(biome:*), Bash(eslint:*), Bash(prettier:*), mcp__linear-server__get_issue, mcp__linear-server__list_comments, mcp__linear-server__save_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
 argument-hint: <ticket-id>
 ---
 
@@ -28,7 +28,7 @@ You are running on Opus 4.7, which per its system card (§2.2.5.1, §4.4.2, §6.
 
 3. **No re-fetch loop.** Once an agent returns a phase report, you already have it in context AND post it to Linear. Do NOT call `mcp__linear-server__list_comments` to re-ingest prior reports for the next phase's prompt. Instead, persist each report to `.swarm/context/<ticket-id>/reports/<phase>.md` and pass the FILE PATH to the next-phase agent. The agent Reads it on demand.
 
-4. **Observability logging.** After each phase dispatch, append one JSON line to `.swarm/observability/<ticket-id>.jsonl` with `{ "ts": <iso8601>, "phase": "<name>", "agent": "<agent-name>", "tool_calls": <n>, "write_calls": <n>, "edit_calls": <n>, "status": "<DONE|BLOCKED|NEEDS_CONTEXT>", "report_bytes": <n>, "files_changed_count": <n> }`. Agents include the counts in their Status block per their own Operating Constraints.
+4. **Observability logging (v4.7 expanded schema — 15 event types).** Emit JSONL events to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` (or `.swarm/observability/_solo/<ticket-id>.jsonl` if no epic context). Every event uses the common envelope `{ts, epic_id, ticket_id, phase, event, data}`. The catalog and emission points are defined in `commands/references/observability-schema.md` — the canonical reference. The pre-v4.7 single-line `phase_completed`-shaped record is now one of fifteen event types; see Step 3 phase loop, Step 3.6 deferral branches, Step 3.8 codex branches, and Step 4 closure for the specific emission points.
 
 5. **Keep your orchestrator narration terse.** Under 4.7's verbosity regression, every extra paragraph you write multiplies across phase transitions. One-sentence status updates between phases: "Phase N complete. Dispatching Phase N+1." No recap, no re-summarization.
 
@@ -58,6 +58,23 @@ The active phase list depends on the ticket's assigned workflow profile (set in 
 
 ---
 
+## Step 0: Anchor to the Structured Phase Pipeline (MANDATORY)
+
+**Before ANY investigation, file read, commit, push, or PR work, confirm you are inside a named phase of the pipeline below.** Drift out of the phase pipeline — investigating "for a moment", committing exploratory edits, or pushing branches without a current phase context — produces the regression B6 fingerprint: code ships, Linear is never told, no audit trail exists.
+
+**The pipeline:** Step 1 (Validate) → Step 1.x setup → Step 2 (Resume detect) → Step 3 (Phase loop: adaptation → implementation → testing → documentation → codereview → codex-review → security-review) → Step 4 (Closure) → Step 5 (Summary).
+
+**Drift-recovery rule:** If you find yourself doing exploratory file reads, running git commands against the worktree, or considering a commit WITHOUT a current Step number governing your action, STOP. Either:
+
+a. **Re-enter the pipeline at Adaptation phase** — start a fresh Step 3.x cycle so the work produces a phase report and Linear comment.
+b. **Halt and surface to the user** with the question: "I'm about to do exploratory work that doesn't fit the current phase. Should I (a) advance to the next phase, (b) re-enter from Adaptation, or (c) hand back to you?"
+
+There is no third option that ships code. Every Write/Edit/git-commit action MUST trace to a named Step. Every Linear-visible artifact MUST originate from a phase report. If neither is true for what you're about to do, you are drifting out of the pipeline and producing the silent-shipping failure mode B6 was filed against.
+
+**Why this exists:** Session `b224fca9` (2026-05-27) shipped 5 tickets of work where the orchestrator did investigation → commits → push → PR without ever entering a phase. Linear got zero updates. The orch-log got zero updates. State.json shows the work happened; nothing else does. The pipeline IS the audit trail — leaving it silently loses everything.
+
+---
+
 ## Step 1: Validate Ticket
 
 Fetch the ticket from Linear and validate it exists:
@@ -70,6 +87,8 @@ Use mcp__linear-server__get_issue to fetch ticket: $ARGUMENTS
 - Ticket exists
 - Ticket is not already Done or Cancelled
 - Ticket has an assigned agent type (check labels for `backend`, `frontend`, or description metadata)
+
+**Extract `epic_id` now:** Check the response for a `parentId` field. If present, set `epic_id = parentId` (used for all JSONL observability paths in Step 1.5+). If absent, `epic_id = null` and observability goes to `_solo/`. Do NOT defer this extraction to Step 3.1.0 — the JSONL path at Step 1.5 needs it.
 
 If validation fails, report the error and stop.
 
@@ -164,6 +183,13 @@ Assign exactly one workflow profile to this ticket. The assignment governs which
 
 **Record the assignment:**
 
+**Idempotency gate (BEFORE posting):** Search the comments already fetched in algorithm step 3 above (the resume-check fetch) for a `## Profile Assignment` comment header. If one is found:
+- DO NOT post a new Profile Assignment comment (would create a duplicate).
+- Log to terminal: `Profile already assigned: <profile> (re-using from prior session)`.
+- Skip directly to the JSONL append in step 2 below, marking `selection_source` as `resumed-from-prior-comment` if not already.
+
+This prevents duplicate Profile Assignment comments on resume — confirmed-latent bug A3 from the v4.7 regression analysis.
+
 1. Post a Linear comment on the ticket with title `## Profile Assignment`. Body:
    ```
    ## Profile Assignment
@@ -179,9 +205,19 @@ Assign exactly one workflow profile to this ticket. The assignment governs which
    *Automated by /execute-ticket — Profile Selection*
    ```
 
-2. Append to `.swarm/observability/[ticket-id].jsonl`:
+2. Append to `.swarm/observability/<epic-id>/[ticket-id].jsonl` (or `.swarm/observability/_solo/[ticket-id].jsonl` if no epic context — see canonical schema at `commands/references/observability-schema.md`):
    ```json
-   {"ts": "<iso8601>", "event": "profile_assigned", "profile": "MINIMAL|STANDARD|STRICT", "selection_source": "<source>"}
+   {"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":null,"event":"profile_assigned","data":{"profile":"MINIMAL|STANDARD|STRICT","selection_source":"<source>","matched_criteria":["<list>"]}}
+   ```
+
+3. If the selection_source is `CLI flag --strict` or `CLI flag --profile`, ALSO emit a `profile_overridden` event recording what auto-detection would have chosen:
+   ```json
+   {"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":null,"event":"profile_overridden","data":{"auto_would_have_chosen":"<MINIMAL|STANDARD>","operator_chose":"<STANDARD|STRICT>","flag":"--profile=<X>|--strict"}}
+   ```
+
+4. For each phase posted as N/A in the next block, emit a `phase_skipped_na` event:
+   ```json
+   {"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"<phase-name>","event":"phase_skipped_na","data":{"profile":"<MINIMAL|STANDARD|STRICT>","reason":"phase not in active profile's phase list"}}
    ```
 
 **Profile reclassification is one-shot.** Once recorded, the orchestrator MUST NOT change the profile mid-execution. STANDARD → MINIMAL downgrade is prohibited. STANDARD → STRICT upgrade requires explicit `AskUserQuestion` confirmation.
@@ -212,23 +248,27 @@ Use mcp__linear-server__list_comments for ticket: $ARGUMENTS
 
 **Parse comments for these phase report headers:**
 
-| Header Pattern | Phase Complete |
-|----------------|----------------|
-| `## Adaptation Report` | adaptation |
-| `## Implementation Report` | implementation |
-| `## Testing Report` (containing `Gate #0`) | testing |
-| `## Documentation Report` | documentation |
-| `## Code Review Report` | codereview |
-| `## Cross-Model Review Report` | codex-review |
-| `## Security Review Report` | security-review |
+| Header Pattern | Phase Complete | Canonical artifact filename |
+|----------------|----------------|----------------------------|
+| `## Adaptation Report` | adaptation | `adaptation.md` |
+| `## Implementation Report` | implementation | `implementation.md` |
+| `## Testing Report` (containing `Gate #0`) | testing | `testing.md` |
+| `## Documentation Report` | documentation | `documentation.md` |
+| `## Code Review Report` | codereview | `codereview.md` |
+| `## Cross-Model Review Report` | codex-review | `codex-review.md` |
+| `## Security Review Report` OR `## Security Scan Report (Pre-Merge)` | security-review | `security-review.md` |
+
+**Canonical filename convention (C6 standardization in v4.7):** Phase artifacts in `.swarm/context/<epic>/reports/<ticket>/<phase>.md` use the phase name from PHASES_BY_PROFILE as the filename. The security phase resolves to `security-review.md` everywhere on disk; the legacy `security-scan.md` filename is recognized for backward-compat reads but new writes ALWAYS use the canonical name. The Linear comment header text `## Security Scan Report (Pre-Merge)` is preserved verbatim — header text is the user-visible audit-trail anchor, the phase name is the internal config identifier; the gap is intentional.
 
 **Resume Logic:**
 - If no reports found → Start from adaptation
 - If some reports found → Check status within each report:
-  - Header present AND `Status: DONE`, `Status: DONE_WITH_CONCERNS`, or `Status: COMPLETE` → Phase done, skip to next
+  - Header present AND `Status: DONE`, `Status: DONE_WITH_CONCERNS`, `Status: COMPLETE`, or `Status: N/A` → Phase done, skip to next
   - Header present AND `Status: BLOCKED`, `Status: NEEDS_CONTEXT`, or `ISSUES_FOUND` → Phase needs re-run from this point
   - Header present but no clear status → Treat as incomplete, re-run phase
-- If all reports found with completed statuses (`DONE`, `DONE_WITH_CONCERNS`, or `COMPLETE`) → Ticket already complete, report status and stop
+- If all reports found with completed statuses (`DONE`, `DONE_WITH_CONCERNS`, `COMPLETE`, or `N/A`) → Ticket already complete, report status and stop
+
+**Note on `Status: N/A`:** N/A reports are posted by Step 3.6.0b for phases skipped per the active workflow profile (e.g., Documentation phase on a MINIMAL ticket). They are valid completion markers for profile-skipped phases only. **Profile-aware guard:** if a phase with `Status: N/A` IS in the active profile's phase list (i.e., it should have run live), treat it as incomplete and re-run — a crashed or confused agent may have erroneously posted N/A for a required phase. First determine the active profile from the `## Profile Assignment` comment, then apply this guard. This matches the epic-swarm hard checkpoint (§3.3), which fails explicitly if a live-profile phase has N/A status.
 
 **Important:** Do not rely solely on header presence. A phase report may exist from a previous blocked run that needs to be re-executed.
 
@@ -277,6 +317,15 @@ For each remaining phase, execute the following loop:
 ### Phase Execution Pattern
 
 For each phase that needs to run:
+
+**Observability emission bracket (MANDATORY):** Every phase iteration emits at minimum `phase_started` (before agent dispatch) and `phase_completed` (after report parse). Schema:
+
+```json
+{"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"<phase-name>","event":"phase_started","data":{"agent":"<agent-name>","redispatch_count":0}}
+{"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"<phase-name>","event":"phase_completed","data":{"agent":"<agent-name>","status":"<DONE|...>","tool_calls":<n>,"write_calls":<n>,"edit_calls":<n>,"report_bytes":<n>,"files_changed_count":<n>}}
+```
+
+Re-dispatches re-emit BOTH events with incremented `redispatch_count` — the audit trail preserves every attempt. See `commands/references/observability-schema.md` for the full event catalog and additional per-phase events (`impact_bar_rejected`, `boundary_question_answered`, `codex_finding_resolved`, `codex_scope_escape`).
 
 #### 3.1 Gather Context
 
@@ -949,7 +998,7 @@ Wait for user response before continuing.
 After successful phase completion (non-blocking), post the agent's report as a comment:
 
 ```
-Use mcp__linear-server__create_comment:
+Use mcp__linear-server__save_comment:
 - issue_id: [ticket-id]
 - body: [Full agent report with phase header]
 ```
@@ -989,7 +1038,7 @@ After implementation agent returns, before posting report:
 For every phase in `SKIPPED_PHASES` (computed in Step 1.5 from the ticket's active profile), post a structured Linear comment with the EXACT header the resume-detection logic expects:
 
 ```
-Use mcp__linear-server__create_comment:
+Use mcp__linear-server__save_comment:
 - issue_id: [ticket-id]
 - body: |
     ## [Phase Name] Report
@@ -1011,7 +1060,7 @@ Use mcp__linear-server__create_comment:
 | testing | `## Testing Report` |
 | documentation | `## Documentation Report` |
 | codex-review | `## Cross-Model Review Report` |
-| security-review | `## Security Review Report` |
+| security-review | `## Security Scan Report (Pre-Merge)` |
 
 **Idempotency:** Check existing comments first. Do NOT post duplicate N/A reports. (adaptation, implementation, and codereview run in every profile — they will never appear as N/A.)
 
@@ -1068,10 +1117,37 @@ If redispatch_count[phase] == 1 and still DEFERRAL_INVALID/OVERRIDDEN:
     4. Modify AC to reflect reduced scope
 ```
 
-Record every re-dispatch in `.swarm/observability/[ticket-id].jsonl`:
+Record every re-dispatch in `.swarm/observability/<epic-id>/[ticket-id].jsonl` (canonical envelope per `commands/references/observability-schema.md`):
 ```json
-{"ts": "<iso8601>", "event": "deferral_redispatch", "phase": "<name>", "rejection_reason": "DEFERRAL_INVALID|DEFERRAL_OVERRIDDEN", "items": [<item_titles>]}
+{"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"<name>","event":"deferral_redispatch","data":{"pass":1,"rejection_reason":"DEFERRAL_INVALID|DEFERRAL_OVERRIDDEN","items":[{"title":"<x>","classification":"AC-DEFERRED|DISCOVERED|OUT-OF-SCOPE","severity":"<sev>"}]}}
 ```
+
+If the deferral is accepted (catastrophic justification valid, or user explicitly approved at a pause prompt), emit `deferral_accepted` instead:
+```json
+{"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"<name>","event":"deferral_accepted","data":{"items":[{"title":"<x>","classification":"<class>","catastrophic_condition":<1|2|3|4>}],"approval_source":"agent-justified|user-override"}}
+```
+
+**Also post a Linear comment** so the orchestrator's intervention is visible to operators (not silent in JSONL only):
+
+```
+Use mcp__linear-server__save_comment for ticket: [ticket-id]
+
+Body:
+## Deferral Rejected — Re-dispatch [phase]
+
+**Pass:** [1 or 2]
+**Rejection reason:** DEFERRAL_INVALID | DEFERRAL_OVERRIDDEN
+**Rejected items:**
+- [item title 1] — [why it's invalid: AC-mapped without catastrophic justification, etc.]
+- [item title 2] — [...]
+
+**Supplemental directive added to re-dispatch:**
+> [verbatim text appended to agent prompt]
+
+The agent has been re-invoked with the same context plus the directive above. The next [phase] report supersedes the prior one.
+```
+
+This restores the audit trail: every orchestrator intervention is a Linear-visible artifact, not just a JSONL event. Without this comment, operators see only the final agent report and have no record of the rejected attempt.
 
 **This validation runs for ALL phases**, not just implementation. Code review and testing agents can also improperly defer items that match AC.
 
@@ -1187,6 +1263,16 @@ Invoke Skill: codex-finding-resolution
 
 This skill defines the complete process for handling Codex findings — presenting P1-P3 items to the user, getting decisions, applying fixes, and posting full reports to Linear. Follow the skill's instructions. Do NOT silently skip or auto-dismiss findings.
 
+**Per-finding observability (v4.7):** After processing each finding, emit one `codex_finding_resolved` event (canonical envelope per `commands/references/observability-schema.md`):
+```json
+{"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"codex-review","event":"codex_finding_resolved","data":{"finding_id":"F<n>","severity":"P1|P2|P3","disposition":"auto_fixed|user_decision|closure_log|scope_escape_ticket","file":"<path>:<line>"}}
+```
+
+When SCOPE_EXPANSION_ESCAPE fires (rare), ALSO emit a `codex_scope_escape` event:
+```json
+{"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"codex-review","event":"codex_scope_escape","data":{"finding_id":"F<n>","severity":"P1|P2","filed_ticket_id":"PRO-XXXX"}}
+```
+
 ### Prerequisites Check
 
 Do NOT probe the Codex MCP server with a test call. Instead, proceed directly to the real review call. If the server is unavailable, the MCP tool call will fail with a connection error — handle that as a skip (post skip note to Linear). Probing wastes a full Codex invocation and can produce false errors.
@@ -1286,7 +1372,7 @@ else:
 **Step 3 — Post the consolidated review comment on the ticket:**
 
 ```
-Use mcp__linear-server__create_comment:
+Use mcp__linear-server__save_comment:
   - issue_id: [ticket-id]
   - body: |
       ## Deferred Items Review — User Decision Required
@@ -1373,7 +1459,12 @@ When the active profile's final phase completes:
    - state: "Done"
    ```
 
-2. **Finalize PR:**
+2. **Emit `ticket_completed` JSONL event** (v4.7 — canonical schema at `commands/references/observability-schema.md`):
+   ```json
+   {"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":null,"event":"ticket_completed","data":{"profile":"<MINIMAL|STANDARD|STRICT>","phases_run_live":["<list>"],"phases_na":["<list>"],"wall_clock_seconds":<n>}}
+   ```
+
+3. **Finalize PR:**
 
    **Skip PR finalization when `WORKTREE_MODE=true` or no `pr_number` is available.**
 
@@ -1401,7 +1492,13 @@ When the active profile's final phase completes:
   ```bash
   gh pr edit [pr-number] --add-label "security-blocked"
   ```
+- **Emit `ticket_failed` JSONL event** (v4.7):
+  ```json
+  {"ts":"<iso8601>","epic_id":"<id-or-null>","ticket_id":"<id>","phase":"security-review","event":"ticket_failed","data":{"halt_phase":"security-review","halt_reason":"<CRITICAL|HIGH finding summary>","recovery_options_offered_to_user":["retry phase","manual review","reduce scope"]}}
+  ```
 - PAUSE for user decision (standard blocking behavior)
+
+**`ticket_failed` is also emitted from any other halt path** — hard-checkpoint failure, merge conflict the user can't resolve, deferral re-dispatch loop exhausted after Pass 2. Use the same envelope with `halt_phase` set to the phase that triggered the halt.
 
 ---
 

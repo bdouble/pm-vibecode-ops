@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Read, Glob, Grep, LS, Task, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__list_issues, mcp__linear-server__list_projects
+allowed-tools: Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Read, Glob, Grep, LS, Task, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__list_issues, mcp__linear-server__list_projects
 description: Close completed epic with impact-bar-disciplined follow-up tickets (capped at 3), boundary-fix-or-propagation-epic for cross-cutting concerns, Considered-but-not-pursued closure-log, downstream impact propagation, and CLAUDE.md updates
 argument-hint: <epic-id> [--skip-deferred-review] [--skip-followups] [--skip-downstream] (e.g., /close-epic EPIC-123)
 workflow-phase: epic-closure
@@ -200,6 +200,23 @@ Use the Task tool to invoke the `epic-closure-agent` with ALL context embedded:
 - Testing and security findings
 - Original success criteria
 - List of related/dependent epics (for downstream analysis)
+- **Closure-log aggregation** (NEW in v4.7): for every sub-ticket, grep its phase report comments for both `### Considered but not pursued` (canonical h3) and `## Considered but not pursued` (legacy h2 — pre-v4.7 artifacts may use it) sections. Aggregate all entries — deduplicated — into the prompt under a `## Aggregated Closure-Log Across Sub-Tickets` section. The agent uses this to write the epic-level `### Considered but not pursued in this epic` section without losing items that lived only inside individual phase reports.
+
+**Aggregation pseudocode:**
+```
+aggregated = []
+for ticket in sub_tickets:
+    comments = mcp__linear-server__list_comments(ticket.id)
+    for c in comments:
+        for level in ["##", "###"]:  # h2 legacy, h3 canonical
+            entries = extract_section(c.body, f"{level} Considered but not pursued")
+            for e in entries:
+                aggregated.append({"ticket": ticket.id, "entry": e})
+# Deduplicate by entry text similarity (>80% overlap = same item)
+# Pass aggregated list into prompt
+```
+
+**Heading-level note:** `### Considered but not pursued` (h3) is canonical as of v4.7. The h2 fallback exists to catch v4.6-era artifacts that emitted h2 inconsistently. New phase reports and agent templates use h3 only.
 
 **Example prompt structure:**
 ```
@@ -213,12 +230,15 @@ Use the Task tool to invoke the `epic-closure-agent` with ALL context embedded:
 [extract from epic description - max 100 tokens]
 
 ## Sub-Ticket Summary
-| Ticket ID | Status | Key Outcome | Key Decision | Tests | Security | Files |
-|-----------|--------|-------------|--------------|-------|----------|-------|
-| TICKET-1  | Done   | [10 words]  | [8 words]    | ✓ 85% | Approved | 4     |
-| TICKET-2  | Done   | [10 words]  | [8 words]    | ✓ 78% | Approved | 3     |
+| Ticket ID | Status | Key Outcome | Key Decision | Tests | Security | Def/Log | Files |
+|-----------|--------|-------------|--------------|-------|----------|---------|-------|
+| TICKET-1  | Done   | [10 words]  | [8 words]    | ✓ 85% | Approved | 2/3     | 4     |
+| TICKET-2  | Done   | [10 words]  | [8 words]    | ✓ 78% | Approved | 0/1     | 3     |
 
-*(Note: Each ticket summary is max 100 tokens per context budget)*
+*(Note: Each ticket summary is max 100 tokens per context budget. The `Def/Log` column shows `deferred_items_count / considered-but-not-pursued_count`. Fetch the full closure-log verbatim into the "Aggregated Closure-Log Across Sub-Tickets" section below whenever Def/Log's right-hand number is > 0.)*
+
+## Aggregated Closure-Log Across Sub-Tickets
+[Populate from the aggregation pseudocode above. One bullet per item, prefixed with originating ticket ID. Group near-duplicates. If empty across all sub-tickets, write "None — all sub-tickets reported empty closure-logs."]
 
 ## Implementation Highlights
 [Key patterns and approaches - max 300 tokens aggregated]
@@ -242,7 +262,7 @@ Use the Task tool to invoke the `epic-closure-agent` with ALL context embedded:
 
 ## User Options
 --skip-deferred-review: [true/false based on user input]
---skip-followups: [true/false based on user input]  # was --skip-followups
+--skip-followups: [true/false based on user input]
 --skip-downstream: [true/false based on user input]
 
 ## Context Budget Note
@@ -461,18 +481,26 @@ IF still missing after retry:
      labels: ["deferred-recovery", "P2", "discovered"]
    ```
 
-4. **Write the closure comment** - Use `mcp__linear-server__create_comment` with the structured closure report
+4. **Write the closure comment** - Use `mcp__linear-server__save_comment` with the structured closure report
    - Include the list of created follow-up ticket IDs (max 3)
    - Include the Considered-but-not-pursued closure-log
    - Include the list of created deferred recovery ticket IDs
    - Reference all tickets so work is traceable
 
 5. **Update related epics** (if downstream analysis was performed):
-   - Use `mcp__linear-server__create_comment` to add guidance to dependent epics
+   - Use `mcp__linear-server__save_comment` to add guidance to dependent epics
 
 6. **Close the epic**:
    - Use `mcp__linear-server__update_issue` to mark epic as "Done"
    - Add appropriate labels (e.g., "epic-completed", "followups-complete")
+   - **Emit `epic_completed` JSONL event** (v4.7 universal — historically only emitted for PRO-1142):
+     ```json
+     {"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":null,"event":"epic_completed","data":{"subticket_count":<n>,"followups_filed":<n>,"closure_log_items":<n>,"boundary_question_invocations":<n>,"epic_wall_clock_seconds":<n>}}
+     ```
+     Append to `.swarm/observability/<epic-id>/_epic.jsonl` (epic-level stream, distinct from per-ticket streams). Canonical schema: `commands/references/observability-schema.md`. If the candidate-count pre-cap exceeded 3 anywhere during follow-up discipline, ALSO emit `followup_cap_blocked`:
+     ```json
+     {"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":null,"event":"followup_cap_blocked","data":{"candidate_count_pre_cap":<n>,"candidate_count_post_cap":<n>,"escalated_to_user":<bool>}}
+     ```
 
 7. **Apply CLAUDE.md updates** - Use Edit tool to update project CLAUDE.md
 
@@ -542,7 +570,7 @@ Before running:
 - **Fetch epic**: `mcp__linear-server__get_issue` - YOU fetch before agent invocation
 - **List sub-tickets**: `mcp__linear-server__list_issues` - YOU fetch before agent invocation
 - **Fetch comments**: `mcp__linear-server__list_comments` - YOU fetch before agent invocation
-- **Add comments**: `mcp__linear-server__create_comment` - YOU write after agent returns
+- **Add comments**: `mcp__linear-server__save_comment` - YOU write after agent returns
 - **Update status**: `mcp__linear-server__update_issue` - YOU update after agent returns (CLOSE EPIC!)
 
 You are closing epic **$ARGUMENTS** (or **$1** if single argument provided).

@@ -1,6 +1,6 @@
 ---
 description: Orchestrate sequential execution of epic sub-tickets using dependency-aware tier scheduling with worktree isolation and full per-ticket workflow pipelines
-allowed-tools: Task, Agent, Read, Write, Edit, MultiEdit, Grep, Glob, LS, WebFetch, Bash, Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(npx:*), Bash(node:*), Bash(cd:*), Bash(mkdir:*), Bash(chmod:*), Bash(mv:*), Bash(cp:*), Bash(ln:*), Bash(touch:*), Bash(rm:*), Bash(test:*), Bash(cat:*), Bash(ls:*), Bash(find:*), Bash(rg:*), Bash(head:*), Bash(tail:*), Bash(pwd:*), Bash(echo:*), Bash(printf:*), Bash(which:*), Bash(jq:*), Bash(sed:*), Bash(awk:*), Bash(tr:*), Bash(sort:*), Bash(uniq:*), Bash(wc:*), Bash(xargs:*), Bash(docker:*), Bash(docker compose:*), Bash(tsc:*), Bash(vitest:*), Bash(jest:*), Bash(biome:*), Bash(eslint:*), Bash(prettier:*), mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__create_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
+allowed-tools: Task, Agent, Read, Write, Edit, MultiEdit, Grep, Glob, LS, WebFetch, Bash, Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(npx:*), Bash(node:*), Bash(cd:*), Bash(mkdir:*), Bash(chmod:*), Bash(mv:*), Bash(cp:*), Bash(ln:*), Bash(touch:*), Bash(rm:*), Bash(test:*), Bash(cat:*), Bash(ls:*), Bash(find:*), Bash(rg:*), Bash(head:*), Bash(tail:*), Bash(pwd:*), Bash(echo:*), Bash(printf:*), Bash(which:*), Bash(jq:*), Bash(sed:*), Bash(awk:*), Bash(tr:*), Bash(sort:*), Bash(uniq:*), Bash(wc:*), Bash(xargs:*), Bash(docker:*), Bash(docker compose:*), Bash(tsc:*), Bash(vitest:*), Bash(jest:*), Bash(biome:*), Bash(eslint:*), Bash(prettier:*), mcp__linear-server__get_issue, mcp__linear-server__list_issues, mcp__linear-server__list_comments, mcp__linear-server__save_comment, mcp__linear-server__update_issue, mcp__linear-server__search_issues, mcp__codex-review-server__codex_review_and_fix, mcp__codex-review-server__codex_review, mcp__codex-review-server__codex_fix
 argument-hint: <epic-id> [--dry-run] [--tier N] [--parallel]
 workflow-phase: epic-swarm
 closes-ticket: false
@@ -82,7 +82,7 @@ The orchestrator dispatches all agents directly — it does NOT delegate to `/ex
 
 ### 4. Every phase MUST post a report to Linear AND every completed ticket MUST be closed
 
-**(a) Phase reports.** After every phase completes for every ticket, post the full structured report as a Linear comment via `mcp__linear-server__create_comment`. A phase without a posted report is a phase that never happened. **Invoke the `swarm-phase-reporting` skill at every phase completion point** — it provides templates, validation, and anti-rationalization guidance.
+**(a) Phase reports.** After every phase completes for every ticket, post the full structured report as a Linear comment via `mcp__linear-server__save_comment`. A phase without a posted report is a phase that never happened. **Invoke the `swarm-phase-reporting` skill at every phase completion point** — it provides templates, validation, and anti-rationalization guidance.
 
 **(b) Ticket closure.** After a ticket clears the hard checkpoint, merges to the epic branch, passes post-merge integration tests, and the epic branch is pushed, the orchestrator MUST mark the Linear ticket as **Done** via `mcp__linear-server__update_issue` (see §3.5.6 for the exact step). The orchestrator inherits this responsibility from `/security-review`, which is the only OTHER command in this workflow that closes tickets — and which is NOT invoked by the swarm. A ticket that completes all 7 phases and merges successfully but is left in "In Progress" is a workflow defect.
 
@@ -96,7 +96,7 @@ Every ticket is assigned exactly one workflow profile (`MINIMAL`, `STANDARD`, or
 
 The active profile's phase list:
 - **MINIMAL** (3 phases): adaptation, implementation, codereview
-- **STANDARD** (7 phases): adaptation, implementation, testing, documentation, codereview, codex-review, security-scan
+- **STANDARD** (7 phases): adaptation, implementation, testing, documentation, codereview, codex-review, security-review
 - **STRICT** (7 phases): identical to STANDARD with NO profile reclassification permitted mid-execution
 
 The ONLY ways a phase in the active profile does not run for a ticket are:
@@ -174,7 +174,7 @@ You are orchestrating a swarm on Opus 4.7, which per its system card (§2.2.5.1,
 
 **10c. Do NOT re-fetch posted reports via `list_comments`.** Once you have received a phase report from a subagent, you already hold it in your context AND posted it to Linear. Do not call `mcp__linear-server__list_comments` during subsequent phase dispatches to "re-ingest" prior reports for the next agent. Instead, persist each received report to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (write the raw report content, nothing else) and include the FILE PATH in the next phase agent's prompt. The agent will Read the file if it needs the content. Forensic analysis of a 6-ticket epic-swarm run showed this re-fetch loop accounted for ~300 KB of duplicated context.
 
-**10d. Observability logging.** For every phase agent dispatch, append one JSON line to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` with the shape `{ "ts": <iso8601>, "phase": "<name>", "agent": "<agent-name>", "tool_calls": <n>, "write_calls": <n>, "edit_calls": <n>, "status": "<DONE|BLOCKED|NEEDS_CONTEXT>", "report_bytes": <n>, "files_changed_count": <n> }`. The agent returns the counts in its Status block per its Operating Constraints; the orchestrator records the line immediately after parsing the report. This enables post-run retros and detection of the "sufficiency stall" regression.
+**10d. Observability logging (v4.7 expanded schema — 15 event types).** Emit JSONL events to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` using the common envelope `{ts, epic_id, ticket_id, phase, event, data}`. Canonical reference: `commands/references/observability-schema.md`. The pre-v4.7 single-line per-phase record is now the `phase_completed` event in the expanded catalog. Required emissions during a tier execution: `phase_started` before each agent dispatch, `phase_completed` after each report parse, `phase_skipped_na` for each N/A posted in §3.2.5b, `deferral_redispatch` / `deferral_accepted` at §3.6 branches, `codex_finding_resolved` / `codex_scope_escape` at §3.8 per finding, `ticket_completed` at §3.5.6 after Linear set to Done, `ticket_failed` on any halt. The schema doc enumerates payloads and emission points exhaustively.
 
 **10e. Re-dispatch on empty Write/Edit count.** If an implementation/testing/documentation agent returns `Status: DONE` but its reported `write_calls + edit_calls == 0`, the agent declared sufficiency without acting (§6.2.2.2). Re-dispatch the same phase with the directive `PRIOR DISPATCH PRODUCED NO ARTIFACTS. Your next tool call must be Write or Edit. Do not explore further.` appended to the prompt. If the second dispatch also returns zero artifacts, HALT and surface to the user.
 
@@ -747,8 +747,8 @@ Each ticket's adaptation examines all code from previously completed tickets.
 ```
 PHASES_BY_PROFILE = {
   "MINIMAL":  ["adaptation", "implementation", "codereview"],
-  "STANDARD": ["adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-scan"],
-  "STRICT":   ["adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-scan"],
+  "STANDARD": ["adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-review"],
+  "STRICT":   ["adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-review"],
 }
 
 # Determine active phase list at start of every ticket loop
@@ -756,7 +756,7 @@ PHASES = PHASES_BY_PROFILE[ticket.profile]  # profile set in §1.5.7
 
 # Phases that exist in the full pipeline but are NOT in the active profile
 SKIPPED_PHASES = [
-  "adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-scan"
+  "adaptation", "implementation", "testing", "documentation", "codereview", "codex-review", "security-review"
 ] - PHASES
 
 # Agent mapping (unchanged from prior versions — phase → agent)
@@ -766,7 +766,7 @@ SKIPPED_PHASES = [
 # documentation  → technical-writer-agent
 # codereview     → code-reviewer-agent
 # codex-review   → MCP tool, not agent
-# security-scan  → security-engineer-agent
+# security-review → security-engineer-agent
 
 For each ticket in the tier (one at a time):
 
@@ -986,7 +986,7 @@ For each phase of the current ticket:
 | documentation | `technical-writer-agent` |
 | codereview | `code-reviewer-agent` |
 | codex-review | *(MCP tool `codex_review_and_fix`, not an agent)* |
-| security-scan | `security-engineer-agent` |
+| security-review | `security-engineer-agent` |
 
 **Implementation phase agent selection** (same logic as `/execute-ticket` Step 3.2):
 
@@ -1122,7 +1122,7 @@ For each phase of the current ticket:
    [full orchestrator-log.md content]
    ```
 
-9. **File scope for read-only phases** (codereview, security-scan):
+9. **File scope for read-only phases** (codereview, security-review):
    ```bash
    git -C .swarm/worktrees/[ticket-id] diff --name-only epic/[epic-id]...HEAD
    ```
@@ -1331,7 +1331,7 @@ Record every re-dispatch in `.swarm/observability/[epic-id]/[ticket-id].jsonl`:
 Post the agent's full structured report as a comment on the ticket:
 
 ```
-Use mcp__linear-server__create_comment:
+Use mcp__linear-server__save_comment:
   - issue_id: [ticket-id]
   - body: [formatted report — see format below]
 ```
@@ -1381,7 +1381,7 @@ For every phase in `SKIPPED_PHASES` (computed in §3 from the ticket's active pr
 **N/A Report template (post one per skipped phase, BEFORE running the first active phase for the ticket):**
 
 ```
-Use mcp__linear-server__create_comment:
+Use mcp__linear-server__save_comment:
   - issue_id: [ticket-id]
   - body: |
       ## [Phase Name] Report
@@ -1404,7 +1404,7 @@ Use mcp__linear-server__create_comment:
 | testing | `## Testing Report` |
 | documentation | `## Documentation Report` |
 | codex-review | `## Cross-Model Review Report` |
-| security-scan | `## Security Scan Report (Pre-Merge)` |
+| security-review | `## Security Scan Report (Pre-Merge)` |
 
 (adaptation, implementation, and codereview run in every profile — they will never appear as N/A.)
 
@@ -1472,7 +1472,7 @@ Do NOT push or create PRs — the swarm handles merge during Phase 4 (Integratio
 | documentation | BLOCKED | Pause ticket, break |
 | codereview | CHANGES_REQUESTED | Pause ticket, break |
 | codex-review | JSON response contains `"error": "rate_limit"` or server unavailable (NOT "rate limit" appearing in successful review findings) | Post skip report (satisfies checkpoint), CONTINUE |
-| security-scan | CRITICAL/HIGH findings | Pause ticket, break |
+| security-review | CRITICAL/HIGH findings | Pause ticket, break |
 
 **When a ticket is paused:**
 - Other tickets in the tier continue through remaining phases
@@ -1480,7 +1480,9 @@ Do NOT push or create PRs — the swarm handles merge during Phase 4 (Integratio
 - Dependents in later tiers remain blocked
 - Report the pause to the user with the blocking reason
 
-**When codex-review is unavailable:** Post a skip report to Linear using the `## Cross-Model Review Report` header with status SKIPPED/DEFERRED/FAILED (see `codex-finding-resolution` skill for templates). The ticket continues to security-scan. The skip report satisfies the hard checkpoint.
+**When codex-review is unavailable:** Post a skip report to Linear using the `## Cross-Model Review Report` header with status SKIPPED/DEFERRED/FAILED (see `codex-finding-resolution` skill for templates). The ticket continues to security-review. The skip report satisfies the hard checkpoint.
+
+**Canonical phase name + filename (C6 standardization in v4.7):** The phase is named `security-review` in all configuration (PHASES_BY_PROFILE, agent mapping, decision tables) and produces the artifact filename `security-review.md` in `.swarm/context/<epic>/reports/<ticket>/security-review.md`. The Linear comment header `## Security Scan Report (Pre-Merge)` is intentionally NOT renamed — preserving header text protects pre-v4.7 audit-trail grep-ability. The plural-naming gap (phase = `security-review`, header text = `Security Scan Report`) is by design.
 
 #### 3.2.8 Update Swarm State
 
@@ -1499,11 +1501,33 @@ After every phase completion, update `.swarm/state/[epic-id].json`:
         "testing": { "status": "in_progress", "startedAt": "[timestamp]" }
       },
       "worktreePath": ".swarm/worktrees/[ticket-id]",
-      "branchName": "feature/[ticket-id]-[slug]"
+      "branchName": "feature/[ticket-id]-[slug]",
+      "deferred_to": null
     }
   }
 }
 ```
+
+**Allowed `status` values (closed enum):**
+
+| Value | Meaning | Set by |
+|---|---|---|
+| `pending` | Ticket has not yet started any phase | Initial state |
+| `in_progress` | At least one phase has started; not yet at hard checkpoint | Phase dispatch (§3.2) |
+| `merged` | Hard checkpoint passed; merged to epic branch | §3.5.5 |
+| `closed` | Linear ticket transitioned to Done | §3.5.6 |
+| `security-blocked` | Security phase returned CRITICAL/HIGH; ticket paused | §3.2.7 |
+| `failed` | Hard checkpoint failed or phase loop halted permanently | §3.4 |
+| `deferred` | Work consolidated into a separate ticket; this ticket is closed in favor of the target | §3.x lateral-deferral path (see below) |
+
+**`deferred_to` field (C8 normalization in v4.7):** When a ticket's work is consolidated into another ticket — historically observed as the ad-hoc string `"closed-deferred-to-PRO-1170"` on PRO-1156's PRO-1161 entry — record it as a clean tuple:
+```json
+{
+  "status": "deferred",
+  "deferred_to": "PRO-1170"
+}
+```
+NOT as a composite status string. Tooling and `/swarm-stats` queries should be able to filter on `status == "deferred"` without parsing string variants. The `deferred_to` field is `null` for any non-deferred status.
 
 Write the state file IMMEDIATELY after each phase event. This enables resume if the session is interrupted.
 
@@ -1567,11 +1591,14 @@ For each ticket that completed all phases:
 
 ### 3.4 Update Orchestrator Notes
 
-After a ticket passes the hard checkpoint, append a summary to `.swarm/orchestrator-log.md`:
+**After each ticket's phase loop completes — regardless of hard-checkpoint outcome — append an entry to `.swarm/orchestrator-log.md`.** The append runs unconditionally in a finally-style block: a hard-checkpoint failure, a merge conflict, or an agent crash MUST still produce an audit-trail entry. Decoupling the log update from checkpoint success is what prevents the "ticket shipped, log shows '(none yet)'" regression observed in PRO-1156.
 
+**Two entry formats — pick based on outcome:**
+
+**Format A — ticket passed hard checkpoint (success):**
 ```markdown
 ### [TICKET-ID] — [title]
-**Tier:** [N] | **Completed:** [timestamp]
+**Tier:** [N] | **Completed:** [timestamp] | **Outcome:** PASSED
 
 **Files Created/Modified:**
 - [path] ([new/modified]) — [brief purpose]
@@ -1586,13 +1613,32 @@ After a ticket passes the hard checkpoint, append a summary to `.swarm/orchestra
 - [anything relevant to subsequent tickets — shared services discovered, integration points, etc.]
 ```
 
+**Format B — ticket failed hard checkpoint, merge, or any phase (failure):**
+```markdown
+### [TICKET-ID] — [title]
+**Tier:** [N] | **Halted:** [timestamp] | **Outcome:** FAILED
+
+**Failure point:** [phase name | "hard checkpoint" | "merge" | "post-merge tests"]
+**Reason:** [one-sentence explanation — e.g., "security-review returned CRITICAL finding", "checkpoint found Documentation Report missing", "merge conflict in src/x.ts blocked by user"]
+
+**Phases completed before halt:** [list]
+**Phase that halted:** [phase name + last report's Status field]
+
+**Files touched (may be partial):**
+- [path] ([new/modified]) — [brief purpose if known]
+
+**Recovery options for the operator:** [text from the pause prompt, if applicable]
+```
+
 **Content sources:**
-- Files Changed: from the implementation report
-- Interfaces: from the adaptation report and `git -C [worktree] diff --stat`
-- Patterns: from the code review report
+- Files Changed: from the implementation report (or `git -C [worktree] diff --stat` if implementation didn't complete)
+- Interfaces: from the adaptation report and worktree diff
+- Patterns: from the code review report (if completed)
 - Cross-ticket observations: from the orchestrator's own analysis of the ticket's work
 
-This log is read during the adaptation phase for subsequent tickets (Step 3.2.1 item 8), giving the architect-agent awareness of what was built and what patterns to reuse.
+**Why both formats matter:** Subsequent tickets' adaptation phases read this log (Step 3.2.1 item 8). A failed ticket's partial work is just as relevant to the architect-agent as a passed ticket's complete work — it surfaces "this surface was attempted and blocked, here's what was built before the halt." Silent dropping of failed tickets from the log was the original bug.
+
+**Idempotency on resume:** Before appending, check if an entry for this ticket-id + outcome already exists. If a previous session wrote a FAILED entry and the current session retried and PASSED, append a NEW entry rather than editing the old one — the audit trail preserves both attempts.
 
 ### 3.5 Per-Ticket Merge to Epic Branch
 
@@ -1651,6 +1697,11 @@ Use mcp__linear-server__update_issue with:
 
 If ANY precondition is not met, the ticket should NOT be closed — it should remain `In Progress` (or transition to a blocked state per §3.2.7) until the issue is resolved.
 
+**Emit `ticket_completed` JSONL event** (v4.7 — canonical schema at `commands/references/observability-schema.md`):
+```json
+{"ts":"<iso8601>","epic_id":"<epic>","ticket_id":"<id>","phase":null,"event":"ticket_completed","data":{"profile":"<MINIMAL|STANDARD|STRICT>","phases_run_live":["<list>"],"phases_na":["<list>"],"wall_clock_seconds":<n>}}
+```
+
 **Why this exists:** In the standalone workflow, `/security-review` is the only command that closes tickets. Inside the swarm, the orchestrator runs the security-engineer-agent inline rather than invoking `/security-review` as a subcommand, so the orchestrator inherits the responsibility for closing the ticket. **Without this step, every swarm-completed ticket remains stuck in "In Progress" forever**, requiring manual cleanup.
 
 **Evidence for why this exists:** A prior swarm session — all tickets merged cleanly with full phase reports posted, but none were marked Done. The user had to close them manually.
@@ -1666,7 +1717,7 @@ After all tickets in the tier have been processed (merged or blocked):
 
 **3.6.1 Post tier update to Linear:**
 ```
-Use mcp__linear-server__create_comment on the EPIC:
+Use mcp__linear-server__save_comment on the EPIC:
   body: "## Swarm Update: Tier [N] Complete\n\n
   | Ticket | Phases | Checkpoint | Status |\n
   | CON-42 | 7/7 | PASSED | Merged |\n
@@ -1745,7 +1796,7 @@ WAIT for user approval.
 
 1. Post the security review report:
    ```
-   Use mcp__linear-server__create_comment:
+   Use mcp__linear-server__save_comment:
      - issue_id: [ticket-id]
      - body: "## Security Review Report\n\n[Full security agent report]\n\n---\n*Automated by /epic-swarm — Post-Merge Security Review*"
    ```
@@ -1846,7 +1897,7 @@ else:
 **Step 3 — Post the consolidated review comment on the EPIC:**
 
 ```
-Use mcp__linear-server__create_comment:
+Use mcp__linear-server__save_comment:
   - issue_id: [epic-id]
   - body: |
       ## Deferred Items Review — User Decision Required

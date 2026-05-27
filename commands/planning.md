@@ -1,6 +1,6 @@
 ---
 description: Technical decomposition of Linear epics into actionable implementation tickets with proper dependencies and technical specifications, using epic tickets as primary input with optional PRD, discovery report, and additional context.
-allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(git branch:*), Bash(git status:*), WebSearch, mcp__linear-server__create_project, mcp__linear-server__create_issue, mcp__linear-server__list_teams, mcp__linear-server__list_projects, mcp__linear-server__update_issue, mcp__linear-server__list_issues, mcp__linear-server__get_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__get_project
+allowed-tools: Task, Read, Write, Edit, MultiEdit, Grep, Glob, LS, TodoWrite, Bash, Bash(git branch:*), Bash(git status:*), WebSearch, mcp__linear-server__create_project, mcp__linear-server__create_issue, mcp__linear-server__list_teams, mcp__linear-server__list_projects, mcp__linear-server__update_issue, mcp__linear-server__list_issues, mcp__linear-server__get_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__get_project
 argument-hint: <epic-ids> [--prd <prd-file>] [--discovery <ticket-id-or-file>] [--context <additional-context>]
 workflow-phase: planning
 closes-ticket: false
@@ -78,7 +78,7 @@ You are acting as a **Technical Planning Architect** responsible for decomposing
 - **List comments**: Use `mcp__linear-server__list_comments` to retrieve all comments on an epic (CRITICAL: always fetch comments alongside issue details)
 - **Create issues**: Use `mcp__linear-server__create_issue` with unique scope
 - **Update issues**: Use `mcp__linear-server__update_issue` for dependencies
-- **Add comments**: Use `mcp__linear-server__create_comment` for updates
+- **Add comments**: Use `mcp__linear-server__save_comment` for updates
 - **DO NOT**: Use GitHub CLI or direct Linear API calls - only use MCP tools
 
 Transform Linear epics into technical implementation tickets with clear dependencies and specifications.

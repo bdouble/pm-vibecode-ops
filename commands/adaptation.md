@@ -1,6 +1,6 @@
 ---
 description: Adapt ticket requirements to codebase patterns, producing implementation guide
-allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
+allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 argument-hint: [ticket-id] [discovery-ticket-or-file-optional] [additional-context]
 workflow-phase: adaptation
 closes-ticket: false
@@ -72,7 +72,7 @@ Perform adaptation analysis for this ticket. Create an implementation guide that
 After the agent returns its report:
 
 1. **Parse the agent's report** - Extract adaptation results, implementation guide, service reuse analysis
-2. **Write the completion comment** - Use `mcp__linear-server__create_comment` with the structured adaptation report
+2. **Write the completion comment** - Use `mcp__linear-server__save_comment` with the structured adaptation report
 3. **Update ticket status** - Use `mcp__linear-server__update_issue` to mark as "In Progress" (do NOT mark as Done)
 4. **Verify success** - Confirm the comment was added
 5. **Report to user** - Summarize what was completed, including branch strategy and next steps
@@ -128,7 +128,7 @@ You are acting as the **Architect** for this ticket. Focus on analysis, planning
 **Tools you will use:**
 - **Fetch ticket**: `mcp__linear-server__get_issue` - YOU fetch before agent invocation
 - **Fetch comments**: `mcp__linear-server__list_comments` - YOU fetch before agent invocation
-- **Add comments**: `mcp__linear-server__create_comment` - YOU write after agent returns
+- **Add comments**: `mcp__linear-server__save_comment` - YOU write after agent returns
 - **Update status**: `mcp__linear-server__update_issue` - YOU update after agent returns
 
 Take Linear issue **$1** and adapt all requirements to existing codebase patterns, creating a precise implementation guide.
@@ -286,7 +286,7 @@ Before making ANY recommendations:
       * Has long-term architectural value AND
       * Cannot fit reasonably in Linear comment
     - **NEVER**: Create temporary markdown files that won't be useful after implementation
-12. **Linear Comment**: Use `mcp__linear-server__create_comment` to add COMPLETE adaptation report with ALL implementation guidance (do NOT change status to done)
+12. **Linear Comment**: Use `mcp__linear-server__save_comment` to add COMPLETE adaptation report with ALL implementation guidance (do NOT change status to done)
     - This is the PRIMARY deliverable - should contain everything engineers need
     - External files are RARE exceptions, not the default
 
@@ -350,7 +350,7 @@ git push origin "project/$PROJECT_NAME"
 ```
 
 4. **Parent Ticket Update**:
-Use mcp__linear-server__create_comment to update the parent ticket with project information:
+Use mcp__linear-server__save_comment to update the parent ticket with project information:
 - **issueId**: The parent ticket ID
 - **body**: A markdown-formatted comment containing:
   - Project name

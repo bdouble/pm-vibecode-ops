@@ -1,6 +1,6 @@
 ---
 description: Review code quality, patterns, and architectural consistency (security issues logged only)
-allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, Bash(find:*), Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Bash(gh pr comment:*), WebSearch, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
+allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, Bash(find:*), Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git show:*), Bash(gh pr comment:*), WebSearch, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 argument-hint: [ticket-id] [implementation-branch] [review-depth]
 workflow-phase: code-review
 closes-ticket: false
@@ -143,7 +143,7 @@ Return a structured code review report including:
 After the agent returns its report:
 
 1. **Parse the agent's report** - Extract issues found, fixes made, security concerns logged
-2. **Write the completion comment** - Use `mcp__linear-server__create_comment` with the structured code review report
+2. **Write the completion comment** - Use `mcp__linear-server__save_comment` with the structured code review report
 3. **Update ticket status if needed** - Use `mcp__linear-server__update_issue` (keep as "In Progress")
 4. **Verify success** - Confirm the comment was added
 5. **Report to user** - Summarize review findings, approval status, next steps (security review)
@@ -193,7 +193,7 @@ You are acting as a **Senior Code Reviewer** responsible for assessing code qual
 **Tools you will use:**
 - **Fetch ticket**: `mcp__linear-server__get_issue` - YOU fetch before agent invocation
 - **Fetch comments**: `mcp__linear-server__list_comments` - YOU fetch before agent invocation (all phase reports are here!)
-- **Add comments**: `mcp__linear-server__create_comment` - YOU write after agent returns
+- **Add comments**: `mcp__linear-server__save_comment` - YOU write after agent returns
 - **Update status**: `mcp__linear-server__update_issue` - YOU update after agent returns
 
 Perform code quality review for ticket **$1** to ensure implementation meets best practices and quality standards.

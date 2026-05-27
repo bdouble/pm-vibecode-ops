@@ -131,7 +131,7 @@ For each closure-log entry, capture the item + rationale for the report.
 Post the **complete** Cross-Model Review Report with all findings AND their resolutions:
 
 ```
-mcp__linear-server__create_comment:
+mcp__linear-server__save_comment:
   - issue_id: [ticket-id]
   - body: [formatted report — see template below]
 ```

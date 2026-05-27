@@ -1,6 +1,6 @@
 ---
 description: Analyze codebase and create comprehensive technical discovery report as a Linear ticket in the project, documenting patterns, architecture, and service inventory for implementation phases.
-allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, WebSearch, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__list_projects, mcp__linear-server__get_project
+allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, WebSearch, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__list_projects, mcp__linear-server__get_project
 argument-hint: [prd-file] [linear-project] [codebase-path] [focus-areas] (e.g., /discovery requirements.md MyProject ./src "auth,api")
 workflow-phase: project-analysis
 closes-ticket: false
@@ -47,7 +47,7 @@ Before running:
 - **Get project**: Use `mcp__linear-server__list_projects` to find project by name
 - **Create discovery ticket**: Use `mcp__linear-server__create_issue` in the project
 - **Update ticket**: Use `mcp__linear-server__update_issue` for status changes
-- **Add findings**: Use `mcp__linear-server__create_comment` for discovery report
+- **Add findings**: Use `mcp__linear-server__save_comment` for discovery report
 - **DO NOT**: Create external markdown files - all findings go in Linear
 
 Analyze the codebase and document findings in a Linear discovery ticket for the project.

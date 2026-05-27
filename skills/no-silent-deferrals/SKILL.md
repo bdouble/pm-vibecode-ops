@@ -82,6 +82,14 @@ If your would-be impact sentence reads any of the following, the item is a closu
 - "Future-proofing" / "defense in depth" without a named attack path
 - "We should document this" (unless the absence of documentation produces a named failure)
 
+### Title Prefix for Any Filed Ticket: `[Follow-up]`
+
+Any ticket filed because of an observation made during execution — at any phase, in any flow (mid-flow `/execute-ticket`, mid-flow `/epic-swarm`, codex-review SCOPE_EXPANSION_ESCAPE, `/close-epic` follow-up discipline) — MUST use the title prefix `[Follow-up]`. NOT `[Retrofit]`.
+
+`[Retrofit]` was the v4.5-era prefix when the closure pattern was "file one ticket per remaining surface." That naming reinforced sprawl. v4.6 renamed it to `[Follow-up]` to reflect that filing a ticket is a residual outcome after the impact bar and boundary question have done their work. v4.7 normalizes the rule to ALL flows — closure flow already used `[Follow-up]`; mid-flow filings (observed on PRO-1170) sometimes regressed back to `[Retrofit]`. Both paths now share the same prefix.
+
+If you find yourself about to type `title: "[Retrofit] ..."` — STOP and change to `[Follow-up]`.
+
 ### Pattern-Propagation Has a Higher Bar
 
 "This pattern exists in this epic; other surfaces should have it too" is the most common ticket-sprawl source. To file such a ticket, you must name EITHER:

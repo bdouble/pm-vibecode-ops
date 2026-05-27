@@ -1,6 +1,6 @@
 ---
 description: Create comprehensive documentation for implemented features, including API docs, user guides, and technical architecture documentation with real code examples.
-allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, Bash(gh pr comment:*), WebSearch, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__create_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
+allowed-tools: Task, Read, Write, Edit, Grep, Glob, LS, TodoWrite, Bash, Bash(gh pr comment:*), WebSearch, mcp__linear-server__get_issue, mcp__linear-server__update_issue, mcp__linear-server__save_comment, mcp__linear-server__list_comments, mcp__linear-server__create_issue, mcp__linear-server__list_issues, mcp__linear-server__create_project, mcp__linear-server__list_projects, mcp__linear-server__list_teams
 argument-hint: [ticket-id] [doc-types] [format] [update-strategy]
 workflow-phase: documentation
 closes-ticket: false
@@ -82,7 +82,7 @@ Create minimal viable documentation (MVD) for this ticket following the "documen
 After the agent returns its report:
 
 1. **Parse the agent's report** - Extract documentation created, JSDoc coverage, gaps noted
-2. **Write the completion comment** - Use `mcp__linear-server__create_comment` with the structured documentation report
+2. **Write the completion comment** - Use `mcp__linear-server__save_comment` with the structured documentation report
 3. **Update ticket status if needed** - Use `mcp__linear-server__update_issue` (keep as "In Progress")
 4. **Verify success** - Confirm the comment was added
 5. **Report to user** - Summarize documentation created, next steps (code review)
@@ -130,7 +130,7 @@ You are acting as a **Technical Writer** responsible for creating clear, accurat
 **Tools you will use:**
 - **Fetch ticket**: `mcp__linear-server__get_issue` - YOU fetch before agent invocation
 - **Fetch comments**: `mcp__linear-server__list_comments` - YOU fetch before agent invocation (all phase reports are here!)
-- **Add comments**: `mcp__linear-server__create_comment` - YOU write after agent returns
+- **Add comments**: `mcp__linear-server__save_comment` - YOU write after agent returns
 - **Update status**: `mcp__linear-server__update_issue` - YOU update after agent returns
 
 Create **minimal viable documentation (MVD)** for ticket **$1** focusing on **essential information only**, avoiding over-documentation and redundancy.
@@ -175,7 +175,7 @@ Documentation approach: ${5:-"pragmatic"}
 14. **PR Comment**: Add documentation summary highlighting JSDoc coverage
 15. **PR State Change (AUTO)**: If PR is in draft, automatically move to READY FOR REVIEW using `gh pr ready` - DO NOT ask user, just do it
 16. **PR Finalization**: Update PR description, add `docs-complete` label
-17. **Linear Integration**: Use `mcp__linear-server__create_comment` to add documentation summary, then use `mcp__linear-server__update_issue` to add label 'docs-complete' (status remains 'In Progress' - proceeding to code review)
+17. **Linear Integration**: Use `mcp__linear-server__save_comment` to add documentation summary, then use `mcp__linear-server__update_issue` to add label 'docs-complete' (status remains 'In Progress' - proceeding to code review)
 
 ## Documentation Philosophy: Minimal Viable Documentation (MVD)
 
@@ -447,7 +447,7 @@ git push origin HEAD
 1. First: Complete all documentation work
 2. Second: Commit documentation to feature branch
 3. Third: Add final PR comment with documentation summary
-4. Fourth: Add comprehensive documentation report comment to Linear ticket using `mcp__linear-server__create_comment`
+4. Fourth: Add comprehensive documentation report comment to Linear ticket using `mcp__linear-server__save_comment`
 5. Fifth: Leave ticket in "In Progress" state - security review phase will close it
 
 **Note**: Documentation phase does NOT close the ticket. The ticket remains open for code review and security review phases.
