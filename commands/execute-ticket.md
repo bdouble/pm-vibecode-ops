@@ -88,6 +88,8 @@ Use mcp__linear-server__get_issue to fetch ticket: $ARGUMENTS
 - Ticket is not already Done or Cancelled
 - Ticket has an assigned agent type (check labels for `backend`, `frontend`, or description metadata)
 
+**Extract `epic_id` now:** Check the response for a `parentId` field. If present, set `epic_id = parentId` (used for all JSONL observability paths in Step 1.5+). If absent, `epic_id = null` and observability goes to `_solo/`. Do NOT defer this extraction to Step 3.1.0 — the JSONL path at Step 1.5 needs it.
+
 If validation fails, report the error and stop.
 
 ### Step 1.2.5: Detect Worktree Mode
@@ -181,7 +183,7 @@ Assign exactly one workflow profile to this ticket. The assignment governs which
 
 **Record the assignment:**
 
-**Idempotency gate (BEFORE posting):** Search the comments already fetched in step 3 above for a `## Profile Assignment` comment header. If one is found:
+**Idempotency gate (BEFORE posting):** Search the comments already fetched in algorithm step 3 above (the resume-check fetch) for a `## Profile Assignment` comment header. If one is found:
 - DO NOT post a new Profile Assignment comment (would create a duplicate).
 - Log to terminal: `Profile already assigned: <profile> (re-using from prior session)`.
 - Skip directly to the JSONL append in step 2 below, marking `selection_source` as `resumed-from-prior-comment` if not already.
@@ -266,7 +268,7 @@ Use mcp__linear-server__list_comments for ticket: $ARGUMENTS
   - Header present but no clear status → Treat as incomplete, re-run phase
 - If all reports found with completed statuses (`DONE`, `DONE_WITH_CONCERNS`, `COMPLETE`, or `N/A`) → Ticket already complete, report status and stop
 
-**Note on `Status: N/A`:** N/A reports are posted by §3.2.5b for phases skipped per the active workflow profile (e.g., Documentation phase on a MINIMAL ticket). They are valid completion markers — resume MUST treat them as done, not re-run them. This matches the epic-swarm hard checkpoint, which counts N/A reports as FOUND (`commands/epic-swarm.md` §3.3).
+**Note on `Status: N/A`:** N/A reports are posted by Step 3.6.0b for phases skipped per the active workflow profile (e.g., Documentation phase on a MINIMAL ticket). They are valid completion markers for profile-skipped phases only. **Profile-aware guard:** if a phase with `Status: N/A` IS in the active profile's phase list (i.e., it should have run live), treat it as incomplete and re-run — a crashed or confused agent may have erroneously posted N/A for a required phase. First determine the active profile from the `## Profile Assignment` comment, then apply this guard. This matches the epic-swarm hard checkpoint (§3.3), which fails explicitly if a live-profile phase has N/A status.
 
 **Important:** Do not rely solely on header presence. A phase report may exist from a previous blocked run that needs to be re-executed.
 
@@ -1058,7 +1060,7 @@ Use mcp__linear-server__save_comment:
 | testing | `## Testing Report` |
 | documentation | `## Documentation Report` |
 | codex-review | `## Cross-Model Review Report` |
-| security-review | `## Security Review Report` |
+| security-review | `## Security Scan Report (Pre-Merge)` |
 
 **Idempotency:** Check existing comments first. Do NOT post duplicate N/A reports. (adaptation, implementation, and codereview run in every profile — they will never appear as N/A.)
 

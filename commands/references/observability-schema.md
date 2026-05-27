@@ -327,8 +327,8 @@ Emitted by `/close-epic` after all sub-tickets are Done/Cancelled and the closur
 | `phase_skipped_na` | Step 1.5 after posting each N/A report | §3.2.5b after posting each N/A | — |
 | `deferral_redispatch` | Step 3.6 (existing JSONL is here, supplement with new schema) | §3.6 same | — |
 | `deferral_accepted` | Step 3.6 / Step 3.9 user-decision branches | §3.6 / §3.9 same | — |
-| `impact_bar_rejected` | Phase report parsing — count `### Considered but not pursued` entries | same | Step 4 closure-log aggregation |
-| `boundary_question_answered` | Phase report parsing — detect boundary-question keyword set | same | Step 4 follow-up discipline output |
+| `impact_bar_rejected` | At the discrete decision point when a candidate item is closure-logged instead of filed as a ticket — one event per item, with `candidate_summary` and `why_below_bar` populated at that moment | same | Step 4 closure-log aggregation |
+| `boundary_question_answered` | At the discrete decision point when the boundary question is answered (single-enforcement-point vs. per-surface-tickets) | same | Step 4 follow-up discipline output |
 | `followup_cap_blocked` | — (close-epic only) | — | Step 4 when candidate count > 3 pre-cap |
 | `codex_finding_resolved` | Step 3.8 per finding | §3.8 per finding | — |
 | `codex_scope_escape` | Step 3.8 SCOPE_EXPANSION_ESCAPE branch | §3.8 same | — |

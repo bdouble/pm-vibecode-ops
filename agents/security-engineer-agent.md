@@ -621,7 +621,7 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 
 **Report Format:**
 ```markdown
-## Security Review Report
+## Security Scan Report (Pre-Merge)
 
 ### Status
 [COMPLETE | BLOCKED | ISSUES_FOUND]

@@ -1,6 +1,6 @@
 ---
 description: Render an observability dashboard for an epic or solo ticket — phase activity, deferral discipline, impact-bar rejections, codex findings, follow-up cap, profile distribution. Shells out to scripts/swarm-stats.sh.
-allowed-tools: Bash, Bash(scripts/swarm-stats.sh:*), Bash(jq:*), Bash(ls:*), Read
+allowed-tools: Bash, Bash(jq:*), Bash(ls:*), Read
 argument-hint: <epic-id-or-ticket-id> [--per-skill] [--audit-deltas]
 ---
 

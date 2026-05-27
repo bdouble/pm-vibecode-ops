@@ -80,7 +80,11 @@ trap 'rm -f "$STREAM"' EXIT
 
 if [[ -n "$EPIC_DIR" ]]; then
   for f in "$EPIC_DIR"/*.jsonl; do
-    [[ -f "$f" ]] && cat "$f" >> "$STREAM"
+    [[ -f "$f" ]] || continue
+    # _epic.jsonl holds epic-level events (epic_completed, followup_cap_blocked) that
+    # are NOT per-ticket events — including it inflates all per-ticket metric counts.
+    [[ "$(basename "$f")" == "_epic.jsonl" ]] && continue
+    cat "$f" >> "$STREAM"
   done
 elif [[ -n "$SOLO_FILE" ]]; then
   cat "$SOLO_FILE" >> "$STREAM"
@@ -106,11 +110,11 @@ fi
 # ---------- header ----------
 
 if [[ -n "$EPIC_DIR" ]]; then
-  HEADER_LABEL="EPIC $TARGET"
   TICKET_COUNT=$(ls "$EPIC_DIR"/*.jsonl 2>/dev/null | grep -v '_epic.jsonl' | wc -l | tr -d ' ')
+  HEADER_LABEL="EPIC $TARGET — $TICKET_COUNT ticket(s)"
 else
-  HEADER_LABEL="TICKET $TARGET (standalone /execute-ticket)"
   TICKET_COUNT=1
+  HEADER_LABEL="TICKET $TARGET (standalone /execute-ticket)"
 fi
 
 echo "$HEADER_LABEL"
@@ -124,9 +128,10 @@ fi
 
 count_event() { jq -rs --arg e "$1" '[.[] | select(.event==$e)] | length' "$STREAM"; }
 
-PROFILES_MINIMAL=$(jq -rs '[.[] | select(.event=="profile_assigned" and .data.profile=="MINIMAL")] | length' "$STREAM")
-PROFILES_STANDARD=$(jq -rs '[.[] | select(.event=="profile_assigned" and .data.profile=="STANDARD")] | length' "$STREAM")
-PROFILES_STRICT=$(jq -rs '[.[] | select(.event=="profile_assigned" and .data.profile=="STRICT")] | length' "$STREAM")
+# .data.profile = execute-ticket envelope format; .profile = epic-swarm legacy top-level format
+PROFILES_MINIMAL=$(jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "MINIMAL"))] | length' "$STREAM")
+PROFILES_STANDARD=$(jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "STANDARD"))] | length' "$STREAM")
+PROFILES_STRICT=$(jq -rs '[.[] | select(.event=="profile_assigned" and ((.data.profile // .profile) == "STRICT"))] | length' "$STREAM")
 OVERRIDES=$(count_event profile_overridden)
 
 PHASES_STARTED=$(count_event phase_started)
@@ -238,5 +243,7 @@ if [[ "$LEGACY" == "0" ]]; then
     echo "Headline: $IMPACT_REJ closure-log entries — sprawl-reduction discipline active."
   elif [[ "$TICKETS_DONE" -gt 0 ]]; then
     echo "Headline: $TICKETS_DONE ticket(s) completed cleanly."
+  else
+    echo "Headline: $PHASES_STARTED phase(s) dispatched — run in progress."
   fi
 fi
