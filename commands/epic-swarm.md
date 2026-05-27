@@ -249,7 +249,9 @@ Some tickets may be in "In Progress" in Linear despite having completed all 7 ph
 
 **When resuming: Read existing state files before writing.**
 
-The `.swarm/orchestrator-log.md` and `.swarm/state/[epic-id].json` files already exist from the prior session. Read them first before writing updates. The Write tool rejects writes to files that haven't been read.
+The `.swarm/orchestrator-log-[epic-id].md` and `.swarm/state/[epic-id].json` files already exist from the prior session. Read them first before writing updates. The Write tool rejects writes to files that haven't been read.
+
+**Path convention reminder (Tier 4 canonicalization, v4.7):** The orchestrator log is per-epic, named `.swarm/orchestrator-log-[epic-id].md`. The pre-v4.7 spec referenced an unsuffixed `.swarm/orchestrator-log.md`; on-disk evidence (PRO-1156) and the v4.7 epic-awareness work both use the per-epic suffixed form. Use the suffixed form everywhere in this command. Solo `/execute-ticket` runs write to `.swarm/orchestrator-log-tickets/[ticket-id].md`.
 
 ### 1.3 Build Dependency DAG
 
@@ -660,10 +662,20 @@ Initialize state:
 
 ### 1.8 Initialize Orchestrator Notes
 
-Create `.swarm/orchestrator-log.md` — a persistent file the orchestrator updates after each ticket completes the hard checkpoint. This provides cross-ticket context for adaptation phases in later tiers.
+Create `.swarm/orchestrator-log-[epic-id].md` — a persistent file the orchestrator updates after each ticket completes the hard checkpoint. This provides cross-ticket context for adaptation phases in later tiers.
+
+**Concurrency note (Tier 4):** A `/execute-ticket` invocation against a sub-ticket of this epic ALSO writes to `.swarm/orchestrator-log-[epic-id].md` (per `commands/execute-ticket.md` Step 1.6 + Step 3.7.0 + Step 4). Both surfaces use the shared lock file `.swarm/.locks/[epic-id].lock` via the `( flock -x 200 ... ) 200>"$LOCK_FILE"` idiom. Seed the file only if it does not exist (a prior `/execute-ticket` against this epic may have seeded it already).
 
 ```bash
-cat > .swarm/orchestrator-log.md << 'EOF'
+LOCK_DIR=".swarm/.locks"
+LOCK_FILE="$LOCK_DIR/[epic-id].lock"
+ORCH_LOG=".swarm/orchestrator-log-[epic-id].md"
+mkdir -p "$LOCK_DIR"
+
+if [ ! -f "$ORCH_LOG" ]; then
+  ( flock -x 200
+    if [ ! -f "$ORCH_LOG" ]; then
+      cat > "$ORCH_LOG" << 'EOF'
 # Orchestrator Notes — Epic [epic-id]
 Generated: [timestamp]
 
@@ -673,6 +685,9 @@ Generated: [timestamp]
 ## Cross-Ticket Observations
 (none yet)
 EOF
+    fi
+  ) 200>"$LOCK_FILE"
+fi
 ```
 
 **Purpose:** When ticket B's adaptation phase runs after ticket A is complete, the orchestrator includes the orchestrator notes in the adaptation prompt so the architect-agent can examine what was built and plan accordingly.
@@ -1111,7 +1126,7 @@ For each phase of the current ticket:
 
 7. **Deferred items** from all prior phases for this ticket (full tables, not summaries)
 
-8. **Orchestrator notes** (ADAPTATION PHASE ONLY): Include the full content of `.swarm/orchestrator-log.md` under a header:
+8. **Orchestrator notes** (ADAPTATION PHASE ONLY): Include the full content of `.swarm/orchestrator-log-[epic-id].md` under a header:
    ```
    ## Prior Ticket Work in This Epic
    The following tickets have already been completed in this epic. Their code
@@ -1119,7 +1134,7 @@ For each phase of the current ticket:
    Reference these when planning your implementation approach — look for existing
    patterns, services, and interfaces you can reuse or extend.
 
-   [full orchestrator-log.md content]
+   [full orchestrator-log-[epic-id].md content]
    ```
 
 9. **File scope for read-only phases** (codereview, security-review):
@@ -1591,7 +1606,7 @@ For each ticket that completed all phases:
 
 ### 3.4 Update Orchestrator Notes
 
-**After each ticket's phase loop completes — regardless of hard-checkpoint outcome — append an entry to `.swarm/orchestrator-log.md`.** The append runs unconditionally in a finally-style block: a hard-checkpoint failure, a merge conflict, or an agent crash MUST still produce an audit-trail entry. Decoupling the log update from checkpoint success is what prevents the "ticket shipped, log shows '(none yet)'" regression observed in PRO-1156.
+**After each ticket's phase loop completes — regardless of hard-checkpoint outcome — append an entry to `.swarm/orchestrator-log-[epic-id].md`.** The append runs unconditionally in a finally-style block: a hard-checkpoint failure, a merge conflict, or an agent crash MUST still produce an audit-trail entry. Decoupling the log update from checkpoint success is what prevents the "ticket shipped, log shows '(none yet)'" regression observed in PRO-1156.
 
 **Two entry formats — pick based on outcome:**
 
@@ -1637,6 +1652,23 @@ For each ticket that completed all phases:
 - Cross-ticket observations: from the orchestrator's own analysis of the ticket's work
 
 **Why both formats matter:** Subsequent tickets' adaptation phases read this log (Step 3.2.1 item 8). A failed ticket's partial work is just as relevant to the architect-agent as a passed ticket's complete work — it surfaces "this surface was attempted and blocked, here's what was built before the halt." Silent dropping of failed tickets from the log was the original bug.
+
+**Append idiom — use flock to serialize with concurrent `/execute-ticket` invocations against the same epic (Tier 4):**
+
+```bash
+ORCH_LOG=".swarm/orchestrator-log-[epic-id].md"
+LOCK_FILE=".swarm/.locks/[epic-id].lock"
+
+( flock -x 200
+  cat >> "$ORCH_LOG" << 'ENTRY'
+### [TICKET-ID] — [title]
+**Tier:** [N] | **Completed:** [timestamp] | **Outcome:** PASSED
+...
+ENTRY
+) 200>"$LOCK_FILE"
+```
+
+Both `/epic-swarm` and `/execute-ticket` share the same lock file (`.swarm/.locks/[epic-id].lock`), so an `/execute-ticket` invocation that lands mid-swarm against a different sub-ticket cannot interleave its append with the swarm's append on the orch-log. See `commands/execute-ticket.md` Step 3.7.0 for the parallel flock idiom on the `/execute-ticket` side.
 
 **Idempotency on resume:** Before appending, check if an entry for this ticket-id + outcome already exists. If a previous session wrote a FAILED entry and the current session retried and PASSED, append a NEW entry rather than editing the old one — the audit trail preserves both attempts.
 
