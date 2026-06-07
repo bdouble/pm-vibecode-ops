@@ -15,7 +15,7 @@ This directory holds **dynamic workflows** — JavaScript scripts that orchestra
 So this plugin delivers the workflow through a thin **command wrapper**:
 
 - `workflows/epic-swarm-workflow.js` — the canonical, version-controlled source (this directory).
-- `commands/epic-swarm-workflow.md` — a slash command that resolves the bundled script path (via `${CLAUDE_SKILL_DIR}`) and launches it with the `Workflow` tool, passing your arguments through.
+- `commands/epic-swarm-workflow.md` — a slash command that resolves the bundled script path (via `${CLAUDE_PLUGIN_ROOT}`) and launches it with the `Workflow` tool, passing your arguments through.
 
 After installing the plugin, run it as:
 
