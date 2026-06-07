@@ -55,11 +55,19 @@
  *     but-produced-nothing); where it was NOT (NO-CODE / no_code STANDARD) an
  *     empty diff is a benign NO_OP — closed, not blocked, never poisons deps.
  *     SMALL/STANDARD builds also get ONE git-verified empty-artifact retry.
+ *   • All phase gates FAIL CLOSED via allowlist: build/adapt/test advance only on an
+ *     explicit COMPLETE, reviews only on APPROVED (+PASS), security only on APPROVED
+ *     with zero CRITICAL/HIGH. An unexpected, BLOCKED, or missing status never passes.
+ *   • Idempotent worktrees + resumable: each tier's first agent clears any stale
+ *     worktree/branch of the same name (left by a prior interrupted run) BEFORE
+ *     `git worktree add`, so a resume never collides; worktrees of tickets that block
+ *     before merge are swept at the end of the run (their branches are kept).
  *
  * ─────────────────────────────────────────────────────────────────────────
  * MODEL ROUTING (aggressive Sonnet; Opus where reasoning matters)
- *   Opus:   plan, adapt, implement, test, review, review-fix, codex(driver)
- *   Sonnet: setup, documentation, security, merge, all NO-CODE work
+ *   Opus:   plan, adapt, implement, test, review, review-fix, codex(driver),
+ *           SMALL-tier build + review
+ *   Sonnet: setup, documentation, security, merge, PR, all NO-CODE work
  *   Effort: per-agent effort is NOT a workflow API knob — it is inherited from
  *           the session. Launch the run at `high` (xhigh/ultracode ~doubles
  *           cost across 70+ agents for marginal gain). See ROUTE below.
@@ -284,11 +292,16 @@ function parseArgs(a) {
       else if (tk === '--no-push') flags.push = false
       else if (tk === '--max-tickets') {
         const v = toks[i + 1]
-        if (v != null && /^\d+$/.test(v)) { flags.maxTickets = parseInt(v, 10); i++ } // consume ONLY a numeric value (0 is parsed here but rejected below; won't eat the epic ID)
+        // Require an explicit non-negative integer. A missing or non-numeric value is a
+        // usage error, NOT a silent no-op: silently ignoring it would either swallow the
+        // cap (and run the whole, expensive epic) or let the next token become the epic ID.
+        if (v == null || !/^\d+$/.test(v)) throw new Error(`epic-swarm-workflow: --max-tickets requires a non-negative integer value (got ${v == null ? 'no value' : `"${v}"`}). Example: --max-tickets 3.`)
+        flags.maxTickets = parseInt(v, 10); i++ // 0 is parsed here but rejected below
       }
       else if (tk.startsWith('--max-tickets=')) {
         const v = tk.split('=')[1]
-        if (/^\d+$/.test(v)) flags.maxTickets = parseInt(v, 10)
+        if (!/^\d+$/.test(v)) throw new Error(`epic-swarm-workflow: --max-tickets requires a non-negative integer value (got "${v}"). Example: --max-tickets=3.`)
+        flags.maxTickets = parseInt(v, 10)
       }
       else if (!tk.startsWith('--') && !epicId) epicId = tk
     }
@@ -296,7 +309,14 @@ function parseArgs(a) {
     epicId = a.epicId || a.epic || a.id || null
     if (a.dryRun) flags.dryRun = true
     if (a.push) flags.push = true
-    if (a.maxTickets != null) flags.maxTickets = a.maxTickets
+    if (a.maxTickets != null) {
+      // Coerce + validate (object callers may pass a string like '0'/'2' or a negative).
+      // Without this, '2' bypasses Number.isFinite below (cap silently dropped → whole epic),
+      // and -1 reaches slice(0, -1) (silently drops the last ticket).
+      const n = Number(a.maxTickets)
+      if (!Number.isInteger(n) || n < 0) throw new Error(`epic-swarm-workflow: maxTickets must be a non-negative integer (got ${JSON.stringify(a.maxTickets)}).`)
+      flags.maxTickets = n
+    }
   }
   return { epicId, flags }
 }
@@ -312,9 +332,19 @@ function ticketRefs(root, t) {
 
 function wtSetup(root, epicBranch, t) {
   const { wt, branch } = ticketRefs(root, t)
+  // Pull only under --push: in that mode the epic branch may exist on the remote, so
+  // fast-forward it. In the default local-only mode the epic branch was NEVER pushed, so
+  // `pull origin <epicBranch>` always fails ("couldn't find remote ref") — skip it entirely
+  // rather than run a guaranteed-failing command on every ticket.
+  const syncStep = flags.push
+    ? `- git -C ${root} pull --ff-only origin ${epicBranch}   — BEST-EFFORT: treat any non-zero exit (branch not yet on the remote / no remote) as a no-op and CONTINUE; do not retry or report it as a failure.\n`
+    : ''
   return `Create your worktree off the CURRENT epic branch (so it includes all prior merged tickets), from REPO_ROOT ${root}:
 - git -C ${root} checkout ${epicBranch}
-- git -C ${root} pull origin ${epicBranch}   (ignore failure if there is no remote)
+${syncStep}- IDEMPOTENT RESET — a prior interrupted run may have left a stale worktree and/or branch with these EXACT names, which would make the \`worktree add\` below fail ("already exists"). Clear them first; run each as its OWN Bash call and IGNORE "not a working tree"/"not found"/"no such branch" errors:
+    git -C ${root} worktree remove ${wt} --force
+    git -C ${root} worktree prune
+    git -C ${root} branch -D ${branch}
 - git -C ${root} worktree add ${wt} -b ${branch} ${epicBranch}
 - install dependencies in the worktree with a dir flag (e.g. pnpm -C ${wt} install --frozen-lockfile); run codegen scripts if present.
 Operate EXCLUSIVELY inside ${wt} using absolute paths.`
@@ -415,7 +445,7 @@ if (Number.isFinite(flags.maxTickets) && tickets.length > flags.maxTickets) {
 }
 const tierCounts = tickets.reduce((m, t) => ((m[t.effort_tier] = (m[t.effort_tier] || 0) + 1), m), {})
 log(`Plan: ${plan.epic.title} — ${tickets.length} ticket(s). Tiers: ${JSON.stringify(tierCounts)}. Baseline pre-existing failures: ${BASELINE.length}.`)
-if (!TEST_CMD) log(`WARN no test command detected — per-ticket review still runs, but merges will NOT be integration-verified, so cross-ticket semantic breakage can go undetected.`)
+if (!TEST_CMD) log(`WARN no test command detected — per-ticket review still runs, but merges will NOT be integration-verified, so cross-ticket semantic breakage can go undetected${flags.push ? ' — and with --push each unverified merge is pushed to the epic branch immediately. Strongly consider configuring a test command before a --push run' : ''}.`)
 
 if (flags.dryRun) {
   log('DRY RUN — returning classification only, no code changes.')
@@ -583,7 +613,10 @@ Return status, summary, files_changed, write/edit counts, committed, no_code.`,
         { schema: WORK_SCHEMA, label: `build ${t.id}`, phase: 'Build', model: ROUTE.buildNoCode },
       )
       ticketResult.phases.build = build ? build.status : 'NO_REPORT'
-      if (!build || build.status === 'BLOCKED' || build.status === 'NEEDS_CONTEXT') {
+      // Fail closed: advance ONLY on explicit COMPLETE (allowlist), matching the SMALL/
+      // STANDARD build gates. A denylist would let ISSUES_FOUND or any unexpected/typo
+      // status fall through as a pass.
+      if (!build || build.status !== 'COMPLETE') {
         log(`BLOCK ${t.id} at build — ${build ? build.status : 'no report'}${build && build.status === 'NEEDS_CONTEXT' ? ' (likely mis-classified; re-run will re-tier)' : ''}`)
         blocked.add(t.id); ticketResult.outcome = 'BLOCKED_BUILD'; results.push(ticketResult); continue
       }
@@ -672,7 +705,10 @@ Return status (COMPLETE | BLOCKED | NEEDS_CONTEXT), summary (one line on the pla
       { schema: WORK_SCHEMA, label: `adapt ${t.id}`, phase: 'Build', model: ROUTE.adapt },
     )
     ticketResult.phases.adaptation = adapt ? adapt.status : 'NO_REPORT'
-    if (!adapt || adapt.status === 'BLOCKED' || adapt.status === 'NEEDS_CONTEXT') {
+    // Fail closed: advance ONLY on explicit COMPLETE (allowlist). A denylist would let
+    // an adapt agent that returned ISSUES_FOUND (or any unexpected status) feed a
+    // flagged plan forward into implementation as if it were sound.
+    if (!adapt || adapt.status !== 'COMPLETE') {
       log(`BLOCK ${t.id} at adaptation — ${adapt ? adapt.status : 'no report'}`)
       blocked.add(t.id); ticketResult.outcome = 'BLOCKED_ADAPTATION'; results.push(ticketResult); continue
     }
@@ -723,8 +759,11 @@ Return status (COMPLETE | ISSUES_FOUND), a gates one-liner, files_changed, write
         { schema: WORK_SCHEMA, label: `test ${t.id}`, phase: 'Build', model: ROUTE.test },
       )
       ticketResult.phases.testing = test ? test.status : 'NO_REPORT'
-      if (!test || test.status === 'ISSUES_FOUND') {
-        log(`BLOCK ${t.id} at testing — a gate failed.`)
+      // Fail closed: advance ONLY on explicit COMPLETE (allowlist). The previous denylist
+      // (`=== 'ISSUES_FOUND'`) let a test agent that returned BLOCKED / NEEDS_CONTEXT — the
+      // likely outcome when the suite can't even run — pass as if tests were green.
+      if (!test || test.status !== 'COMPLETE') {
+        log(`BLOCK ${t.id} at testing — ${test ? test.status : 'no report'} (gate not COMPLETE).`)
         blocked.add(t.id); ticketResult.outcome = 'BLOCKED_TESTING'; results.push(ticketResult); continue
       }
     } else { ticketResult.phases.testing = 'skipped' }
@@ -817,6 +856,28 @@ Return status (APPROVED | CHANGES_REQUIRED | BLOCKED), critical_high_count.`,
 
 // ═══════════════════════════════════ Report ═════════════════════════════════
 phase('Report')
+
+// Best-effort worktree sweep. mergeTicket cleans up the worktree of every ticket that
+// REACHES merge (any status), but a ticket BLOCKED earlier in its pipeline never gets
+// there and leaks its `.swarm/worktrees/<id>` dir — so a long run with several blocked
+// tickets accumulates worktrees. Sweep exactly those here. Feature BRANCHES are kept so
+// failed work stays inspectable; a later rerun's idempotent wtSetup clears any stale
+// branch before re-creating the worktree. `.swarm/` is gitignored scratch space.
+const LEAKED_OUTCOMES = new Set(['BLOCKED_BUILD', 'BLOCKED_ADAPTATION', 'BLOCKED_IMPLEMENTATION', 'BLOCKED_TESTING', 'BLOCKED_REVIEW', 'SECURITY_BLOCKED', 'ERROR'])
+const leakedWts = results.filter((r) => LEAKED_OUTCOMES.has(r.outcome)).map((r) => ticketRefs(REPO_ROOT, { id: r.id }).wt)
+if (leakedWts.length) {
+  await safeAgent(
+    `Best-effort worktree cleanup for epic ${epicId}. Each path below is a per-ticket git worktree left behind by a ticket that blocked before it could merge. Remove each one; KEEP all branches (failed work must stay inspectable); NEVER touch main/master or the epic branch.
+${SHELL_RULES}
+For EACH path, run \`git -C ${REPO_ROOT} worktree remove <path> --force\` as its OWN Bash call (ignore "not a working tree"/"not found" errors). Then run \`git -C ${REPO_ROOT} worktree prune\`. Do NOT run \`git branch -D\` on anything.
+Paths:
+${leakedWts.map((p) => `- ${p}`).join('\n')}
+Return status only ("DONE").`,
+    { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string' } } }, label: `cleanup ${epicId}`, phase: 'Report', model: ROUTE.merge },
+  )
+  log(`Swept ${leakedWts.length} leftover worktree(s) from blocked tickets (branches kept for inspection).`)
+}
+
 let pr = null
 if (flags.push && mergedIds.size > 0) {
   pr = await safeAgent(

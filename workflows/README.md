@@ -6,7 +6,7 @@ This directory holds **dynamic workflows** — JavaScript scripts that orchestra
 
 | File | Purpose |
 |------|---------|
-| `epic-swarm-workflow.js` | Resilient, right-sized port of `/epic-swarm`. Per ticket: adaptation → implementation → testing → documentation → code review → Codex cross-model review → security → merge, scaled to each ticket's effort tier, with a hard review floor for code changes and full per-agent failure isolation. |
+| `epic-swarm-workflow.js` | Resilient, right-sized port of `/epic-swarm`. Each ticket runs a pipeline scaled to its effort tier — STANDARD runs the full adaptation → implementation → testing → documentation → code review → Codex cross-model review → security → merge chain; NO_CODE/SMALL collapse to build → review → merge — with a hard review floor for code changes and full per-agent failure isolation. |
 
 ## How this ships in the plugin
 
@@ -15,7 +15,7 @@ This directory holds **dynamic workflows** — JavaScript scripts that orchestra
 So this plugin delivers the workflow through a thin **command wrapper**:
 
 - `workflows/epic-swarm-workflow.js` — the canonical, version-controlled source (this directory).
-- `commands/epic-swarm-workflow.md` — a slash command that resolves the bundled script path (via `${CLAUDE_PLUGIN_ROOT}`) and launches it with the `Workflow` tool, passing your arguments through.
+- `commands/epic-swarm-workflow.md` — a slash command that resolves the bundled script path (probing `${CLAUDE_PLUGIN_ROOT}`, then `${CLAUDE_SKILL_DIR}`, then a Glob fallback across the cwd and the `~/.claude/plugins`/`~/.claude/marketplaces` install roots) and launches it with the `Workflow` tool, passing your arguments through.
 
 After installing the plugin, run it as:
 
@@ -52,6 +52,6 @@ It then appears as `/epic-swarm-workflow` in `/` autocomplete. (Re-copy after up
 - **Resilient by construction.** Every agent call is wrapped so a single failure (API 5xx, MCP hang, schema miss) is contained — the ticket is recorded blocked and the run continues, always returning a reconciled summary. Each phase agent posts its own report to Linear as it finishes, so a crash never loses the audit trail.
 - **Empty-diff handling is tier-aware.** Where code was expected (SMALL build, STANDARD implement) an empty diff blocks loudly as `BLOCKED_EMPTY_DIFF` (a "claimed complete but produced nothing" anomaly), and those builds get one git-verified empty-artifact retry first. Where code was *not* expected (a NO-CODE observation ticket, or a `no_code` STANDARD ticket) an empty diff is a benign `NO_OP` — the ticket is closed, reported separately, and never blocks or poisons its dependents.
 - **Merge gate uses a test-diff** — it blocks only on tests that *newly* fail versus a baseline captured at setup, so a pre-existing red or flaky suite (common in real repos) never blocks a clean merge.
-- **Model routing** is aggressive on Sonnet: Opus for the reasoning phases (plan, adapt, implement, test, review, review-fix, codex), Sonnet for the mechanical ones (setup, documentation, security, merge). Tune the `ROUTE` map at the top of the script. Per-agent *effort* is not a workflow API knob — launch the session at `high`.
+- **Model routing** is aggressive on Sonnet: Opus for the reasoning phases (plan, adapt, implement, test, review, review-fix, codex) **and both SMALL-tier agents (build + review)**; Sonnet for the mechanical ones (setup, documentation, security, merge, the PR) **and both NO-CODE-tier agents (build + review)**. So a SMALL-heavy epic costs more Opus than the reasoning-phase list alone implies. Tune the `ROUTE` map at the top of the script. Per-agent *effort* is not a workflow API knob — launch the session at `high`.
 
 To edit the workflow, change `epic-swarm-workflow.js` here (the source of truth), then re-deliver it (the command wrapper always runs this file; re-copy it if you used the bare-command install above).

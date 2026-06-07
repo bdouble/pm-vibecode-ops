@@ -11,9 +11,9 @@ Minor release adding the first **dynamic workflow** to the plugin: `/epic-swarm-
 
 ### Added
 
-- **`/epic-swarm-workflow` command + `workflows/` directory.** New `workflows/epic-swarm-workflow.js` (canonical, version-controlled source) launched by a thin `commands/epic-swarm-workflow.md` wrapper. The wrapper resolves the bundled script path via `${CLAUDE_PLUGIN_ROOT}` and runs it through the `Workflow` tool, passing `$ARGUMENTS` (epic ID + flags) through. Installs as `/pm-vibecode-ops:epic-swarm-workflow`; an optional copy into `.claude/workflows/` or `~/.claude/workflows/` yields the bare `/epic-swarm-workflow`.
+- **`/epic-swarm-workflow` command + `workflows/` directory.** New `workflows/epic-swarm-workflow.js` (canonical, version-controlled source) launched by a thin `commands/epic-swarm-workflow.md` wrapper. The wrapper resolves the bundled script path (probing `${CLAUDE_PLUGIN_ROOT}`, then `${CLAUDE_SKILL_DIR}`, then a Glob fallback) and runs it through the `Workflow` tool, passing `$ARGUMENTS` (epic ID + flags) through. Installs as `/pm-vibecode-ops:epic-swarm-workflow`; an optional copy into `.claude/workflows/` or `~/.claude/workflows/` yields the bare `/epic-swarm-workflow`.
 - **Right-sized pipelines.** A planning agent classifies each ticket into `NO_CODE` / `SMALL` / `STANDARD`, and the script runs a pipeline sized to it (NO_CODE/SMALL collapse to build + review + merge; STANDARD runs the full phase set). Every tier uses at least two work agents (a build/plan-implement agent and a separate reviewer) plus a merge agent — no single agent does everything.
-- **Per-phase model routing.** Opus for reasoning phases (plan, adapt, implement, test, review, review-fix, codex); Sonnet for mechanical phases (setup, documentation, security, merge). Tunable via the `ROUTE` map at the top of the script.
+- **Per-phase model routing.** Opus for reasoning phases (plan, adapt, implement, test, review, review-fix, codex) and both SMALL-tier agents (build + review); Sonnet for mechanical phases (setup, documentation, security, merge, the PR) and both NO-CODE-tier agents — so a SMALL-heavy epic costs more Opus than the reasoning-phase list alone implies. Tunable via the `ROUTE` map at the top of the script.
 - **`--dry-run` / `--push` / `--no-push` / `--max-tickets N` flags** for cheap previews, local-only-by-default execution (with `--no-push` to force it explicitly), and scope capping.
 - **`workflows/README.md`** documenting the workflow, the plugin-delivery model, and the (current) absence of a native plugin `workflows/` component.
 
@@ -37,9 +37,17 @@ Defects caught by an extra-high-recall code review of the workflow before merge:
 - **Setup-failure error printed `undefined`** (interpolated an optional field). Now reports the status with a clear message.
 - **`--max-tickets 0` ran a silent no-op.** Now rejected with a usage error.
 
-### Added
+### Fixed — pre-release review, round 2 (PR #4)
 
-- **`--no-push` flag** — explicitly forces local-only execution (the inverse of `--push`; last one wins).
+A second extra-high-recall review of the workflow surfaced 14 more issues, all resolved here:
+
+- **Three quality gates failed open.** The NO-CODE build, STANDARD adaptation, and STANDARD testing gates used denylists (`status === 'BLOCKED' || …`) instead of allowlists, so an unexpected status — most damagingly a testing agent returning `BLOCKED`/`NEEDS_CONTEXT` when the suite can't run — passed as if the phase succeeded. All three now fail closed on `status !== 'COMPLETE'`, matching the build/review/security gates.
+- **Worktrees leaked on every blocked path, breaking resume.** Cleanup lived only in `mergeTicket`, which blocked tickets never reach, so each leaked its `.swarm/worktrees/<id>` dir and `feature/<id>-<slug>` branch — and the planner's deliberate re-inclusion of In-Progress tickets then made the next run's `git worktree add` collide ("already exists"). `wtSetup` now does an idempotent reset (`worktree remove`/`prune`/`branch -D`) before `add`, and a best-effort end-of-run sweep removes leftover worktrees of blocked tickets (branches kept for inspection).
+- **`--max-tickets` mis-handled bad values.** A missing/non-numeric value in string form was silently swallowed (running the whole epic, or letting the next token become the epic ID); object-form values weren't validated (`'2'` disabled the cap, `-1` dropped the last ticket via `slice(0,-1)`). Both forms now require — and validate — a non-negative integer.
+- **`git pull origin <epicBranch>` ran on every ticket in local-only mode**, where the epic branch was never pushed, so it always failed. The pull is now issued only under `--push`, and as an explicitly best-effort step.
+- **Command path resolution hardened.** The wrapper now probes both `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_SKILL_DIR}` and broadens the Glob fallback to the `~/.claude/plugins`/`~/.claude/marketplaces` install roots, so a plugin installed outside the cwd still resolves.
+- **No-test-command merges flagged louder.** When no test command is detected, the warning now calls out that `--push` pushes each unverified merge immediately, and recommends configuring a test command first.
+- **Docs corrected.** Removed a duplicate `### Added` heading in this entry; the command/README now frame the full 8-phase chain as STANDARD-only (NO_CODE/SMALL are shorter); and the model-routing summaries no longer omit the SMALL (Opus) / NO-CODE (Sonnet) tier agents.
 
 ### Notes
 
