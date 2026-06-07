@@ -1,7 +1,7 @@
 ---
 description: Launch the epic-swarm-workflow dynamic workflow — a resilient, right-sized multi-agent swarm over a Linear epic (per-ticket adapt→implement→test→docs→review→codex→security→merge, reviews fail-closed)
 allowed-tools: Bash(echo:*), Bash(test:*), Glob, Workflow
-argument-hint: <epic-id> [--dry-run] [--push] [--max-tickets N]
+argument-hint: <epic-id> [--dry-run] [--push] [--no-push] [--max-tickets N]
 workflow-phase: epic-swarm-workflow
 closes-ticket: false
 ---
@@ -35,7 +35,8 @@ Absolute path to the bundled workflow script (resolved from this command's plugi
 - **Flags:**
   - `--dry-run` — classify each ticket into NO_CODE / SMALL / STANDARD and print the tier plan; make **no** code changes.
   - `--push` — push the epic branch and open the epic PR. Default is **local-only** (a local `epic/<id>` branch is created and tickets merge into it locally; nothing is pushed).
-  - `--max-tickets N` — cap scope to the first N tickets (use for a cheap first run to gauge cost).
+  - `--no-push` — explicitly force local-only (the inverse of `--push`). This is already the default, so it only matters to override a `--push` elsewhere in the same invocation; the last of `--push` / `--no-push` wins.
+  - `--max-tickets N` — cap scope to the first N tickets (use for a cheap first run to gauge cost). `N` must be ≥ 1 (`--max-tickets 0` is rejected, since it would process nothing).
 - **Requires dynamic workflows enabled** — a plan-gated research-preview feature. On Pro, turn on the "Dynamic workflows" row in `/config`. If it's disabled, the `Workflow` tool will not run.
 - **Recommended session effort:** `high`. Per-agent effort is not configurable from a workflow; the script already routes models per phase — **Opus** for reasoning work (plan, adapt, implement, test, review, review-fix, codex, and both SMALL-tier agents — build & review), **Sonnet** for mechanical work (setup, docs, security, merge, the PR, and both NO-CODE-tier agents — build & review). Note that review-fix and the SMALL build/review run on Opus, so Opus spend is higher for SMALL-heavy epics than the short list above implies. Tune the `ROUTE` map at the top of the script.
 - **Safety:** never merges to `main`/`master` — all work lands on the epic branch. Reviews and the security scan **fail closed** (a failed/empty review blocks the merge), and the merge gate uses a test-diff so pre-existing/flaky test failures never block a clean merge.

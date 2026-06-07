@@ -1,6 +1,7 @@
 /**
  * epic-swarm-workflow (v2) — a resilient, right-sized dynamic-workflow port of /epic-swarm.
- * Runs as `/epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--max-tickets N]`.
+ * Runs as `/epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--max-tickets N]`.
+ *   --no-push explicitly forces local-only (the default); it's the inverse of --push.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * WHAT IT DOES
@@ -25,7 +26,9 @@
  * review (and, for STANDARD, a passing security scan). codex is the cross-model
  * second opinion and runs on STANDARD tickets only (it is the slow/expensive
  * phase; a single strong Opus reviewer + cross-model codex beats three
- * same-model review lenses).
+ * same-model review lenses). codex auto-fixes land AFTER the review floor, so
+ * when codex changes code the correctness review is RE-RUN on the new diff and
+ * still fails closed — codex output never reaches merge unreviewed.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * RESILIENCY (this is the headline of v2 — environment-independent)
@@ -47,6 +50,11 @@
  *   • Merge gate uses a TEST-DIFF: it blocks only on tests that NEWLY fail vs.
  *     a baseline captured at setup — pre-existing/flaky red suites (common in
  *     real repos) never block a clean merge.
+ *   • Empty-diff is tier-aware: where code was EXPECTED (SMALL build, STANDARD
+ *     implement) an empty diff blocks as BLOCKED_EMPTY_DIFF (claimed-complete-
+ *     but-produced-nothing); where it was NOT (NO-CODE / no_code STANDARD) an
+ *     empty diff is a benign NO_OP — closed, not blocked, never poisons deps.
+ *     SMALL/STANDARD builds also get ONE git-verified empty-artifact retry.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * MODEL ROUTING (aggressive Sonnet; Opus where reasoning matters)
@@ -276,7 +284,7 @@ function parseArgs(a) {
       else if (tk === '--no-push') flags.push = false
       else if (tk === '--max-tickets') {
         const v = toks[i + 1]
-        if (v != null && /^\d+$/.test(v)) { flags.maxTickets = parseInt(v, 10); i++ } // consume ONLY a numeric value (honors 0; won't eat the epic ID)
+        if (v != null && /^\d+$/.test(v)) { flags.maxTickets = parseInt(v, 10); i++ } // consume ONLY a numeric value (0 is parsed here but rejected below; won't eat the epic ID)
       }
       else if (tk.startsWith('--max-tickets=')) {
         const v = tk.split('=')[1]
@@ -293,7 +301,8 @@ function parseArgs(a) {
   return { epicId, flags }
 }
 const { epicId, flags } = parseArgs(args)
-if (!epicId) throw new Error('epic-swarm-workflow: missing epic ID. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--max-tickets N]')
+if (!epicId) throw new Error('epic-swarm-workflow: missing epic ID. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--max-tickets N]')
+if (flags.maxTickets === 0) throw new Error('epic-swarm-workflow: --max-tickets 0 would process no tickets. Omit the flag to run all tickets, or pass a positive count (e.g. --max-tickets 1).')
 
 // Single source of truth for a ticket's worktree path AND feature branch name —
 // used by setup, merge, and cleanup so the three can never drift apart.
@@ -379,11 +388,12 @@ const [setup, plan] = await parallel([
   () => safeAgent(planPrompt, { schema: PLAN_SCHEMA, label: `plan ${epicId}`, phase: 'Setup', model: ROUTE.plan }),
 ])
 
-if (!setup || setup.status !== 'OK') throw new Error(`epic-swarm-workflow: setup failed — ${setup ? setup.baseline_note : 'no result'}`)
+if (!setup || setup.status !== 'OK') throw new Error(`epic-swarm-workflow: setup failed — ${setup ? (setup.baseline_note || `status=${setup.status || 'unknown'} (setup agent returned no detail)`) : 'no result from setup agent'}`)
 if (!plan || !plan.tickets || plan.tickets.length === 0) throw new Error(`epic-swarm-workflow: no eligible sub-tickets for ${epicId}.`)
 
 const REPO_ROOT = setup.repo_root
 const EPIC_BRANCH = setup.epic_branch || `epic/${epicId}`
+const DEFAULT_BRANCH = setup.default_branch || 'main' // PR base; default_branch is optional in SETUP_SCHEMA, so never let it interpolate as undefined
 const TEST_CMD = setup.test_cmd || ''
 const BASELINE = setup.baseline_failures || []
 
@@ -423,16 +433,23 @@ const blocked = new Set()
 const mergedIds = new Set()
 
 // Shared merge tail (empty-diff guard → test-diff gate → close → always-cleanup) for
-// code-changing tickets (SMALL & STANDARD).
-async function mergeTicket(t, ticketResult) {
+// every tier that reaches merge. `expectsCode` is true when this tier was supposed to
+// produce a code change (SMALL, or STANDARD with implementation): then an empty diff is
+// an ANOMALY and blocks. When false (NO-CODE, or a no_code STANDARD ticket) an empty
+// diff is a legitimate no-op — the ticket is closed, recorded NO_OP, and does NOT block
+// its dependents.
+async function mergeTicket(t, ticketResult, expectsCode) {
   phase('Integrate')
   const { wt, branch } = ticketRefs(REPO_ROOT, t)
+  const emptyDiffStep = expectsCode
+    ? `If the feature branch changed NOTHING, set STATUS = SKIPPED (notes: "empty diff — nothing to merge, but code WAS expected for this ticket"); do NOT merge or close; go to step 7.`
+    : `This ticket may legitimately require NO code change. If the feature branch changed NOTHING, set STATUS = SKIPPED (notes: "empty diff — no change required"), then set ${t.id} to "Done" in Linear and set ticket_closed=true ONLY if that succeeds (on a Linear error leave it false and CONTINUE); do NOT merge; go to step 7.`
   const merge = await safeAgent(
     `You are the integration agent for ${t.id}. Merge its work to the epic branch using a TEST-DIFF gate that ignores pre-existing failures, then close it. Track a STATUS as you go and ALWAYS run the final CLEANUP step before returning — NEVER return early.
 ${SHELL_RULES}
 
 1. Safety: confirm NOT on main/master. \`git -C ${REPO_ROOT} checkout ${EPIC_BRANCH}\`.
-2. Empty-diff pre-check: \`git -C ${REPO_ROOT} diff --stat ${EPIC_BRANCH}...${branch}\`. If the feature branch changed NOTHING, set STATUS = SKIPPED (notes: "empty diff — nothing to merge"); do NOT merge or close; go to step 7.
+2. Empty-diff pre-check: \`git -C ${REPO_ROOT} diff --stat ${EPIC_BRANCH}...${branch}\`. ${emptyDiffStep}
 3. Dry-merge (no commit yet): \`git -C ${REPO_ROOT} merge --no-ff --no-commit ${branch}\`. If CONFLICT: \`git -C ${REPO_ROOT} merge --abort\`, set STATUS = CONFLICT, go to step 7.
 4. ${TEST_CMD ? `Run integration tests on the merged tree: \`${TEST_CMD}\` (tool-native dir flag from ${REPO_ROOT}). Compare FAILING tests to this BASELINE of pre-existing failures captured before any merge:
 ${BASELINE.length ? BASELINE.map((b) => `   - ${b}`).join('\n') : '   (baseline was clean — any failure is new)'}
@@ -461,10 +478,24 @@ Return status (= STATUS: MERGED | CONFLICT | TEST_FAILED | SKIPPED), integration
       ticketResult.outcome = 'MERGED_NOT_CLOSED'
       log(`✓ ${t.id} merged to ${EPIC_BRANCH}, but Linear close did not confirm — code is integrated; mark it Done manually.`)
     }
+  } else if (merge && merge.status === 'SKIPPED' && !expectsCode) {
+    // Legitimate no-op: this tier was not required to change code and the reviewers
+    // approved with nothing to merge. NOT a failure — must not block or poison dependents.
+    // (Recorded only via ticketResult.outcome; reconciliation derives no_op from results.)
+    if (merge.ticket_closed) {
+      ticketResult.outcome = 'NO_OP'
+      log(`○ ${t.id} no-op (empty diff, review-approved) — nothing to merge, marked Done.`)
+    } else {
+      ticketResult.outcome = 'NO_OP_NOT_CLOSED'
+      log(`○ ${t.id} no-op (empty diff, review-approved) — nothing to merge; mark it Done manually.`)
+    }
   } else {
     blocked.add(t.id)
-    ticketResult.outcome = merge ? `MERGE_${merge.status}` : 'MERGE_NO_REPORT'
-    log(`NO MERGE ${t.id} — merge ${merge ? merge.status : 'failed'}${merge && merge.new_failures && merge.new_failures.length ? ' (' + merge.new_failures.length + ' new failures)' : ''}.`)
+    // An empty diff where code WAS expected is an anomaly (e.g. an implementation that
+    // self-reported success but committed nothing), not a benign skip — flag it loudly.
+    ticketResult.outcome = (merge && merge.status === 'SKIPPED') ? 'BLOCKED_EMPTY_DIFF'
+      : (merge ? `MERGE_${merge.status}` : 'MERGE_NO_REPORT')
+    log(`NO MERGE ${t.id} — ${merge && merge.status === 'SKIPPED' ? 'EMPTY DIFF but code was expected (claimed-complete-but-produced-nothing)' : 'merge ' + (merge ? merge.status : 'failed')}${merge && merge.new_failures && merge.new_failures.length ? ' (' + merge.new_failures.length + ' new failures)' : ''}.`)
   }
   results.push(ticketResult)
 }
@@ -484,15 +515,40 @@ ${SHELL_RULES}${PROD}
 FINDINGS:
 ${review.blocking_findings.map((f, i) => `${i + 1}. [${f.severity || '?'}] ${f.file || ''} — ${f.issue || ''}`).join('\n')}
 ${selfPost(t, H.codereview + ' (fixes)', false)}
-Return status, summary, write/edit counts, committed.`,
+Return status, summary, write/edit counts, and committed — set committed=true ONLY if you actually committed the fixes (it gates the re-review; reporting it falsely will block the ticket).`,
       { schema: WORK_SCHEMA, label: `review-fix ${t.id}`, phase: 'Review', model: ROUTE.reviewFix },
     )
-    if (fix && fix.status === 'COMPLETE') {
+    // Only re-review if the fixer actually COMMITTED its changes. A fix that reports
+    // COMPLETE but committed nothing would have the re-review run against the UNCHANGED
+    // diff, where same-model variance could flip CHANGES_REQUESTED → APPROVED and merge
+    // unfixed code. No commit ⇒ keep the original CHANGES_REQUESTED so the gate fails closed.
+    if (fix && fix.status === 'COMPLETE' && fix.committed) {
       const rereview = await safeAgent(prompt(true), { schema, label: `re-review ${t.id}`, phase: 'Review', model })
       if (rereview) { review = rereview; reReviewed = true }
+    } else if (fix && fix.status === 'COMPLETE' && !fix.committed) {
+      log(`${t.id} ${label} fix reported COMPLETE but committed=false — NOT re-reviewing; keeping CHANGES_REQUESTED (fail closed).`)
     }
   }
   return { review, reReviewed }
+}
+
+// An agent that self-reports COMPLETE but produced nothing — no commit, no files, no
+// write/edit calls — and is NOT legitimately no-code. (no_code tickets are exempt: an
+// empty result is valid for them and is handled as a no-op at merge.)
+const looksEmpty = (r) => r && r.status === 'COMPLETE' && !r.no_code && !r.committed &&
+  (r.files_changed || []).length === 0 && ((r.write_calls || 0) + (r.edit_calls || 0)) === 0
+
+// ONE git-verified re-dispatch for tiers where code IS expected (SMALL build, STANDARD
+// implement). NOT used for NO-CODE, where an empty result is a legitimate outcome. The
+// caller re-tests looksEmpty() on the return to block a still-empty result.
+async function buildWithEmptyRetry(prompt, wt, opts) {
+  let r = await safeAgent(prompt, opts)
+  if (looksEmpty(r)) {
+    log(`${opts.label} reported COMPLETE with no committed artifacts — re-dispatching once (will verify against git).`)
+    r = await safeAgent(`${prompt}\n\n---\nPRIOR DISPATCH REPORTED NO ARTIFACTS. FIRST verify against git: \`git -C ${wt} diff --stat ${EPIC_BRANCH}...HEAD\` and \`git -C ${wt} status\`. If the work is ALREADY present/committed, do NOT redo it — just report status=COMPLETE with the actual files_changed (from git diff) and committed=true. If it truly needs code, do it now (Write/Edit) and commit. If it genuinely has no code deliverable, set no_code=true and explain.`,
+      { ...opts, label: `${opts.label} (retry)` })
+  }
+  return r
 }
 
 for (const t of tickets) {
@@ -546,7 +602,7 @@ Return status (APPROVED | CHANGES_REQUESTED), blocking_findings[], security_stat
         log(`BLOCK ${t.id} — NO-CODE review ${review ? review.status + '/' + (review.security_status || '?') : 'failed (null)'}.`)
         blocked.add(t.id); ticketResult.outcome = 'BLOCKED_REVIEW'; results.push(ticketResult); continue
       }
-      await mergeTicket(t, ticketResult)
+      await mergeTicket(t, ticketResult, false) // NO-CODE: an empty diff is a legitimate no-op, not a block
       continue
     }
 
@@ -554,8 +610,7 @@ Return status (APPROVED | CHANGES_REQUESTED), blocking_findings[], security_stat
     if (t.effort_tier === 'SMALL') {
       phase('Build')
       const implRole = t.impl_type === 'frontend' ? 'frontend (UI/components — match the existing component library)' : 'backend (APIs/services/data — match existing patterns)'
-      const build = await safeAgent(
-        `You are handling a SMALL ${implRole} ticket end-to-end: brief planning, implementation, and a focused test — in one focused pass (the change is small: <=~30 lines, 1-3 files, no schema/auth/API/new-deps).
+      const smallBuildPrompt = `You are handling a SMALL ${implRole} ticket end-to-end: brief planning, implementation, and a focused test — in one focused pass (the change is small: <=~30 lines, 1-3 files, no schema/auth/API/new-deps).
 ${wtSetup(REPO_ROOT, EPIC_BRANCH, t)}
 ${SHELL_RULES}
 ${PROD}
@@ -567,9 +622,13 @@ ${readTicket(t)}
 Reuse existing code; implement every AC; add a focused test for the change; run lint + typecheck on changed files (npx --prefix ${wt} tsc --noEmit, project lint). Commit: \`git -C ${wt} add -A\` then \`feat(${t.id}): ...\`. If the work turns out to be larger than SMALL (schema/auth/API/many files), STOP with status NEEDS_CONTEXT (it was mis-classified for STANDARD).
 
 ${selfPost(t, H.implementation, true)}
-Return status, summary, files_changed, write/edit counts, committed, no_code, gates.`,
-        { schema: WORK_SCHEMA, label: `build ${t.id}`, phase: 'Build', model: ROUTE.buildSmall },
-      )
+Return status, summary, files_changed, ACTUAL write/edit counts, committed, no_code, gates.`
+      // Code IS expected for SMALL — use the git-verified empty-artifact retry (parity with STANDARD).
+      const build = await buildWithEmptyRetry(smallBuildPrompt, wt, { schema: WORK_SCHEMA, label: `build ${t.id}`, phase: 'Build', model: ROUTE.buildSmall })
+      if (looksEmpty(build)) {
+        log(`BLOCK ${t.id} — SMALL build produced no artifacts twice (git-verified empty).`)
+        blocked.add(t.id); ticketResult.phases.build = 'BLOCKED_NO_ARTIFACTS'; ticketResult.outcome = 'BLOCKED_BUILD'; results.push(ticketResult); continue
+      }
       ticketResult.phases.build = build ? build.status : 'NO_REPORT'
       if (!build || build.status !== 'COMPLETE') {
         log(`BLOCK ${t.id} at build — ${build ? build.status : 'no report'}`)
@@ -591,7 +650,7 @@ Return status (APPROVED | CHANGES_REQUESTED), blocking_findings[], security_stat
         log(`BLOCK ${t.id} — SMALL review ${review ? review.status + '/' + (review.security_status || '?') : 'failed (null)'}.`)
         blocked.add(t.id); ticketResult.outcome = 'BLOCKED_REVIEW'; results.push(ticketResult); continue
       }
-      await mergeTicket(t, ticketResult)
+      await mergeTicket(t, ticketResult, true) // SMALL: code was expected — an empty diff is an anomaly that blocks
       continue
     }
 
@@ -630,20 +689,14 @@ Reuse what adaptation mandated; implement every AC; NO test code here (separate 
 ${selfPost(t, H.implementation, false)}
 Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, committed.`
 
-    let impl = await safeAgent(implPrompt, { schema: WORK_SCHEMA, label: `implement ${t.id}`, phase: 'Build', model: ROUTE.implement })
-    // Empty-artifact re-dispatch — but NOT for legitimately no-code tickets. Use ALL
-    // signals (committed flag + files_changed + call counts) so a real implementation
-    // that merely under-reports its self-reported call counts is not falsely re-run.
-    const looksEmpty = (r) => r && r.status === 'COMPLETE' && !r.no_code && !r.committed &&
-      (r.files_changed || []).length === 0 && ((r.write_calls || 0) + (r.edit_calls || 0)) === 0
+    // Code IS expected here (unless the agent legitimately reports no_code) — use the
+    // git-verified empty-artifact retry shared with the SMALL tier. Using ALL signals
+    // (committed + files_changed + call counts) avoids falsely re-running a real
+    // implementation that merely under-reports its self-reported call counts.
+    let impl = await buildWithEmptyRetry(implPrompt, wt, { schema: WORK_SCHEMA, label: `implement ${t.id}`, phase: 'Build', model: ROUTE.implement })
     if (looksEmpty(impl)) {
-      log(`${t.id} implementation reported COMPLETE with no committed artifacts — re-dispatching once (will verify against git).`)
-      impl = await safeAgent(`${implPrompt}\n\n---\nPRIOR DISPATCH REPORTED NO ARTIFACTS. FIRST verify against git: \`git -C ${wt} diff --stat ${EPIC_BRANCH}...HEAD\` and \`git -C ${wt} status\`. If the implementation is ALREADY present/committed, do NOT redo it — just report status=COMPLETE with the actual files_changed (from git diff) and committed=true. If the ticket truly needs code, implement it now (Write/Edit) and commit. If it genuinely has no code deliverable, set no_code=true and explain.`,
-        { schema: WORK_SCHEMA, label: `implement ${t.id} (retry)`, phase: 'Build', model: ROUTE.implement })
-      if (looksEmpty(impl)) {
-        log(`BLOCK ${t.id} — implementation produced no artifacts twice (git-verified empty).`)
-        blocked.add(t.id); ticketResult.phases.implementation = 'BLOCKED_NO_ARTIFACTS'; ticketResult.outcome = 'BLOCKED_IMPLEMENTATION'; results.push(ticketResult); continue
-      }
+      log(`BLOCK ${t.id} — implementation produced no artifacts twice (git-verified empty).`)
+      blocked.add(t.id); ticketResult.phases.implementation = 'BLOCKED_NO_ARTIFACTS'; ticketResult.outcome = 'BLOCKED_IMPLEMENTATION'; results.push(ticketResult); continue
     }
     ticketResult.phases.implementation = impl ? impl.status : 'NO_REPORT'
     if (!impl || impl.status !== 'COMPLETE') {
@@ -652,8 +705,9 @@ Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, c
     }
 
     // Run testing even when impl.no_code is true: a no-implementation STANDARD ticket
-    // is typically TEST-ONLY (its tests ARE the deliverable). A genuinely empty ticket
-    // is caught later by the merge empty-diff guard rather than merged as DONE.
+    // is typically TEST-ONLY (its tests ARE the deliverable). If a no_code ticket also
+    // produces no tests/docs, its merge is called with expectsCode=false, so an empty
+    // diff is reconciled as a benign NO_OP — not blocked, not poisoning dependents.
     if (t.run_testing !== false) {
       const test = await safeAgent(
         `ROLE: qa-engineer-agent for ${t.id}. ACCURACY-FIRST testing in ${wt}, gates in order:
@@ -675,7 +729,10 @@ Return status (COMPLETE | ISSUES_FOUND), a gates one-liner, files_changed, write
       }
     } else { ticketResult.phases.testing = 'skipped' }
 
-    if (t.run_docs !== false && !impl.no_code) {
+    // Docs run when planning requested them. An explicit run_docs===true wins even for a
+    // no_code ticket (e.g. a config/test deliverable that still has a user-facing surface);
+    // only the DEFAULT (run_docs unset) skips docs for no_code tickets.
+    if (t.run_docs !== false && (t.run_docs === true || !impl.no_code)) {
       const doc = await safeAgent(
         `ROLE: technical-writer-agent for ${t.id}. MVD — "document WHY, not WHAT" in ${wt}. Document complex/non-obvious logic, decisions, security constraints, public API (auto-generate where possible); SKIP self-documenting types/trivial CRUD. Commit: \`git -C ${wt} add -A\`; \`docs(${t.id}): ...\`.
 ${readTicket(t)}
@@ -717,6 +774,19 @@ Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count.`,
     )
     ticketResult.phases.codex = codex ? codex.status : 'UNAVAILABLE'
 
+    // Codex commits its fixes AFTER the code-review hard floor already ran, so those
+    // changes would otherwise reach merge unreviewed for correctness/ACs. If codex
+    // changed code, re-run the correctness review on the new diff and FAIL CLOSED.
+    if (codex && codex.status === 'COMPLETE' && (codex.auto_fixed_count || 0) > 0) {
+      log(`${t.id} codex applied ${codex.auto_fixed_count} fix(es) after the review floor — re-reviewing the codex changes (fail closed).`)
+      const postCodex = await safeAgent(stdReviewPrompt(true), { schema: REVIEW_SCHEMA, label: `post-codex review ${t.id}`, phase: 'Review', model: ROUTE.review })
+      ticketResult.phases.codereview = `${ticketResult.phases.codereview} + post-codex ${postCodex ? postCodex.status : 'NO_REPORT'}`
+      if (!postCodex || postCodex.status !== 'APPROVED') {
+        log(`BLOCK ${t.id} — post-codex re-review ${postCodex ? postCodex.status : 'failed (null)'}; codex changes not approved.`)
+        blocked.add(t.id); ticketResult.outcome = 'BLOCKED_REVIEW'; results.push(ticketResult); continue
+      }
+    }
+
     // ── Security scan (the merge gate) ──────────────────────────────────────
     const sec = await safeAgent(
       `ROLE: security-engineer-agent for ${t.id} (read-only scan of THIS diff only): \`git -C ${wt} diff --name-only ${EPIC_BRANCH}...HEAD\`.
@@ -735,7 +805,7 @@ Return status (APPROVED | CHANGES_REQUIRED | BLOCKED), critical_high_count.`,
       blocked.add(t.id); ticketResult.outcome = 'SECURITY_BLOCKED'; results.push(ticketResult); continue
     }
 
-    await mergeTicket(t, ticketResult)
+    await mergeTicket(t, ticketResult, !impl.no_code) // STANDARD: code expected unless impl legitimately reported no_code
   } catch (err) {
     // Belt-and-suspenders: no single ticket may abort the run.
     const msg = err && err.message ? err.message : String(err)
@@ -752,7 +822,7 @@ if (flags.push && mergedIds.size > 0) {
   pr = await safeAgent(
     `Open or refresh the PR for the epic branch.
 ${SHELL_RULES}
-- existing = \`gh pr list --head ${EPIC_BRANCH} --json number --jq '.[0].number'\`. If present \`gh pr edit\` it, else \`gh pr create --base ${setup.default_branch} --head ${EPIC_BRANCH}\`.
+- existing = \`gh pr list --head ${EPIC_BRANCH} --json number --jq '.[0].number'\`. If present \`gh pr edit\` it, else \`gh pr create --base ${DEFAULT_BRANCH} --head ${EPIC_BRANCH}\`.
 - Title: "Epic: ${epicId} — ${plan.epic.title}". Body: epic summary + table of merged tickets (${[...mergedIds].join(', ')}) + QA note (each merged ticket passed its review floor + security; merges gated on a test-diff). End "*Created by /epic-swarm-workflow*". NEVER merge the PR.
 Return status, pr_url.`,
     { schema: PR_SCHEMA, label: `epic PR ${epicId}`, phase: 'Report', model: ROUTE.pr },
@@ -764,9 +834,15 @@ const seen = new Set(results.map((r) => r.id))
 const unprocessed = tickets.filter((t) => !seen.has(t.id)).map((t) => ({ id: t.id, title: t.title, tier: t.tier, effort_tier: t.effort_tier }))
 if (unprocessed.length) log(`WARN ${unprocessed.length} ticket(s) never processed: ${unprocessed.map((u) => u.id).join(', ')}`)
 
+// Outcome buckets are mutually exclusive: DONE / MERGED_NOT_CLOSED / NO_OP(_NOT_CLOSED)
+// / SKIPPED_UPSTREAM are all non-blocking; everything else is a genuine block.
+const NON_BLOCKING = new Set(['DONE', 'MERGED_NOT_CLOSED', 'NO_OP', 'NO_OP_NOT_CLOSED', 'SKIPPED_UPSTREAM'])
 const doneIds = results.filter((r) => r.outcome === 'DONE').map((r) => r.id)
 const mergedPending = results.filter((r) => r.outcome === 'MERGED_NOT_CLOSED').map((r) => r.id)
-const blockedList = results.filter((r) => r.outcome !== 'DONE' && r.outcome !== 'MERGED_NOT_CLOSED' && r.outcome !== 'SKIPPED_UPSTREAM').map((r) => ({ id: r.id, outcome: r.outcome }))
+const noOpIds = results.filter((r) => r.outcome === 'NO_OP' || r.outcome === 'NO_OP_NOT_CLOSED').map((r) => r.id)
+const noOpPending = results.filter((r) => r.outcome === 'NO_OP_NOT_CLOSED').map((r) => r.id)
+const blockedList = results.filter((r) => !NON_BLOCKING.has(r.outcome)).map((r) => ({ id: r.id, outcome: r.outcome }))
+const manualClose = [...mergedPending, ...noOpPending]
 const summary = {
   epic: { id: epicId, title: plan.epic.title },
   mode: flags.push ? 'real+push' : 'real(local)',
@@ -775,6 +851,7 @@ const summary = {
   tickets_total: tickets.length,
   done: doneIds,
   merged_pending_close: mergedPending, // merged to the epic branch but the Linear "Done" close did not confirm
+  no_op: noOpIds, // legitimately required no code change (e.g. NO-CODE observation tickets)
   blocked: blockedList,
   skipped_upstream: results.filter((r) => r.outcome === 'SKIPPED_UPSTREAM').map((r) => r.id),
   unprocessed,
@@ -782,7 +859,7 @@ const summary = {
   integration_verification: TEST_CMD ? `test-diff gate (cmd: ${TEST_CMD})` : 'NONE — no test command detected; merges not integration-verified',
   pr_url: pr ? pr.pr_url : (flags.push ? '(nothing merged)' : '(local-only; pass --push to open a PR)'),
   results,
-  next_steps: `Review epic branch ${EPIC_BRANCH}.${mergedPending.length ? ` Manually set ${mergedPending.join(', ')} to Done in Linear (merged but auto-close failed).` : ''} Run /close-epic ${epicId} once all tickets are Done.`,
+  next_steps: `Review epic branch ${EPIC_BRANCH}.${manualClose.length ? ` Manually set ${manualClose.join(', ')} to Done in Linear (merged/no-op but auto-close failed).` : ''} Run /close-epic ${epicId} once all tickets are Done.`,
 }
-log(`epic-swarm-workflow v2 complete — ${doneIds.length}/${tickets.length} done${mergedPending.length ? `, ${mergedPending.length} merged-pending-close` : ''}, ${blockedList.length} blocked, ${unprocessed.length} unprocessed.`)
+log(`epic-swarm-workflow v2 complete — ${doneIds.length}/${tickets.length} done${mergedPending.length ? `, ${mergedPending.length} merged-pending-close` : ''}${noOpIds.length ? `, ${noOpIds.length} no-op` : ''}, ${blockedList.length} blocked, ${unprocessed.length} unprocessed.`)
 return summary

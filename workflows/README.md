@@ -20,8 +20,10 @@ So this plugin delivers the workflow through a thin **command wrapper**:
 After installing the plugin, run it as:
 
 ```
-/pm-vibecode-ops:epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--max-tickets N]
+/pm-vibecode-ops:epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--max-tickets N]
 ```
+
+Flags: `--dry-run` prints the tier plan and makes no changes; `--push` pushes the epic branch and opens the PR (default is local-only; `--no-push` forces local-only explicitly — the last of `--push`/`--no-push` wins); `--max-tickets N` caps scope to the first N tickets (N must be ≥ 1).
 
 ### Optional: a bare, un-namespaced command
 
@@ -46,8 +48,9 @@ It then appears as `/epic-swarm-workflow` in `/` autocomplete. (Re-copy after up
 ## Design notes
 
 - **Right-sized by effort.** A `plan` agent classifies each ticket into `NO_CODE` / `SMALL` / `STANDARD` and the script runs a pipeline sized to it. Every tier uses at least two work agents (a build/plan-implement agent and a *separate* reviewer) plus a merge agent — no single agent does everything.
-- **Reviews are a hard floor for code changes** and **fail closed**: a failed or empty review blocks the merge; it can never silently pass as approved.
+- **Reviews are a hard floor for code changes** and **fail closed**: a failed or empty review blocks the merge; it can never silently pass as approved. A review fix is only trusted after the fixer confirms it *committed* — an uncommitted "fix" keeps the original CHANGES_REQUESTED. Codex auto-fixes land *after* the review floor, so when codex changes code the correctness review is re-run on the new diff (also fail-closed) before merge.
 - **Resilient by construction.** Every agent call is wrapped so a single failure (API 5xx, MCP hang, schema miss) is contained — the ticket is recorded blocked and the run continues, always returning a reconciled summary. Each phase agent posts its own report to Linear as it finishes, so a crash never loses the audit trail.
+- **Empty-diff handling is tier-aware.** Where code was expected (SMALL build, STANDARD implement) an empty diff blocks loudly as `BLOCKED_EMPTY_DIFF` (a "claimed complete but produced nothing" anomaly), and those builds get one git-verified empty-artifact retry first. Where code was *not* expected (a NO-CODE observation ticket, or a `no_code` STANDARD ticket) an empty diff is a benign `NO_OP` — the ticket is closed, reported separately, and never blocks or poisons its dependents.
 - **Merge gate uses a test-diff** — it blocks only on tests that *newly* fail versus a baseline captured at setup, so a pre-existing red or flaky suite (common in real repos) never blocks a clean merge.
 - **Model routing** is aggressive on Sonnet: Opus for the reasoning phases (plan, adapt, implement, test, review, review-fix, codex), Sonnet for the mechanical ones (setup, documentation, security, merge). Tune the `ROUTE` map at the top of the script. Per-agent *effort* is not a workflow API knob — launch the session at `high`.
 

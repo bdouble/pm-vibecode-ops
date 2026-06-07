@@ -214,7 +214,7 @@ For cases requiring phase-by-phase control:
 
 | Command | Purpose |
 |---------|---------|
-| `/epic-swarm-workflow [epic-id] [--dry-run] [--push] [--max-tickets N]` | Run the epic pipeline as a Claude Code **dynamic workflow** (JavaScript `Workflow` runtime). A planning agent classifies each ticket into no-code / small / standard and the script runs a pipeline sized to it; reviews are a hard floor for code changes and fail closed; every subagent failure is isolated so the run always finishes with a reconciled summary; the merge gate uses a test-diff so pre-existing/flaky failures don't block clean merges. Requires [dynamic workflows](https://code.claude.com/docs/en/workflows) enabled. Source + delivery notes in [workflows/](workflows/). |
+| `/epic-swarm-workflow [epic-id] [--dry-run] [--push] [--no-push] [--max-tickets N]` | Run the epic pipeline as a Claude Code **dynamic workflow** (JavaScript `Workflow` runtime). A planning agent classifies each ticket into no-code / small / standard and the script runs a pipeline sized to it; reviews are a hard floor for code changes and fail closed; every subagent failure is isolated so the run always finishes with a reconciled summary; the merge gate uses a test-diff so pre-existing/flaky failures don't block clean merges. `--push` opens the epic PR (default is local-only; `--no-push` forces it explicitly); `--max-tickets N` (N ≥ 1) caps scope. Requires [dynamic workflows](https://code.claude.com/docs/en/workflows) enabled. Source + delivery notes in [workflows/](workflows/). |
 
 **Best practice:** Run each command in a fresh Claude Code session to prevent context overflow.
 

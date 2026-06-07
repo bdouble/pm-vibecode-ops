@@ -67,7 +67,7 @@ Backed by the 15-event JSONL stream at `.swarm/observability/<epic-id>/<ticket-i
 
 | Command | Purpose | Your Action |
 |---------|---------|-------------|
-| `/epic-swarm-workflow [epic-id] [--dry-run] [--push]` | **Run the epic as a dynamic workflow** — per-ticket pipeline sized to effort (no-code / small / standard), reviews fail-closed, every agent failure isolated | Start with `--dry-run`; review the reconciled summary |
+| `/epic-swarm-workflow [epic-id] [--dry-run] [--push] [--no-push] [--max-tickets N]` | **Run the epic as a dynamic workflow** — per-ticket pipeline sized to effort (no-code / small / standard), reviews fail-closed, every agent failure isolated. `--push` opens the epic PR (default local-only; `--no-push` forces it); `--max-tickets N` (N ≥ 1) caps scope | Start with `--dry-run`; review the reconciled summary |
 
 Same intent as `/epic-swarm`, run on Claude Code's `Workflow` runtime. Right-sizes each ticket, blocks merges only on *new* test failures (test-diff gate), and always finishes with a done/blocked/unprocessed summary. Requires [dynamic workflows](https://code.claude.com/docs/en/workflows) enabled. Details in [workflows/](workflows/).
 

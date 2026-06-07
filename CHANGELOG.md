@@ -14,7 +14,7 @@ Minor release adding the first **dynamic workflow** to the plugin: `/epic-swarm-
 - **`/epic-swarm-workflow` command + `workflows/` directory.** New `workflows/epic-swarm-workflow.js` (canonical, version-controlled source) launched by a thin `commands/epic-swarm-workflow.md` wrapper. The wrapper resolves the bundled script path via `${CLAUDE_PLUGIN_ROOT}` and runs it through the `Workflow` tool, passing `$ARGUMENTS` (epic ID + flags) through. Installs as `/pm-vibecode-ops:epic-swarm-workflow`; an optional copy into `.claude/workflows/` or `~/.claude/workflows/` yields the bare `/epic-swarm-workflow`.
 - **Right-sized pipelines.** A planning agent classifies each ticket into `NO_CODE` / `SMALL` / `STANDARD`, and the script runs a pipeline sized to it (NO_CODE/SMALL collapse to build + review + merge; STANDARD runs the full phase set). Every tier uses at least two work agents (a build/plan-implement agent and a separate reviewer) plus a merge agent — no single agent does everything.
 - **Per-phase model routing.** Opus for reasoning phases (plan, adapt, implement, test, review, review-fix, codex); Sonnet for mechanical phases (setup, documentation, security, merge). Tunable via the `ROUTE` map at the top of the script.
-- **`--dry-run` / `--push` / `--max-tickets N` flags** for cheap previews, local-only-by-default execution, and scope capping.
+- **`--dry-run` / `--push` / `--no-push` / `--max-tickets N` flags** for cheap previews, local-only-by-default execution (with `--no-push` to force it explicitly), and scope capping.
 - **`workflows/README.md`** documenting the workflow, the plugin-delivery model, and the (current) absence of a native plugin `workflows/` component.
 
 ### Changed
@@ -22,6 +22,24 @@ Minor release adding the first **dynamic workflow** to the plugin: `/epic-swarm-
 - **Resilient by construction.** Every subagent call is failure-isolated — a single API 5xx, MCP hang, or schema miss is contained to one ticket (recorded blocked) instead of aborting the run; the workflow always returns a reconciled done / blocked / unprocessed summary. Each phase agent posts its own report to Linear as it completes, so a crash never loses the audit trail.
 - **Reviews fail closed.** A failed or empty code review / security scan blocks the merge — it can never silently pass as approved. Reviews remain a hard floor for any code-changing ticket.
 - **Merge test-diff gate.** Integration tests block a merge only on failures that are *new* versus a baseline captured at setup, so pre-existing or flaky red suites don't block clean merges.
+
+### Fixed — pre-release review (`workflows/epic-swarm-workflow.js`)
+
+Defects caught by an extra-high-recall code review of the workflow before merge:
+
+- **Codex fixes merged unreviewed for correctness.** Codex auto-commits its P1/P2 fixes *after* the code-review hard floor, so only the OWASP security scan saw them. The correctness review is now re-run on the codex diff (`auto_fixed_count > 0`) and fails closed before merge.
+- **Legitimate no-op tickets reported blocked + poisoned dependents.** A NO-CODE/observation ticket (or a `no_code` STANDARD ticket) that correctly changes nothing hit the merge empty-diff path → `SKIPPED` → `blocked`, was never closed, and cascaded `SKIPPED_UPSTREAM` onto dependents. Empty-diff is now tier-aware: benign `NO_OP` (closed, non-blocking) where no code was expected, loud `BLOCKED_EMPTY_DIFF` where it was.
+- **Hallucinated/empty implementation slipped through.** An impl that self-reported `committed:true` but produced nothing passed every gate on an empty diff. Now flagged loudly at merge as `BLOCKED_EMPTY_DIFF`.
+- **SMALL/NO-CODE builds lacked the empty-artifact retry** that STANDARD `implement` had. SMALL builds now use the same git-verified one-shot re-dispatch (NO-CODE is intentionally exempt — empty is valid there).
+- **Review fix trusted without confirming a commit.** A fix reporting `COMPLETE` but `committed:false` let a stochastic re-review flip `CHANGES_REQUESTED → APPROVED` on an unchanged diff. Re-review now requires `fix.committed`; otherwise the ticket stays blocked.
+- **Explicit `run_docs:true` silently dropped for `no_code` tickets.** Documentation now runs whenever planning explicitly requested it; only the default (unset) skips docs for `no_code` tickets.
+- **`gh pr create --base` could interpolate `undefined`** (`default_branch` is optional in the setup schema). Now falls back to `main`.
+- **Setup-failure error printed `undefined`** (interpolated an optional field). Now reports the status with a clear message.
+- **`--max-tickets 0` ran a silent no-op.** Now rejected with a usage error.
+
+### Added
+
+- **`--no-push` flag** — explicitly forces local-only execution (the inverse of `--push`; last one wins).
 
 ### Notes
 
