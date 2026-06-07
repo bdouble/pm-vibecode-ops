@@ -5,6 +5,56 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.0] - 2026-06-06
+
+Minor release adding the first **dynamic workflow** to the plugin: `/epic-swarm-workflow`, a port of `/epic-swarm` to Claude Code's JavaScript `Workflow` runtime. It runs the epic pipeline as a script-orchestrated multi-agent swarm rather than a turn-by-turn command, with resilience and right-sizing baked in.
+
+### Added
+
+- **`/epic-swarm-workflow` command + `workflows/` directory.** New `workflows/epic-swarm-workflow.js` (canonical, version-controlled source) launched by a thin `commands/epic-swarm-workflow.md` wrapper. The wrapper resolves the bundled script path (probing `${CLAUDE_PLUGIN_ROOT}`, then `${CLAUDE_SKILL_DIR}`, then a Glob fallback) and runs it through the `Workflow` tool, passing `$ARGUMENTS` (epic ID + flags) through. Installs as `/pm-vibecode-ops:epic-swarm-workflow`; an optional copy into `.claude/workflows/` or `~/.claude/workflows/` yields the bare `/epic-swarm-workflow`.
+- **Right-sized pipelines.** A planning agent classifies each ticket into `NO_CODE` / `SMALL` / `STANDARD`, and the script runs a pipeline sized to it (NO_CODE/SMALL collapse to build + review + merge; STANDARD runs the full phase set). Every tier uses at least two work agents (a build/plan-implement agent and a separate reviewer) plus a merge agent — no single agent does everything.
+- **Per-phase model routing.** Opus for reasoning phases (plan, adapt, implement, test, review, review-fix, codex) and both SMALL-tier agents (build + review); Sonnet for mechanical phases (setup, documentation, security, merge, the PR) and both NO-CODE-tier agents — so a SMALL-heavy epic costs more Opus than the reasoning-phase list alone implies. Tunable via the `ROUTE` map at the top of the script.
+- **`--dry-run` / `--push` / `--no-push` / `--max-tickets N` flags** for cheap previews, local-only-by-default execution (with `--no-push` to force it explicitly), and scope capping.
+- **`workflows/README.md`** documenting the workflow, the plugin-delivery model, and the (current) absence of a native plugin `workflows/` component.
+
+### Changed
+
+- **Resilient by construction.** Every subagent call is failure-isolated — a single API 5xx, MCP hang, or schema miss is contained to one ticket (recorded blocked) instead of aborting the run; the workflow always returns a reconciled done / blocked / unprocessed summary. Each phase agent posts its own report to Linear as it completes, so a crash never loses the audit trail.
+- **Reviews fail closed.** A failed or empty code review / security scan blocks the merge — it can never silently pass as approved. Reviews remain a hard floor for any code-changing ticket.
+- **Merge test-diff gate.** Integration tests block a merge only on failures that are *new* versus a baseline captured at setup, so pre-existing or flaky red suites don't block clean merges.
+
+### Fixed — pre-release review (`workflows/epic-swarm-workflow.js`)
+
+Defects caught by an extra-high-recall code review of the workflow before merge:
+
+- **Codex fixes merged unreviewed for correctness.** Codex auto-commits its P1/P2 fixes *after* the code-review hard floor, so only the OWASP security scan saw them. The correctness review is now re-run on the codex diff (`auto_fixed_count > 0`) and fails closed before merge.
+- **Legitimate no-op tickets reported blocked + poisoned dependents.** A NO-CODE/observation ticket (or a `no_code` STANDARD ticket) that correctly changes nothing hit the merge empty-diff path → `SKIPPED` → `blocked`, was never closed, and cascaded `SKIPPED_UPSTREAM` onto dependents. Empty-diff is now tier-aware: benign `NO_OP` (closed, non-blocking) where no code was expected, loud `BLOCKED_EMPTY_DIFF` where it was.
+- **Hallucinated/empty implementation slipped through.** An impl that self-reported `committed:true` but produced nothing passed every gate on an empty diff. Now flagged loudly at merge as `BLOCKED_EMPTY_DIFF`.
+- **SMALL/NO-CODE builds lacked the empty-artifact retry** that STANDARD `implement` had. SMALL builds now use the same git-verified one-shot re-dispatch (NO-CODE is intentionally exempt — empty is valid there).
+- **Review fix trusted without confirming a commit.** A fix reporting `COMPLETE` but `committed:false` let a stochastic re-review flip `CHANGES_REQUESTED → APPROVED` on an unchanged diff. Re-review now requires `fix.committed`; otherwise the ticket stays blocked.
+- **Explicit `run_docs:true` silently dropped for `no_code` tickets.** Documentation now runs whenever planning explicitly requested it; only the default (unset) skips docs for `no_code` tickets.
+- **`gh pr create --base` could interpolate `undefined`** (`default_branch` is optional in the setup schema). Now falls back to `main`.
+- **Setup-failure error printed `undefined`** (interpolated an optional field). Now reports the status with a clear message.
+- **`--max-tickets 0` ran a silent no-op.** Now rejected with a usage error.
+
+### Fixed — pre-release review, round 2 (PR #4)
+
+A second extra-high-recall review of the workflow surfaced 14 more issues, all resolved here:
+
+- **Three quality gates failed open.** The NO-CODE build, STANDARD adaptation, and STANDARD testing gates used denylists (`status === 'BLOCKED' || …`) instead of allowlists, so an unexpected status — most damagingly a testing agent returning `BLOCKED`/`NEEDS_CONTEXT` when the suite can't run — passed as if the phase succeeded. All three now fail closed on `status !== 'COMPLETE'`, matching the build/review/security gates.
+- **Worktrees leaked on every blocked path, breaking resume.** Cleanup lived only in `mergeTicket`, which blocked tickets never reach, so each leaked its `.swarm/worktrees/<id>` dir and `feature/<id>-<slug>` branch — and the planner's deliberate re-inclusion of In-Progress tickets then made the next run's `git worktree add` collide ("already exists"). `wtSetup` now does an idempotent reset (`worktree remove`/`prune`/`branch -D`) before `add`, and a best-effort end-of-run sweep removes leftover worktrees of blocked tickets (branches kept for inspection).
+- **`--max-tickets` mis-handled bad values.** A missing/non-numeric value in string form was silently swallowed (running the whole epic, or letting the next token become the epic ID); object-form values weren't validated (`'2'` disabled the cap, `-1` dropped the last ticket via `slice(0,-1)`). Both forms now require — and validate — a non-negative integer.
+- **`git pull origin <epicBranch>` ran on every ticket in local-only mode**, where the epic branch was never pushed, so it always failed. The pull is now issued only under `--push`, and as an explicitly best-effort step.
+- **Command path resolution hardened.** The wrapper now probes both `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_SKILL_DIR}` and broadens the Glob fallback to the `~/.claude/plugins`/`~/.claude/marketplaces` install roots, so a plugin installed outside the cwd still resolves.
+- **No-test-command merges flagged louder.** When no test command is detected, the warning now calls out that `--push` pushes each unverified merge immediately, and recommends configuring a test command first.
+- **Docs corrected.** Removed a duplicate `### Added` heading in this entry; the command/README now frame the full 8-phase chain as STANDARD-only (NO_CODE/SMALL are shorter); and the model-routing summaries no longer omit the SMALL (Opus) / NO-CODE (Sonnet) tier agents.
+
+### Notes
+
+- Dynamic workflows are a plan-gated research-preview feature; `/epic-swarm-workflow` requires them enabled (`/config` → Dynamic workflows on Pro). Claude Code plugins have no native `workflows/` component yet — hence the command-wrapper delivery. See `workflows/README.md`.
+
+---
+
 ## [4.7.1] - 2026-05-27
 
 Patch release fixing 15 defects surfaced by an extra-high-recall code review of the v4.7.0 ship. Every fix has a concrete failure scenario in the regression / review notes — these aren't latent issues, they're things that broke or would have broken on the next operator session.
@@ -2198,6 +2248,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[4.8.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.8.0
 [4.7.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.7.1
 [4.7.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.7.0
 [4.6.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.6.0

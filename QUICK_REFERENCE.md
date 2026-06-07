@@ -63,6 +63,14 @@ Processes each ticket through ALL 7 phases (adaptation → security scan) before
 
 Backed by the 15-event JSONL stream at `.swarm/observability/<epic-id>/<ticket-id>.jsonl`. Use this instead of grepping Linear or recalling from memory. Pre-v4.7 epics render with a legacy badge.
 
+### Dynamic Workflow (v4.8)
+
+| Command | Purpose | Your Action |
+|---------|---------|-------------|
+| `/epic-swarm-workflow [epic-id] [--dry-run] [--push] [--no-push] [--max-tickets N]` | **Run the epic as a dynamic workflow** — per-ticket pipeline sized to effort (no-code / small / standard), reviews fail-closed, every agent failure isolated. `--push` opens the epic PR (default local-only; `--no-push` forces it); `--max-tickets N` (N ≥ 1) caps scope | Start with `--dry-run`; review the reconciled summary |
+
+Same intent as `/epic-swarm`, run on Claude Code's `Workflow` runtime. Right-sizes each ticket, blocks merges only on *new* test failures (test-diff gate), and always finishes with a done/blocked/unprocessed summary. Requires [dynamic workflows](https://code.claude.com/docs/en/workflows) enabled. Details in [workflows/](workflows/).
+
 ---
 
 ## Quality Gates Checklist
@@ -134,6 +142,10 @@ Your PRD must include:
 # Concurrent execution (new in 3.0)
 /epic-swarm EPIC-123
 
+# Epic as a dynamic workflow (new in 4.8) — preview the plan first
+/epic-swarm-workflow EPIC-123 --dry-run
+/epic-swarm-workflow EPIC-123
+
 # Cross-model review (standalone)
 /codex-review TICKET-201
 ```
@@ -174,4 +186,4 @@ Your PRD must include:
 
 ---
 
-**Version 4.7.1** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 4.8.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

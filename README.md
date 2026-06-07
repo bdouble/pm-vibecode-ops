@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-4.7.1-blue.svg)
+![Version](https://img.shields.io/badge/version-4.8.0-blue.svg)
 
 **A production development workflow for Product Managers who build with AI.**
 
@@ -89,6 +89,8 @@ AI loves temporary solutions. This workflow forbids them through **auto-activate
 One command, `/execute-ticket`, orchestrates the full ticket lifecycle: adaptation, implementation, testing, documentation, two-stage code review, cross-model Codex review, and security review. It creates a PR, pauses only for blocking issues, and marks tickets done when security passes.
 
 For epics with multiple tickets, `/epic-swarm` orchestrates the full workflow across all tickets with dependency-aware sequencing. Each ticket runs the complete 7-phase pipeline (adaptation through security scan) before the next ticket starts — so every ticket's adaptation examines code built by prior tickets. A hard checkpoint verifies all 7 phase reports exist in Linear before any ticket can merge. Dual-layer security review (per-ticket pre-merge + comprehensive post-merge), persistent swarm state for resume, and orchestrator notes for cross-ticket context.
+
+A newer variant, `/epic-swarm-workflow`, runs the same idea as a Claude Code **dynamic workflow** (the JavaScript `Workflow` runtime). It right-sizes each ticket's pipeline to its effort (a planning agent classifies tickets as no-code / small / standard), keeps a hard review floor for any code change, and isolates every subagent failure so a single API hiccup can't abort the run. See [workflows/](workflows/).
 
 ---
 
@@ -208,6 +210,12 @@ For cases requiring phase-by-phase control:
 |---------|---------|
 | `/swarm-stats [epic-id-or-ticket-id]` | Render the per-epic or per-ticket workflow dashboard from the 15-event JSONL observability stream. Backs meta-questions ("are we deferring too much", "did the impact bar help", "what's the codex auto-fix rate"). Pre-v4.7 epics render with a legacy badge. |
 
+### Dynamic Workflow (v4.8)
+
+| Command | Purpose |
+|---------|---------|
+| `/epic-swarm-workflow [epic-id] [--dry-run] [--push] [--no-push] [--max-tickets N]` | Run the epic pipeline as a Claude Code **dynamic workflow** (JavaScript `Workflow` runtime). A planning agent classifies each ticket into no-code / small / standard and the script runs a pipeline sized to it; reviews are a hard floor for code changes and fail closed; every subagent failure is isolated so the run always finishes with a reconciled summary; the merge gate uses a test-diff so pre-existing/flaky failures don't block clean merges. `--push` opens the epic PR (default is local-only; `--no-push` forces it explicitly); `--max-tickets N` (N ≥ 1) caps scope. Requires [dynamic workflows](https://code.claude.com/docs/en/workflows) enabled. Source + delivery notes in [workflows/](workflows/). |
+
 **Best practice:** Run each command in a fresh Claude Code session to prevent context overflow.
 
 ---
@@ -243,9 +251,10 @@ The plugin system automatically provides all components:
 
 | Component | What It Does |
 |-----------|-------------|
-| **Commands** | 15 workflow phases you invoke (`/adaptation`, `/implementation`, `/execute-ticket`, `/epic-swarm`, `/swarm-stats`, etc.) |
+| **Commands** | 16 workflow phases you invoke (`/adaptation`, `/implementation`, `/execute-ticket`, `/epic-swarm`, `/epic-swarm-workflow`, `/swarm-stats`, etc.) |
 | **Agents** | 10 specialized AI roles (architect, backend engineer, QA, security engineer, etc.) |
 | **Skills** | 16 auto-activated quality standards (production code, security patterns, testing philosophy, observability, etc.) |
+| **Workflows** | `epic-swarm-workflow` — a dynamic multi-agent workflow (JavaScript `Workflow` runtime) launched via `/epic-swarm-workflow`; see [workflows/](workflows/) |
 | **Hooks** | Session automation for workflow context |
 | **Scripts** | `swarm-stats.sh` (observability dashboard) and `validate-skill-invariants.sh` (CI gate for SkillOpt protected regions) |
 
