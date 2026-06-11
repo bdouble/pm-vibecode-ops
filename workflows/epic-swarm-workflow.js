@@ -105,6 +105,9 @@ export const meta = {
 }
 
 // ── Model routing. Change here to re-tune. ──────────────────────────────────
+// `fable` is also a valid value — operators wanting maximum-capability reasoning
+// phases can set e.g. plan/review/adapt to 'fable' (no default change; see
+// docs/MODEL_CALIBRATION.md for the calibration evidence).
 const M = { opus: 'opus', sonnet: 'sonnet' }
 const ROUTE = {
   setup: M.sonnet,
@@ -151,14 +154,27 @@ const SHELL_RULES = `SHELL POLICY — one action per Bash call, NO compound shel
   dynamic routes) or use Read/Grep/Glob (they never invoke the shell); an
   unquoted bracket path fails AND cancels sibling parallel calls.`
 
-const PROD = `PRODUCTION-CODE STANDARDS: no fallbacks, no temporary/workaround code,
-no TODO-later stubs, no mocked code outside tests. Fail fast with specific errors.
-If a proper fix needs a pre-existing bug fixed first, STOP and report it.`
+const PROD = `PRODUCTION-CODE STANDARDS: no fallbacks masking errors, no temporary/workaround
+code, no mocked code outside tests. Fail fast with specific errors. Implement exactly what
+the ticket asks — no unrequested abstractions, surrounding cleanup, or flexibility for
+hypothetical future requirements. If a proper fix needs a pre-existing bug fixed first,
+STOP and report it.`
 
 const NO_DEFER = `DEFERRAL POLICY: default disposition for in-scope work is "do it now".
 Only defer an acceptance criterion under a genuinely catastrophic condition, and if
 so include a justification block (condition, concrete external evidence, the specific
-blocker). "Complex"/"tricky"/"takes time" are NOT valid reasons.`
+blocker). "Complex"/"tricky"/"takes time" are NOT valid reasons. The bar is symmetric:
+do NOT add defensive runtime machinery (retries, sweeps, reconciliation jobs) no AC
+asked for unless you can name the concrete OBSERVED failure it answers — otherwise
+note the idea in your report's closure-log instead of building it.`
+
+const GUARD = `CONVENTION GUARD: if your change establishes a convention — a pattern other
+code must follow, a new "always/never" rule, a first instance meant to be copied — ship its
+structural guard in the same commits: a lint rule, a source-scanning guard test, a drift
+test, or a shrink-only ratchet allowlist (recipes: production-code-standards skill,
+references/enforcement-ladder.md). A convention without its guard is an incomplete change.
+Genuinely judgment-only rules get a [prose-only] tag plus one line on why no guard can
+express them.`
 
 const LINEAR_NOTE = `(Linear is exposed as mcp__linear-server__* or mcp__claude_ai_Linear__*; load whichever is present via ToolSearch.)`
 
@@ -241,6 +257,7 @@ const REVIEW_SCHEMA = {
     status: { type: 'string', enum: ['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED'], description: 'APPROVED | CHANGES_REQUESTED | BLOCKED' },
     blocking_findings: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string' }, file: { type: 'string' }, issue: { type: 'string' } } } },
     security_status: { type: 'string', enum: ['PASS', 'FAIL'], description: 'SMALL/NO-CODE combined review only: PASS | FAIL for the folded security sanity' },
+    convention_guard: { type: 'string', enum: ['NOT_APPLICABLE', 'GUARD_SHIPPED', 'PROSE_ONLY_TAGGED', 'MISSING'], description: 'optional summary of the convention-guard check; MISSING must also appear as a blocking_finding with status CHANGES_REQUESTED (the gate keys on status, not this field)' },
   },
 }
 // Combined code+security review (NO-CODE / SMALL): security_status is REQUIRED so the
@@ -699,6 +716,7 @@ ${wtSetup(REPO_ROOT, EPIC_BRANCH, t)}
 ${SHELL_RULES}
 ${PROD}
 ${NO_DEFER}
+${GUARD}
 
 ${acBlock(t)}
 
@@ -723,7 +741,7 @@ Return status, summary, files_changed, ACTUAL write/edit counts, committed, no_c
       phase('Review')
       const smallReviewPrompt = reviewPrompt(t, wt, {
         intro: `You are the combined reviewer (code review + security) for SMALL ticket ${t.id}. Read-only.`,
-        scope: 'Cover, in one pass: (a) every acceptance criterion met (Requirements check); (b) correctness/bugs/edge cases; (c) SOLID/DRY + framework best practices; (d) a focused OWASP security pass (injection, authz, secrets, input validation, data exposure) on the diff.',
+        scope: 'Cover, in one pass: (a) every acceptance criterion met (Requirements check); (b) correctness/bugs/edge cases; (c) SOLID/DRY + framework best practices; (d) a focused OWASP security pass (injection, authz, secrets, input validation, data exposure) on the diff; (e) Convention guard: if the diff establishes a convention (a pattern other code must follow, an always/never rule), verify its guard (lint rule / source-scanning guard test / drift test / ratchet) ships in this diff or the rule carries an explicit [prose-only] tag — report a missing guard as a blocking_finding (severity/file/issue) with status CHANGES_REQUESTED so the fix pass can ship it. Finding bar: flag what would fail in production, not what is merely suboptimal.',
         includeAc: false, foldSecurity: true,
       })
       const { review, reReviewed } = await reviewWithFixPass(t, wt, smallReviewPrompt, COMBINED_REVIEW_SCHEMA, ROUTE.reviewSmall, 'SMALL review')
@@ -769,6 +787,7 @@ Return status (COMPLETE | BLOCKED | NEEDS_CONTEXT), summary (one line on the pla
 ${SHELL_RULES}
 ${PROD}
 ${NO_DEFER}
+${GUARD}
 ${acBlock(t)}
 ${readTicket(t)} In particular read the Adaptation Report and any prior phase comments on ${t.id}.
 ADAPTATION SUMMARY: ${adapt.summary || '(read the Adaptation Report you posted)'}
@@ -801,9 +820,10 @@ Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, c
         `ROLE: qa-engineer-agent for ${t.id}. ACCURACY-FIRST testing in ${wt}, gates in order:
 ${readTicket(t)}
 ${SHELL_RULES}${PROD}
-- Gate #0: run existing tests in affected modules; FIX broken existing tests (root-cause) FIRST.
+- Gate #0: run existing tests in affected modules; FIX broken existing tests (root-cause) FIRST. Never delete/skip a failing test to pass; never hard-code values to make specific test inputs pass — if a test seems wrong, report it.
 - Gate #1 API Accuracy (100%): Read the implementation for ACTUAL method names/enums/params — no invented APIs.
 - Gate #2 Compilation (100%): tests compile, zero type errors. Gate #3 Execution (100%): tests run, mocks work, assertions valid.
+- ANTI-BALLAST: assert behavior and contracts (returns, persisted state, emitted events), not call shapes — no toHaveBeenCalled* on internal collaborators unless the call IS the contract; prefer a few real-infrastructure integration tests over many mocked units for data-layer logic.
 - Cap Gate #0 fix loops at ~3 cycles; if still red, report ISSUES_FOUND with the specifics rather than looping. Coverage secondary (~70-80%, 90%+ critical), skip trivial code.
 - Commit: \`git -C ${wt} add -A\`; \`test(${t.id}): ...\`. Files changed by implementation: ${(impl.files_changed || []).join(', ') || '(discover via git diff)'}
 ${selfPost(t, H.testing, false)}
@@ -846,7 +866,7 @@ Return status, summary, files_changed, write/edit counts, committed.`,
     phase('Review')
     const stdReviewPrompt = reviewPrompt(t, wt, {
       intro: `ROLE: code-reviewer-agent for ${t.id} (read-only, single combined review).`,
-      scope: 'Cover in one pass: (1) Requirements — verify EACH acceptance criterion against the implementation with concrete evidence (any unmet → CHANGES_REQUESTED); (2) Correctness — bugs, edge cases, data-flow (params accepted but not forwarded), error handling; (3) Best practices + SOLID/DRY (duplicated logic, leaky abstractions).',
+      scope: 'Cover in one pass: (1) Requirements — verify EACH acceptance criterion against the implementation with concrete evidence (any unmet → CHANGES_REQUESTED); (2) Correctness — bugs, edge cases, data-flow (params accepted but not forwarded), error handling; (3) Best practices + SOLID/DRY (duplicated logic, leaky abstractions); (4) Convention guard — if the diff establishes a convention (a pattern other code must follow, an always/never rule, a first instance meant to be copied) or the adaptation plan mandated a guard, verify the guard (lint rule / source-scanning guard test / drift test / ratchet) ships in this diff or the rule carries an explicit [prose-only] tag; report a missing guard as a blocking_finding (severity/file/issue) with status CHANGES_REQUESTED so the fix pass can ship it. Finding bar: flag what would fail in production, not what is merely suboptimal — findings demanding unrequested abstractions create over-engineering, not quality.',
       includeAc: true, foldSecurity: false,
     })
     const { review, reReviewed } = await reviewWithFixPass(t, wt, stdReviewPrompt, REVIEW_SCHEMA, ROUTE.review, 'review')

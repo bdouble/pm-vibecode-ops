@@ -6,7 +6,7 @@ argument-hint: <epic-id-or-ticket-id> [--per-skill] [--audit-deltas]
 
 # /swarm-stats
 
-Render a single dashboard view of the v4.7 JSONL observability stream for an epic (or a standalone `/execute-ticket` run). Discoverable in-session interface for the same logic that powers `scripts/swarm-stats.sh` — CI/dashboards/alerts call the shell script directly; operators use this slash command.
+Render a single dashboard view of the JSONL observability stream (v5.0 schema, 17 event types) for an epic (or a standalone `/execute-ticket` run). Discoverable in-session interface for the same logic that powers `scripts/swarm-stats.sh` — CI/dashboards/alerts call the shell script directly; operators use this slash command.
 
 ## Input
 
@@ -63,8 +63,20 @@ LIFECYCLE
 ├── Tickets failed:      0
 └── Epics completed:     1
 
+DISCIPLINE DEBT (conventions & guards)
+├── Guard checks emitted:     11
+├── Missing guards flagged:   0   (should be 0 — each blocked a review or closure)
+├── Prose-only rules (last epic_completed): 22   (↓ is better)
+└── Enforced rules (last epic_completed):   15   (↑ is better)
+
+ENTROPY AUDIT (latest scorecard: scorecard-2026-06-11.json)
+├── Prose-only: 22   Guards: 10   Zero-activation machinery: 5
+└── Mock:integration ratio: 5.4
+
 Headline: 12 deferral attempt(s) — 9 rejected (75%), 3 accepted as catastrophic-justified.
 ```
+
+The `DISCIPLINE DEBT` section is the operator-readable enforcement dashboard (v5.0): prose-only counts should trend down as guards ship; missing-guard flags should be zero. The deferral/redispatch counters double as **recalibration signals** — machinery that fires ~0 times across many consecutive epics is a retirement candidate per the countermeasure ledger in `docs/MODEL_CALIBRATION.md`. The `ENTROPY AUDIT` block appears only when `.swarm/entropy/` scorecards exist (see `/entropy-audit`).
 
 ## Expected dashboard with `--per-skill`
 
@@ -151,4 +163,4 @@ If the shell script returns non-zero, surface stderr to the user and stop. Do no
 
 - Canonical event schema: `commands/references/observability-schema.md`
 - Backend: `scripts/swarm-stats.sh`
-- Emission points: `commands/execute-ticket.md` (Steps 1.5, 3, 3.6, 3.8, 4), `commands/epic-swarm.md` (§§1.5.7, 3.2, 3.5, 3.6, 3.8), `commands/close-epic.md` (Step 4)
+- Emission points: `commands/execute-ticket.md` (Steps 1.5, 3, 3.6, 3.8, 4), `commands/epic-swarm.md` (§§1.5.7, 3.2, 3.5, 3.6, 3.8), `commands/close-epic.md` (Phase 2.5, Step 4), `commands/entropy-audit.md` (Step 5 → `_audit.jsonl`)

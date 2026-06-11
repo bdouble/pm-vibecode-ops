@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# swarm-stats.sh — render an observability dashboard for a v4.7 JSONL event stream.
+# swarm-stats.sh — render an observability dashboard for a JSONL event stream.
 #
-# Schema version: 1 (v4.7 — 15 event types)
+# Schema version: 2 (v5.0 — 17 event types: + convention_guard_check, entropy_scorecard_recorded)
 # Canonical event spec: commands/references/observability-schema.md
 #
 # Usage:
@@ -220,6 +220,18 @@ IMPACT_REJ=$(count_epic_event impact_bar_rejected)
 BOUNDARY=$(count_epic_event boundary_question_answered)
 CAP_BLOCKED=$(count_epic_event followup_cap_blocked)
 
+# convention_guard_check is dual-routed (per-ticket at codereview; epic-level at
+# /close-epic Phase 2.5) — count both streams. "missing" entries are the signal.
+GUARD_CHECKS=$(( $(count_event convention_guard_check) + $(count_epic_event convention_guard_check) ))
+GUARD_MISSING=$({ [[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="convention_guard_check") | (.data.missing // []) | length] | add // 0' "$STREAM" || echo 0; })
+GUARD_MISSING_EPIC=$({ [[ -s "$EPIC_STREAM" ]] && jq -rs '[.[] | select(.event=="convention_guard_check") | (.data.missing // []) | length] | add // 0' "$EPIC_STREAM" || echo 0; })
+GUARD_MISSING_TOTAL=$(( GUARD_MISSING + GUARD_MISSING_EPIC ))
+
+# Discipline-debt census from the most recent epic_completed payload (v5.0 additive
+# fields; pre-v5.0 events lack them → "n/a").
+PROSE_ONLY=$({ [[ -s "$EPIC_STREAM" ]] && jq -rs '[.[] | select(.event=="epic_completed")] | last | .data.prose_only_count // "n/a"' "$EPIC_STREAM" || echo "n/a"; })
+ENFORCED=$({   [[ -s "$EPIC_STREAM" ]] && jq -rs '[.[] | select(.event=="epic_completed")] | last | .data.enforced_count   // "n/a"' "$EPIC_STREAM" || echo "n/a"; })
+
 CODEX_RES=$(count_event codex_finding_resolved)
 CODEX_AUTO=$([[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="auto_fixed")]    | length' "$STREAM" || echo 0)
 CODEX_USER=$([[ -s "$STREAM" ]] && jq -rs '[.[] | select(.event=="codex_finding_resolved" and .data.disposition=="user_decision")] | length' "$STREAM" || echo 0)
@@ -270,6 +282,29 @@ echo "├── Tickets completed:   $(show "$TICKETS_DONE")"
 echo "├── Tickets failed:      $(show "$TICKETS_FAILED")"
 echo "└── Epics completed:     $(show "$EPICS_DONE")"
 echo ""
+
+# Discipline debt (v5.0): the operator-readable enforcement dashboard. Prose-only
+# should trend DOWN (rules migrating to guards); guard checks with missing entries
+# should be 0. The deferral/redispatch counters above double as RECALIBRATION
+# SIGNALS — machinery that fires ~0 times across many epics is a retirement
+# candidate per docs/MODEL_CALIBRATION.md's countermeasure ledger.
+echo "DISCIPLINE DEBT (conventions & guards)"
+echo "├── Guard checks emitted:     $(show "$GUARD_CHECKS")"
+echo "├── Missing guards flagged:   $(show "$GUARD_MISSING_TOTAL")   (should be 0 — each blocked a review or closure)"
+echo "├── Prose-only rules (last epic_completed): $(show "$PROSE_ONLY")   (↓ is better)"
+echo "└── Enforced rules (last epic_completed):   $(show "$ENFORCED")   (↑ is better)"
+echo ""
+
+# Latest entropy-audit scorecard, if any (repo-level: .swarm/entropy/ + _audit.jsonl).
+ENTROPY_DIR="$REPO_ROOT/.swarm/entropy"
+if [[ -d "$ENTROPY_DIR" ]]; then
+  latest_card=$(find "$ENTROPY_DIR" -maxdepth 1 -type f -name 'scorecard-*.json' 2>/dev/null | sort | tail -1)
+  if [[ -n "$latest_card" ]]; then
+    echo "ENTROPY AUDIT (latest scorecard: $(basename "$latest_card"))"
+    jq -r '"├── Prose-only: \(.prose_rules.prose_only // "?")   Guards: \(.guards.count // "?")   Zero-activation machinery: \(.runtime_machinery.zero_activation_count // "?")\n└── Mock:integration ratio: \(.test_ballast.mock_to_integration_ratio // "?")"' "$latest_card" 2>/dev/null || echo "└── (scorecard unreadable)"
+    echo ""
+  fi
+fi
 
 # ---------- optional: per-skill drill-down ----------
 
