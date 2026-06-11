@@ -1,6 +1,6 @@
-# Workflow Observability JSONL Schema (v4.7)
+# Workflow Observability JSONL Schema (v5.0)
 
-Canonical reference for `.swarm/observability/<epic>/<ticket-id>.jsonl` event streams. Both `/epic-swarm` and `/execute-ticket` emit to these files. The `/swarm-stats` command and `scripts/swarm-stats.sh` consume them.
+Canonical reference for `.swarm/observability/<epic>/<ticket-id>.jsonl` event streams. `/epic-swarm`, `/execute-ticket`, `/close-epic`, and `/entropy-audit` emit to these files. The `/swarm-stats` command and `scripts/swarm-stats.sh` consume them.
 
 ---
 
@@ -13,21 +13,25 @@ Canonical reference for `.swarm/observability/<epic>/<ticket-id>.jsonl` event st
 │   ├── <ticket-id-2>.jsonl
 │   └── _epic.jsonl             # epic-level events only (epic_completed,
 │                               # followup_cap_blocked, impact_bar_rejected,
-│                               # boundary_question_answered) emitted by
+│                               # boundary_question_answered, and /close-epic's
+│                               # convention_guard_check) emitted by
 │                               # /close-epic. Distinct from per-ticket
 │                               # files: aggregators MUST NOT mix them
 │                               # into per-ticket metrics — see
 │                               # scripts/swarm-stats.sh "two streams" pattern.
-└── _solo/
-    └── <ticket-id>.jsonl       # standalone /execute-ticket runs (no epic context)
+├── _solo/
+│   └── <ticket-id>.jsonl       # standalone /execute-ticket runs (no epic context)
+└── _audit.jsonl                # repo-level audit events (entropy_scorecard_recorded)
+                                # emitted by /entropy-audit. No epic or ticket parent.
 ```
 
 Each `.jsonl` file is append-only. One JSON object per line. Never modify or delete prior lines — the file IS the audit trail.
 
-**Three audiences for the file split:**
-- Per-ticket files (`<epic-id>/<ticket-id>.jsonl`) — phase-loop, deferral, codex, ticket-lifecycle events. Single ticket's audit trail.
-- Epic-level file (`<epic-id>/_epic.jsonl`) — closure-time events that have no single ticket parent: epic_completed, followup_cap_blocked, impact_bar_rejected, boundary_question_answered. Emitted by `/close-epic`.
+**Four audiences for the file split:**
+- Per-ticket files (`<epic-id>/<ticket-id>.jsonl`) — phase-loop, deferral, codex, convention-guard, ticket-lifecycle events. Single ticket's audit trail.
+- Epic-level file (`<epic-id>/_epic.jsonl`) — closure-time events that have no single ticket parent: epic_completed, followup_cap_blocked, impact_bar_rejected, boundary_question_answered, convention_guard_check (when emitted by `/close-epic`'s Convention Guard Audit).
 - Solo files (`_solo/<ticket-id>.jsonl`) — `/execute-ticket` invoked against a ticket with no epic parent. Same event types as per-ticket files; no epic-level file exists for solo runs.
+- Repo-level audit file (`_audit.jsonl`) — `entropy_scorecard_recorded` events from `/entropy-audit`. Both `epic_id` and `ticket_id` are `null`; the audit is scoped to the repository, not to any epic.
 
 ---
 
@@ -47,15 +51,15 @@ Every event has the same five fields. Event-specific data goes under `data`.
 ```
 
 - **`ts`** — ISO8601 UTC. Required.
-- **`epic_id`** — Parent epic ID. `null` for `_solo/` runs. Required field, nullable value.
-- **`ticket_id`** — Ticket the event pertains to. Required.
+- **`epic_id`** — Parent epic ID. `null` for `_solo/` runs and `_audit.jsonl` events. Required field, nullable value.
+- **`ticket_id`** — Ticket the event pertains to. `null` for epic-level (`_epic.jsonl`) and repo-level (`_audit.jsonl`) events. Required field, nullable value.
 - **`phase`** — Phase name from `PHASES_BY_PROFILE` (or `null` for ticket-/epic-level events). Required field, nullable value.
 - **`event`** — Event name from the catalog below. Required.
 - **`data`** — Event-specific payload. Required (may be `{}`).
 
 ---
 
-## Event catalog (15 types)
+## Event catalog (17 types)
 
 ### Profile / configuration events
 
@@ -210,6 +214,8 @@ Emitted when a cross-cutting concern surfaces and the boundary question is answe
 }
 ```
 
+**v5.0 note:** a shipped **ratchet** (shrink-only allowlist guard test — see `skills/production-code-standards/references/enforcement-ladder.md`) IS a single enforcement point; emit `decision: "single-enforcement-point"` for it. No enum change — existing aggregations stay valid.
+
 #### `followup_cap_blocked` *(NEW v4.7)*
 
 Emitted when 4 or more candidates would have been filed and the ≤3 cap forced a re-application of the impact bar (per `epic-closure-validation` Rule C).
@@ -224,6 +230,58 @@ Emitted when 4 or more candidates would have been filed and the ≤3 cap forced 
   }
 }
 ```
+
+---
+
+### Convention guard events
+
+#### `convention_guard_check` *(NEW v5.0)*
+
+Emitted at two points, with two routings:
+
+1. **Codereview phase** (`/execute-ticket` Step 3 loop, `/epic-swarm` §3.2) — after parsing the code-review report's Convention Guard Verification section. `ticket_id` populated → per-ticket file.
+2. **`/close-epic` Phase 2.5 Convention Guard Audit** — one event summarizing the epic-level audit. `ticket_id: null` → `_epic.jsonl`.
+
+```json
+{
+  "event": "convention_guard_check",
+  "data": {
+    "conventions_introduced": ["all mutations validate input via validateInput()"],
+    "guards_shipped": ["tests/guards/zod-mutations.test.ts"],
+    "prose_only_tagged": [],
+    "missing": []
+  }
+}
+```
+
+A non-empty `missing` array at codereview time corresponds to a CHANGES_REQUESTED review; at close-epic time it corresponds to a blocked closure (until the guard ships or the user explicitly approves `[prose-only]` status).
+
+---
+
+### Repo-level audit events
+
+#### `entropy_scorecard_recorded` *(NEW v5.0)*
+
+Emitted by `/entropy-audit` after the scorecard is written and the audit report lands in Linear. Routed to `.swarm/observability/_audit.jsonl` (`epic_id: null`, `ticket_id: null`, `phase: null`).
+
+```json
+{
+  "event": "entropy_scorecard_recorded",
+  "data": {
+    "scorecard_path": ".swarm/entropy/scorecard-2026-06-11.json",
+    "north_star": "workflow completion outranks cost strictness",
+    "headline_deltas": {
+      "prose_only": -3,
+      "guards": 2,
+      "machinery_zero_activation": 5,
+      "mock_to_integration_ratio": -0.3
+    },
+    "highest_conviction_change": "Install drift test pinning quota matrix to billing enum"
+  }
+}
+```
+
+`headline_deltas` is `null` on a baseline (first) run. Full scorecard schema: `commands/references/entropy-scorecard-schema.md`.
 
 ---
 
@@ -311,10 +369,14 @@ Emitted by `/close-epic` after all sub-tickets are Done/Cancelled and the closur
     "followups_filed": 1,
     "closure_log_items": 8,
     "boundary_question_invocations": 2,
-    "epic_wall_clock_seconds": 86400
+    "epic_wall_clock_seconds": 86400,
+    "prose_only_count": 22,
+    "enforced_count": 15
   }
 }
 ```
+
+**v5.0 additive fields:** `prose_only_count` / `enforced_count` — the project-memory status-tag census taken during Phase 6's CLAUDE.md pruning step (the discipline-debt metric; see `enforcement-ladder.md`). `null` when the target repo has no tagged rules yet. Pre-v5.0 events lack these fields; aggregators must tolerate their absence.
 
 ---
 
@@ -346,9 +408,11 @@ Emitted by `/close-epic` after all sub-tickets are Done/Cancelled and the closur
 | `followup_cap_blocked` | — | — | Step 6 when candidate count > 3 pre-cap | epic-level (`_epic.jsonl`) |
 | `codex_finding_resolved` | Step 3.8 per finding | §3.8 per finding | — | per-ticket |
 | `codex_scope_escape` | Step 3.8 SCOPE_EXPANSION_ESCAPE branch | §3.8 same | — | per-ticket |
+| `convention_guard_check` | Step 3 loop, after codereview report parsed | §3.2 same | Phase 2.5 Convention Guard Audit (`ticket_id: null`) | per-ticket; epic-level for `/close-epic` |
 | `ticket_completed` | Step 4 after Linear set to Done | §3.5.6 after Linear set to Done | — | per-ticket |
 | `ticket_failed` | Step 4 on any halt | §3.2.7 / §3.3 fail / §3.5 conflict | — | per-ticket |
 | `epic_completed` | — | — | Step 6 after closure comment lands | epic-level (`_epic.jsonl`) |
+| `entropy_scorecard_recorded` | — (emitted by `/entropy-audit`) | — | — | repo-level (`_audit.jsonl`) |
 
 ---
 

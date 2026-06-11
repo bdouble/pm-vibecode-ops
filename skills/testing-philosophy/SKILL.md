@@ -1,6 +1,6 @@
 ---
 name: testing-philosophy
-description: Use when writing new tests, when existing tests are failing, when CI is red, or when about to add coverage. Also use when tempted to mock an API without reading the implementation, skip a failing test to unblock a build, chase a coverage percentage, or assume a test passes without running it.
+description: Use when writing new tests, when existing tests are failing, when CI is red, or when about to add coverage. Also use when tempted to skip or delete a failing test to unblock a build, chase a coverage percentage, hard-code values to make tests pass, or assert how a function was called rather than what it produced.
 ---
 
 # Testing Philosophy
@@ -16,115 +16,46 @@ Fix broken tests BEFORE writing new tests. Accurate running tests > high coverag
 
 ## Mandatory Gate Sequence
 
-### Gate 0: Fix Existing Tests (FIRST)
+**Gate 0 — Fix existing tests first.** Find and run the existing tests for affected modules. Fix every failure before writing new tests: API changed → update the test; bug found → fix the production code, not the test; wrong assumption → correct the test. It is unacceptable to remove, skip, or edit a failing test just to make it pass — a skipped test trains everyone to ignore failing tests.
 
-**BLOCKER: Do not write new tests until existing tests pass.**
+**Gate 1 — Ground in the real API.** Read the implementation you're testing before mocking or asserting against it; never speculate about code you haven't opened. Test against actual method names, enums, and signatures.
 
-```bash
-# 1. Find existing tests for affected modules
-ls src/modules/[module]/**/*.spec.ts 2>/dev/null
+**Gate 2 — Compilation.** Tests compile with zero type errors.
 
-# 2. Run existing tests
-npm test -- --testPathPattern="[module]" --run
+**Gate 3 — Execution.** Tests run green, mocks work, assertions are valid.
 
-# 3. Fix ALL failures (see below), then verify 100% pass
-```
+**Gate 4 — Coverage (secondary).** Target 70–80% focused on complex logic. Coverage is the last gate, never the first: 50% coverage with correct tests beats 90% with broken ones.
 
-Fix strategies:
-- API changed → Update test to match new API
-- Bug found → Fix production code, not the test
-- Wrong assumption → Update test to correct behavior
+**No gaming the gates:** do not hard-code values or special-case solutions that only pass specific test inputs. If a test looks incorrect or the task infeasible, report that rather than working around it.
 
-### Gate 1: API Discovery (Before New Tests)
+## Anti-Ballast Doctrine
 
-**NEVER assume. ALWAYS verify:**
+Test mass is not confidence. At agent speed, test count grows at near-zero cost — and a suite can come to resist refactoring more than it catches bugs (field data: a 17K-test suite with a 5.4:1 mock-to-integration ratio whose healthiest stratum was its handful of static guards). Four rules keep the suite load-bearing:
 
-```bash
-# Read actual implementation
-cat src/modules/[module]/[module].service.ts
-
-# Find actual enums and methods
-grep -r "enum\|async.*(" src/modules/[module]/
-```
-
-Document findings before writing tests:
-```markdown
-## API Discovery: EmailService
-- Method: sendEmail(params: SendEmailParams): Promise<EmailResult>
-- Enum: EmailType.USER_WELCOME (NOT "WELCOME")
-```
-
-### Gate 2: Compilation (100%)
-```bash
-npx tsc --noEmit src/**/*.spec.ts  # Zero TS errors
-```
-
-### Gate 3: Execution (100%)
-```bash
-npm test -- --testPathPattern="[module]" --run  # Zero runtime errors
-```
-
-### Gate 4: Coverage (Secondary)
-- Target: 70-80% (not 90%+)
-- Focus on complex logic
-- Skip trivial code
-
-## Test Structure
-
-Study passing tests first, then follow pattern:
-
-```javascript
-describe('PaymentService', () => {
-  let service: PaymentService;
-  let mockRepository: jest.Mocked<PaymentRepository>;
-
-  beforeEach(() => {
-    mockRepository = createMockRepository();
-    service = new PaymentService(mockRepository);
-  });
-
-  describe('processPayment', () => {
-    it('should return transaction ID for valid payment', async () => {
-      // Arrange
-      mockRepository.save.mockResolvedValue({ id: 'txn_123' });
-      // Act
-      const result = await service.processPayment(validPayment);
-      // Assert
-      expect(result.transactionId).toBe('txn_123');
-    });
-  });
-});
-```
+1. **Assert behavior and contracts, not call shapes.** `toHaveBeenCalledTimes` / `toHaveBeenCalledWith` on internal collaborators pins implementation shape, not correctness — a smell unless the call IS the contract (e.g., "exactly one billing dispatch"). Default to asserting returns, persisted state, and emitted events.
+2. **A handful of real-infrastructure integration tests outrank thousands of mocked unit tests for the data layer.** A mocked DB client cannot catch a constraint violation, a transaction-isolation bug, or migration drift.
+3. **Static guards count as tests** — of the architecture. When the choice is "30 mocked tests re-asserting a convention per-surface" vs "one source-scanning guard test," choose the guard (see `production-code-standards` → `references/enforcement-ladder.md`).
+4. **Watch the ratio.** Rising mock:integration ratio or call-count-assertion density means the suite is accreting ballast. `/entropy-audit` trends both.
 
 ## When TO Test
 
-- New functionality with no coverage
-- Complex business logic
-- Security-sensitive operations
-- Critical user paths
+New functionality, complex business logic, security-sensitive operations, critical user paths.
 
 ## When NOT TO Test
 
-- Already well-covered
-- Trivial code (getters, pass-throughs)
-- Just for coverage percentage
-- Framework/library code
+Already well-covered code, trivial getters/pass-throughs, framework code, or purely to move a coverage number.
 
-**Questions before each test:** Is this new? Is there a gap? Can this fail? Will it catch real bugs?
+**Before each test:** Is this new? Can this fail? Will it catch a real bug?
 
-## Common Mistakes
+## Asserting the Right Behavior
+
+Never assert the workaround behavior instead of the correct behavior:
 
 ```javascript
-// WRONG - Assumed API
-await emailService.sendWelcomeEmail(user); // Doesn't exist!
+// WRONG — pins the bug in place
+expect(await service.failingOp()).toBeNull();
 
-// RIGHT - Verified via Read
-await emailService.sendEmail({ type: EmailType.USER_WELCOME });
-
-// WRONG - Testing workaround behavior
-expect(await service.failingOp()).toBeNull(); // Tests workaround!
-
-// RIGHT - Testing correct behavior
+// RIGHT — asserts the contract
 await expect(service.failingOp()).rejects.toThrow(ValidationError);
 ```
 
@@ -135,44 +66,31 @@ await expect(service.failingOp()).rejects.toThrow(ValidationError);
 | src/, lib/, app/ | NO | NO | NO |
 | *.test.*, __tests__/ | YES | YES | N/A |
 
-**Remember: 50% coverage with correct tests > 90% with broken tests.**
-
 ## Red Flags — STOP
 
-When you notice ANY of these in your own thinking or writing, you are about to write unreliable tests. Stop and follow the gate sequence.
-
-- "I'll skip the failing test for now"
-- "The existing broken tests aren't my problem"
-- "I'll mock this without reading the implementation"
-- "Coverage is at X%, that's the goal"
-- `expect(result).toBeDefined()` as the only assertion
-- "Let me write tests after the implementation is done" (then "tomorrow", then "next sprint")
-- "This test is too complex, I'll write a simpler one that passes"
-- "I'll commit this with the tests skipped, fix later"
-- Writing a test that asserts the workaround behavior instead of the correct behavior
+- Skipping or deleting a failing test to unblock a build
 - Mocking a function whose signature you haven't read
+- `expect(result).toBeDefined()` as the only assertion
+- Asserting call counts on internal collaborators instead of outcomes
+- Hard-coding expected values so specific test inputs pass
+- "Coverage is at X%, that's the goal"
 
-**All of these mean: stop writing new tests and complete Gate 0 first** — make every existing test pass before adding new ones.
-
-## Rationalizations -- STOP
-
-If you think any of these, you are about to write unreliable tests.
+## Rationalizations — STOP
 
 | Excuse | Reality |
 |--------|---------|
-| "The existing broken tests are someone else's problem" | You must fix ALL broken tests before writing new ones. No exceptions. |
-| "I'll mock the API to save time" | Read the actual implementation first. Mocks based on assumptions create false passes. |
-| "Coverage is what matters" | Accuracy is what matters. 50% accurate coverage beats 90% mocked coverage. |
-| "This test is too complex to write properly" | If the test is complex, the code may need refactoring. The difficulty is a signal. |
-| "I'll fix the test later" | A failing test you ignore trains everyone to ignore failing tests. Fix it now. |
+| "The existing broken tests are someone else's problem" | Gate 0: fix all broken tests before writing new ones. |
+| "Coverage is what matters" | Accuracy is what matters. Correct tests at 50% beat broken tests at 90%. |
 | "Skipping this test unblocks the build" | Skipping tests hides bugs. Fix the test or fix the code. |
+| "More tests = more confidence" | Ballast resists refactoring more than it catches bugs. Assert contracts, prefer real infrastructure, count static guards. |
+| "This test is too complex to write properly" | The difficulty is a signal — the code may need refactoring. |
 
 ## Additional Resources
 
-- **`references/test-priority-guidelines.md`** — Detailed test priority matrix for deciding what to test and what to skip
-- **`examples/test-templates.md`** — Well-structured test file templates and examples for common patterns
+- **`references/test-priority-guidelines.md`** — Decision matrix for what to test and what to skip
+- **`examples/test-templates.md`** — Well-structured test file templates for common patterns
 
 ## Related Skills
-- **production-code-standards**: Production code quality standards (test code has different rules)
+- **production-code-standards**: Production code quality standards; the enforcement ladder (static guards)
 - **verify-implementation**: Run and show test output before claiming "tests pass"
 - **no-silent-deferrals**: `.skip()` on a failing test is a silent deferral
