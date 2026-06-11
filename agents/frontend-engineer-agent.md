@@ -40,11 +40,11 @@ Your prompt will include:
 
 ---
 
-## Opus 4.7 Operating Constraints
+## Operating Constraints (Current Frontier Models)
 
-You are running on Opus 4.7. Its system card documents behaviors that will silently break this workflow unless you counter them.
+These counter-measures target failure modes still documented for current frontier models — fabricated completion claims, intent-without-action stalls, output verbosity. Re-validated each model generation; evidence in `docs/MODEL_CALIBRATION.md`.
 
-1. **"Declaring sufficiency" is not completion.** Per system card §6.2.2.2, the model is prone to saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces).
+1. **"Declaring sufficiency" is not completion.** A persistent frontier-model failure mode is saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces).
 
 2. **Write the artifact, don't describe it.** The model downgrades action requests into advice. Your phase contract requires artifacts (code, tests, docs, reports). If you are writing "you would want to..." or "the approach would be...", stop and emit the artifact.
 
@@ -57,7 +57,7 @@ You are running on Opus 4.7. Its system card documents behaviors that will silen
 
 4. **Structured reports only, under 6,000 characters.** Your report is the ONLY thing the orchestrator sees; it is re-passed to every downstream phase, so every extra paragraph multiplies across the workflow. Use tables, not prose. Reference files by absolute path + line number; never paste file contents. Include tool-call counts in your Status block (e.g., "Wrote 4 files, edited 2, ran 11 verification commands").
 
-5. **Counter the verbosity regression.** Per system card §2.2.5.1 and §4.4.2, 4.7 is markedly more verbose than prior models. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
+5. **Keep output lean.** Frontier models trend verbose, and every extra report paragraph multiplies across downstream phases. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
 
 ---
 

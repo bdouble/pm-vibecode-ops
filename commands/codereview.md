@@ -126,10 +126,28 @@ Perform code review for this ticket following the mandatory pre-review steps:
 4. **Code Quality Review**: Then proceed with standard review — SOLID principles,
    pattern compliance, service reuse verification.
 
+5. **Convention Guard Verification (Step 4)**: Determine whether this change
+   establishes a convention — a new pattern other code must follow, a new
+   "always/never" rule, a first instance meant to be copied, or a pattern the
+   adaptation guide mandated. If yes: verify its structural guard ships in this
+   same change (enforcement-ladder rung 1–5: type chokepoint, source-scanning
+   guard test, drift test, ratchet, or runtime assert — see
+   skills/production-code-standards/references/enforcement-ladder.md), or that
+   the rule carries an explicit [prose-only] tag with a one-line rationale.
+   A convention with neither is an incomplete change — CHANGES_REQUESTED, same
+   severity as missing tests. If the adaptation guide named a guard that is
+   absent, treat it as a SCOPE_GAP.
+
+Finding bar: flag what would fail or regress in production — correctness, security,
+unmet ACs, missing guards, duplication. Do not flag what is merely suboptimal;
+review findings that demand unrequested abstractions or speculative hardening
+create over-engineering rather than quality.
+
 Return a structured code review report including:
 - Requirements Checklist (from Step 0)
 - Best Practices Assessment (from Step 1)
 - SOLID/DRY Assessment (from Step 2)
+- Convention Guard Verification (from Step 4)
 - Issues found and fixed
 - Security concerns (logged, not fixed)
 - Duplication analysis
@@ -348,6 +366,13 @@ async function getUserById(id: string): Promise<User>
 - [ ] **Pattern Adherence**: Verify established patterns are followed consistently across all modules
 - [ ] **Abstraction Layer Bypass**: Check for code that bypasses abstraction layers to access lower levels directly
 
+### Convention Enforcement (CRITICAL — the Enforcement Ladder)
+- [ ] **Convention Introduced?** Does this change establish a pattern other code must follow, a new "always/never" rule, or a first instance meant to be copied?
+- [ ] **Guard Ships With It**: If yes, the convention's structural guard is in this same change — a type chokepoint, source-scanning guard test, drift test, ratchet (shrink-only allowlist), or runtime assert (rungs 1–5, `skills/production-code-standards/references/enforcement-ladder.md`)
+- [ ] **Prose-Only Is Explicit**: If no guard can express the rule, it carries a `[prose-only]` tag plus one line on why rung 6 is the ceiling
+- [ ] **Mandated Guards Present**: Any guard the adaptation guide or ticket ACs named exists and passes — absence is a SCOPE_GAP
+- **Verdict**: Convention without guard or tag → CHANGES_REQUESTED, same severity as missing tests. Prose rules don't propagate across agent sessions; guards do.
+
 ### Module & Dependency Hygiene
 - [ ] **Explicit Dependencies**: All module dependencies are explicitly declared, not implicitly assumed
 - [ ] **Circular Dependencies**: Document any circular dependencies with justification
@@ -424,6 +449,11 @@ If security issues are noticed during review:
 - **Missing Reuse Justification**: New [service/component] lacks "why not reuse" documentation
   - **Fix**: Document why existing solutions couldn't be used
 
+### 🛡️ Convention Guard Verification
+- **Convention introduced**: [convention description, or "None — no conventions established by this change"]
+  - **Guard**: [artifact path + rung, e.g. `tests/guards/x.test.ts` (rung 2)] or **[prose-only]**: [one-line ceiling rationale]
+  - **Status**: [GUARD_SHIPPED / PROSE_ONLY_TAGGED / MISSING → CHANGES_REQUESTED]
+
 ### 🔒 Security Concerns (Logged for Security Review)
 - **Concern**: [Security issue noticed]
   - **Status**: Logged - will be addressed in security review phase
@@ -447,14 +477,13 @@ If security issues are noticed during review:
 - Code follows established architectural patterns
 - Proper error handling implemented
 - No obvious performance regressions
+- Conventions introduced by this change ship with a guard (rung 1–5) or an explicit `[prose-only]` tag
 
 ### Should Pass Requirements
 - Clean code principles followed
-- Appropriate abstraction levels
+- Appropriate abstraction levels — no speculative flexibility
 - Clear naming conventions
-- **JSDoc present for all public functions/classes/methods**
-- **@param and @returns tags properly documented**
-- **Complex logic has inline explanatory comments**
+- **Documentation follows MVD**: complex/security-sensitive logic explains the "why"; no JSDoc that restates TypeScript types (see `mvd-documentation` skill)
 
 ### Security Handling
 - Security issues are LOGGED ONLY, not fixed in this phase
@@ -797,9 +826,8 @@ EOF
 ```
 - `refactor: improve [component] based on review feedback`
 - `style: fix formatting and code style issues`
-- `docs: add missing JSDoc to [functions/classes]`
-- `docs: complete JSDoc with @param/@returns/@throws tags`
-- `docs: add inline comments for complex logic`
+- `docs: explain [non-obvious decision/security constraint] (MVD)`
+- `test: add guard test for [convention]`
 NOTE: NO security fixes in this phase - security issues are logged only
 
 ### PR Status Management
@@ -813,7 +841,7 @@ Add comprehensive review section to existing PR description:
 ```markdown
 ## 📋 Code Review Results
 **Status**: APPROVED/CHANGES_REQUESTED  
-**Reviewer**: Security Review Agent  
+**Reviewer**: Code Review Agent  
 **Review Date**: [Date]
 
 ### Key Findings
@@ -883,6 +911,10 @@ After completing the code review, add the following structured comment to the Li
 - **Performance Issues**: X issues identified and fixed
 - [List of specific fixes made with commit references]
 
+### 🛡️ Convention Guard Verification
+- **Convention introduced**: [description, or "None"]
+- **Guard**: [artifact + rung] / **[prose-only]**: [rationale] / **MISSING** (blocks approval)
+
 ### 🔒 Security Concerns (Logged Only)
 - **Security Issues Noticed**: Y concerns
 - **Action Taken**: Logged for security review phase
@@ -925,6 +957,7 @@ Code review is successful when:
 - **No duplication of existing services or infrastructure components**
 - **All adaptation guide reuse mandates verified and followed**
 - **Service inventory checked and no violations found**
+- **Convention guard verified** (any convention this change establishes ships its guard or carries an explicit `[prose-only]` tag)
 - All code quality issues addressed through focused commits
 - Architectural patterns properly followed
 - Performance acceptable (no obvious regressions)

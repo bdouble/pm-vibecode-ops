@@ -212,6 +212,15 @@ Generate **accurate, compilable** test suites for ticket **$1** that use the act
 6. Type definitions and interfaces
 7. Styling and layout code
 
+### Anti-Ballast Doctrine (Test Mass Is Not Confidence)
+
+Tests are generated at near-zero marginal cost, so a suite can accrete until it resists refactoring more than it catches bugs (field data: a 17K-test suite at a 5.4:1 mock-to-integration ratio whose healthiest stratum was its static guards). Four rules keep the suite load-bearing:
+
+1. **Assert behavior and contracts, not call shapes.** `toHaveBeenCalledTimes`/`toHaveBeenCalledWith` on internal collaborators pins implementation shape, not correctness — a smell unless the call IS the contract (e.g., "exactly one billing dispatch"). Default to asserting returns, persisted state, and emitted events.
+2. **A handful of real-infrastructure integration tests outrank thousands of mocked unit tests for the data layer.** A mocked DB client cannot catch a constraint violation, a transaction-isolation bug, or migration drift.
+3. **Static guards count as tests** — of the architecture. One source-scanning guard test beats 30 per-surface mocked re-assertions of the same convention (see `skills/production-code-standards/references/enforcement-ladder.md`).
+4. **Watch the ratio.** Rising mock:integration ratio or call-count-assertion density = ballast accreting; `/entropy-audit` trends both.
+
 ## Code Quality Standards - NO WORKAROUNDS IN PRODUCTION CODE
 
 **CRITICAL: Test Code vs Production Code Standards**

@@ -59,11 +59,11 @@ Your prompt will include:
 
 ---
 
-## Opus 4.7 Operating Constraints
+## Operating Constraints (Current Frontier Models)
 
-You are running on Opus 4.7. Its system card documents behaviors that will silently break this workflow unless you counter them.
+These counter-measures target failure modes still documented for current frontier models — fabricated completion claims, intent-without-action stalls, output verbosity. Re-validated each model generation; evidence in `docs/MODEL_CALIBRATION.md`.
 
-1. **"Declaring sufficiency" is not completion.** Per system card §6.2.2.2, the model is prone to saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces — for epic closure, that is the follow-up specs, closure-log entries, or ticket-creation calls).
+1. **"Declaring sufficiency" is not completion.** A persistent frontier-model failure mode is saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces — for epic closure, that is the follow-up specs, closure-log entries, or ticket-creation calls).
 
 2. **Write the artifact, don't describe it.** The model downgrades action requests into advice. Your phase contract requires artifacts: up to 3 follow-up ticket specs detailed enough to create Linear tickets PLUS a fully-written closure-log with rationale per entry — not prose summaries of what follow-ups might be needed.
 
@@ -75,7 +75,7 @@ You are running on Opus 4.7. Its system card documents behaviors that will silen
 
 4. **Structured reports only, under 10,000 characters (follow-up tickets may require more detail than phase reports; closure-log entries must stay terse).** Reference files by absolute path + line number. Use tables, not prose.
 
-5. **Counter the verbosity regression.** Per system card §2.2.5.1 and §4.4.2, 4.7 is markedly more verbose than prior models. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
+5. **Keep output lean.** Frontier models trend verbose, and every extra report paragraph multiplies across downstream phases. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
 
 ---
 
@@ -189,7 +189,7 @@ During closure analysis, flag any evidence of:
 - Recommend creating tickets to address before closure
 - Epic closure is blocked until workarounds are resolved
 
-## Seven-Phase Epic Closure Analysis
+## Epic Closure Analysis (Seven Phases + the Convention Guard Gate at 2.5)
 
 ### Phase 1: Completion Verification & Late Findings
 
@@ -381,6 +381,27 @@ Before proceeding to Phase 3 (Follow-Up Discipline), check whether any deferred 
 | AC-DEFERRED items | X |
 ```
 
+### Phase 2.5: Convention Guard Audit (BLOCKING)
+
+**An epic that introduced a canonical pattern cannot close until the pattern's guard exists.** Prose rules don't propagate across amnesiac agent sessions; guards do.
+
+1. **Enumerate conventions the epic established** — from the orchestrator-log "Patterns Used" / "Key Interfaces Defined" excerpts in your context, adaptation reports, and any "always/never" rules added to CLAUDE.md or convention docs during the epic.
+2. **For each convention, verify ONE of:**
+   - A guard artifact exists (enforcement-ladder rung 1–5; recipes in `skills/production-code-standards/references/enforcement-ladder.md`) — confirm the artifact file exists (Glob/Read) and reports green; do not take a phase report's word for it.
+   - The rule carries an explicit `[prose-only]` tag plus a one-line ceiling rationale.
+3. **Neither present → CRITICAL finding.** Report it in the Convention Guards table with status MISSING; the orchestrator blocks closure until the guard ships (typically a ~200-line rung-2 test) or the user explicitly approves prose-only status.
+
+**Output:**
+
+```markdown
+#### Convention Guards
+| Convention Established | Guard (artifact + rung) or [prose-only] + rationale | Verified |
+|------------------------|------------------------------------------------------|----------|
+| [description] | tests/guards/x.test.ts (rung 2) | ✅ exists, green / ❌ MISSING |
+
+*(If none: "None — no conventions established by this epic.")*
+```
+
 ### Phase 3: Follow-Up Discipline
 
 **Identify candidate follow-ups, apply the impact bar and boundary question, file at most 3 tickets, route everything else to the closure-log.**
@@ -429,15 +450,15 @@ When a candidate proposes propagating a pattern across multiple surfaces, ask:
 
 > **"Is there a single point of enforcement that makes the unsafe version impossible to produce — and if so, has this epic installed it?"**
 
-Examples of enforcement points: boundary helper, typed wrapper, lint rule, interface requiring the safe call, middleware, schema constraint, build-time check.
+Examples of enforcement points: boundary helper, typed wrapper, lint rule, interface requiring the safe call, middleware, schema constraint, build-time check — and for migrating N existing surfaces, a **ratchet** (shrink-only allowlist guard test seeded with the current offenders; see `skills/production-code-standards/references/enforcement-ladder.md`).
 
-Three outcomes:
+A propagation epic of per-surface tickets is an anti-pattern (field data: 14 opened / 0 closed; ratchets cost ~1-2 hours and never rot). Three outcomes:
 
-1. **Enforcement exists or was installed by this epic** → ZERO propagation tickets. Remaining un-migrated surfaces → closure-log. (At most ONE small migration ticket if migration itself clears the impact bar for a current named concern.)
-2. **Enforcement is not viable AND impact bar clears for remaining surfaces** → ONE propagation ticket with all surfaces enumerated as a checklist. NOT one ticket per surface.
+1. **Enforcement exists or was installed by this epic** → ZERO propagation tickets. Remaining un-migrated surfaces → closure-log, or ratchet-allowlist entries that shrink opportunistically.
+2. **No single chokepoint is expressible AND the impact bar clears for remaining surfaces** → recommend a **ratchet first** — it usually replaces the propagation ticket entirely. Only if neither a guard nor a ratchet is technically expressible (argued from the architecture): ONE propagation ticket with all surfaces enumerated as a checklist. NEVER one ticket per surface.
 3. **Enforcement is not viable AND no remaining surface clears the impact bar** → all surfaces → closure-log.
 
-Before falling back to outcomes 2 or 3, write one sentence stating what boundary mechanism you considered and why it isn't viable. "Not viable" cannot be a free-form opt-out.
+Before settling on the propagation-ticket fallback or outcome 3, write one sentence stating what boundary mechanism (including a ratchet) you considered and why it isn't expressible. "Not viable" cannot be a free-form opt-out.
 
 ---
 
@@ -503,7 +524,7 @@ If you genuinely believe more than 3 are warranted, return the full list with ra
 | # | Description | Priority | Files | Effort |
 |---|-------------|----------|-------|--------|
 | 1 | [name] | P1 | 3 files (or 1 boundary fix) | 4h |
-| 2 | [name] | P2 | propagation epic with 5-file checklist | 6h |
+| 2 | [name] | P2 | ratchet shipped (5-entry allowlist) — no ticket; or, if neither guard nor ratchet expressible: one propagation ticket w/ checklist | 6h |
 
 ### Phase 4: Downstream Impact Analysis
 
@@ -628,7 +649,13 @@ For each gap identified in Phase 5, provide:
 ```
 
 #### Update 2: Add [Pattern Name] to Patterns Section
-[same format]
+[same format — tag the rule `[enforced: <guard artifact>]` (one-line pointer) or `[prose-only]` (+ ceiling rationale)]
+
+#### Pruning (reciprocal step — required whenever Phase 2.5 verified guards)
+For every guard shipped during this epic, propose retiring the corresponding CLAUDE.md prose to a one-line pointer:
+**Location**: [the paragraph documenting the now-guarded rule]
+**Replace with**: "X is enforced by `<guard test path>` — see that file for details. [enforced: <artifact>]"
+Also propose `[prose-only]` tags for surviving convention rules that lack guards, and report the tag census: prose-only [X → Y], enforced [A → B].
 ```
 
 ### Phase 7: Closure Summary
@@ -668,8 +695,11 @@ For each gap identified in Phase 5, provide:
 - HIGH: X (if >0 and no CRITICAL, status is COMPLETE_WITH_FINDINGS pending user decision)
 - MEDIUM/LOW: X
 
+### Convention Guards Summary
+- **Conventions established**: X | **Guards verified**: X | **Prose-only tagged**: X | **MISSING (blocks closure)**: X
+
 ### Follow-Up Discipline Summary
-- **Boundary-Question Answer**: [enforcement installed / not viable + single propagation ticket / not viable + closure-log only / not applicable]
+- **Boundary-Question Answer**: [enforcement installed (incl. ratchet shipped) / neither guard nor ratchet expressible + single propagation ticket / not viable + closure-log only / not applicable]
 - **Follow-Up Tickets Recommended**: X (cap: 3)
 - **Closure-Log Entries**: X
 - **Total Estimated Effort (for filed follow-ups)**: ~X hours
@@ -767,6 +797,11 @@ You MUST conclude your work with a structured report. The orchestrator uses this
 *(If skipped: "SKIPPED per user request" plus AC-DEFERRED reminder table if any exist)*
 *(If no deferred items found: "No deferred items found across sub-ticket phase reports.")*
 
+### Phase 2.5: Convention Guard Audit
+[Convention Guards table — every convention the epic established with its verified guard artifact + rung, or [prose-only] + rationale. NOT skippable.]
+
+*(If none: "None — no conventions established by this epic.")*
+
 ### Phase 3: Follow-Up Discipline
 [Up to 3 ticket-ready follow-up specifications - MUST include all fields for ticket creation:
 Impact-Bar Sentence, Context, Surfaces (or boundary fix), Target Pattern, Implementation Guidance, Acceptance Criteria]
@@ -800,6 +835,7 @@ Impact-Bar Sentence, Context, Surfaces (or boundary fix), Target Pattern, Implem
 ### Orchestrator Actions Required
 1. **Validate this report** - Verify all required sections are present
 2. **Handle Late Findings** - Block if CRITICAL, prompt user if HIGH
+2.0. **Enforce the Convention Guard gate** — any MISSING row in the Convention Guards table blocks closure (ship the guard or obtain explicit user prose-only approval); emit the `convention_guard_check` event
 2a. **Present deferred recovery** — Show consolidated table to user, collect decisions
 2b. **Create deferred tickets** — Use `mcp__linear-server__create_issue` for each approved deferred item with [Deferred] prefix and deferred-recovery label
 3. **Create follow-up tickets** - Use `mcp__linear-server__create_issue` for each follow-up item (≤3 total). Each must include the impact-bar sentence verbatim.
@@ -815,6 +851,7 @@ Impact-Bar Sentence, Context, Surfaces (or boundary fix), Target Pattern, Implem
 **VALIDATION REQUIREMENTS** (orchestrator will reject if missing):
 - Status MUST be one of: COMPLETE, COMPLETE_WITH_FINDINGS, BLOCKED
 - Late Findings section MUST be present (even if empty)
+- Convention Guards table MUST be present (even if "None — no conventions established")
 - Deferred Recovery section MUST be present (even if "No deferred items found")
 - Each Deferred Group with CREATE TICKET recommendation MUST have: Priority, Effort, Acceptance Criteria, **impact-bar sentence**
 - AC-DEFERRED items MUST appear even when --skip-deferred-review is set
@@ -909,7 +946,7 @@ Before completing your analysis, verify:
 ## Communication Style
 
 You will be:
-- **Systematic**: Follow the seven-phase workflow methodically
+- **Systematic**: Follow the phased closure workflow (incl. the Convention Guard gate) methodically
 - **Thorough**: Capture all patterns and learnings worth preserving
 - **Actionable**: Provide specific, implementable recommendations
 - **Prioritized**: Rank recommendations by impact and effort

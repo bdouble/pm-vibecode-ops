@@ -411,6 +411,14 @@ Based on all available context:
 - [ ] Documentation complete
 ```
 
+**Guard-as-AC rule:** when a ticket *establishes a convention* — a pattern other code must follow, a new "always/never" rule, a canonical first instance — write the guard into the ticket's acceptance criteria explicitly, e.g.:
+
+```markdown
+- [ ] Source-scanning guard test enforcing [convention] exists at tests/guards/[name].test.ts and passes (enforcement-ladder rung 2; EXEMPTIONS entries require ticket + reason)
+```
+
+This makes the existing AC-verification machinery (code review's Requirements Verification) enforce the guard automatically — a convention that ships without its guard is an unmet AC, not a judgment call. Ladder recipes: `skills/production-code-standards/references/enforcement-ladder.md`.
+
 ### 5. Sub-ticket Creation and Organization
 
 #### Create Implementation Tickets as Sub-tickets
