@@ -39,7 +39,7 @@ The evidence base: a hostile two-layer audit of the largest pm-vibecode-ops depl
 ### Notes
 
 - The `.swarm/entropy/` scorecard is per-machine (`.swarm/` is gitignored); the Linear comment embeds the full scorecard JSON as the durable cross-machine trend record.
-- Repo-root `AGENTS.md` and `codex/AGENTS.md` are matched by a pre-existing `.gitignore` rule (the agents.md standard treats them as local config); both were updated on disk but are not tracked.
+- Repo-root `AGENTS.md` and `codex/AGENTS.md` were previously matched by a bare `AGENTS.md` `.gitignore` rule and never tracked; v5.0 removes the rule and commits both (current content, 11 agents).
 
 ## [4.8.0] - 2026-06-06
 
