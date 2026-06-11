@@ -40,9 +40,9 @@ Fix strategies:
 
 It is unacceptable to remove, skip, or edit a failing test just to make it pass — a skipped test trains everyone to ignore failing tests.
 
-### Gate 1: API Discovery (Before New Tests)
+### Gate 1: Ground in the Real API (Before New Tests)
 
-**NEVER assume. ALWAYS verify:**
+**NEVER assume. ALWAYS read the implementation you're testing before mocking or asserting against it. Test against actual method names, enums, and signatures:**
 
 ```bash
 # Read actual implementation

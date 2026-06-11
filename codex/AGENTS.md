@@ -90,7 +90,7 @@ In Codex, **you are the orchestrator**:
 | [technical-writer-agent](#technical-writer-agent) | Documentation Specialist | API docs, user guides |
 | [security-engineer-agent](#security-engineer-agent) | Security Specialist | OWASP assessment, security review |
 | [design-reviewer-agent](#design-reviewer-agent) | UI/UX Design Validator | Design review, accessibility |
-| [epic-closure-agent](#epic-closure-agent) | Epic Completion Analyst | Retrofit analysis, convention guard audit, lessons learned |
+| [epic-closure-agent](#epic-closure-agent) | Epic Completion Analyst | Follow-up discipline, convention guard audit, lessons learned |
 | [ticket-context-agent](#ticket-context-agent) | Context Gathering Support | Parallel context for large epics |
 | [entropy-auditor-agent](#entropy-auditor-agent) | Cross-Epic Entropy Auditor | Recurring consolidation audit, pragmatism-filtered findings |
 
@@ -365,7 +365,7 @@ Review UI implementation for:
 
 **When to Use**:
 - Epic completion validation
-- Retrofit analysis and lessons learned
+- Follow-up discipline (impact bar + boundary question + ≤3 cap) and lessons learned
 - Convention guard audit (blocks closure if a convention lacks its guard or [prose-only] tag)
 - Cross-cutting follow-ups (ratchet first — never per-surface propagation tickets)
 - Downstream impact assessment

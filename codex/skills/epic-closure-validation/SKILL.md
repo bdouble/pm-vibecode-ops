@@ -78,25 +78,33 @@ An epic that introduced a canonical pattern cannot close until the pattern's gua
 
 Record the audit in the closure comment as a `### Convention Guards` table: Convention | Guard artifact + rung (or `[prose-only]` + rationale) | Verified.
 
-## Retrofit Analysis
+## Follow-Up Discipline
 
-When closure IS valid, include:
+When closure IS valid, capture lessons and disciplined follow-ups:
 
 1. **What worked well** - Patterns to replicate
 2. **What could improve** - Process adjustments
 3. **Downstream impacts** - Other epics/systems affected
-4. **Follow-up tickets** - New work identified during epic
+4. **Follow-up candidates** - New work identified during the epic — most land in the closure-log, not as tickets
 
-## Creating Retrofit Tickets
+Default disposition for any candidate is the **Considered-but-not-pursued closure-log**, NOT a ticket. This replaces the prior "one retrofit ticket per finding" behavior, which produced backlog sprawl.
 
-Each significant finding from retrofit analysis becomes a ticket:
+## Filing Follow-Up Tickets (≤3, each clears the impact bar)
+
+Each filed follow-up MUST clear the impact bar — complete this sentence with concrete content:
+
+> "Without this, **[specific production behavior / user experience / cost / security control]** changes for **[identified code path / user-operator segment]**."
+
+Generic "for" content ("users", "the codebase", "maintainability", "consistency") fails the bar → the item moves to the closure-log.
+
+**Absolute cap: ≤3 filed follow-ups per closure.** More than 3 surviving candidates means the impact bar or boundary question was not applied properly — re-apply it or surface to the user. A filed follow-up looks like:
 
 ```markdown
-## Retrofit: [Finding Title]
+## [Follow-up]: [Finding Title]
 
+**Impact-bar sentence**: [the completed sentence above]
 **Context**: [Which epic, what was learned]
 **Recommendation**: [Specific action to take]
-**Impact**: [What improves if addressed]
 **Effort**: [T-shirt size estimate]
 **Priority**: [Suggested priority]
 ```
@@ -119,7 +127,7 @@ Before falling back to a propagation ticket, write one sentence stating what bou
 Include this skill's content in your Codex prompt when:
 - About to close an epic
 - Reviewing epic status for completion
-- Performing retrofit analysis
+- Performing follow-up discipline analysis
 - Creating follow-up work from completed epics
 
 Copy the blocking conditions checklist to ensure no incomplete epics are closed prematurely.
