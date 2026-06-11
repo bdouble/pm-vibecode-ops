@@ -35,6 +35,10 @@ Before closure, search for workarounds in completed tickets:
 - Check Deferred Items tables for AC-DEFERRED classifications
 - Verify no tickets were closed with known production workarounds
 
+### Convention Guard Audit
+
+For every convention/canonical pattern the epic established, verify a guard artifact exists (enforcement-ladder rungs 1–5) or the rule carries an explicit `[prose-only]` tag with rationale. Neither → CRITICAL, blocks closure until the guard ships (typically a ~200-line rung-2 test) or the user explicitly approves prose-only status.
+
 ### Follow-Up Discipline
 
 When patterns introduced in this epic could (or have been) violated on existing surfaces, apply this decision in order:
@@ -42,8 +46,8 @@ When patterns introduced in this epic could (or have been) violated on existing 
 1. **Impact bar.** For each candidate, write the impact-bar sentence: "Without this, [specific behavior/property] changes for [identified code path/segment/property]." Generic content ("users", "developers", "maintainability") fails the bar → closure-log only.
 2. **Boundary question** (for cross-cutting candidates). "Is there a single point of enforcement that makes the unsafe version impossible to produce, and has this epic installed it?"
    - Enforcement installed → zero propagation tickets; closure-log only
-   - Not viable + bar clears → ONE propagation ticket with surfaces as checklist (not one per surface)
+   - No chokepoint expressible + bar clears → install a **ratchet** (shrink-only allowlist guard test) — it replaces the propagation ticket entirely. Only if neither a guard nor a ratchet is expressible: ONE propagation ticket with surfaces as checklist (never one per surface)
    - Not viable + bar fails → all surfaces → closure-log
 3. **Absolute cap of 3 filed follow-ups per closure.** Excess candidates → closure-log. 4+ filed → block closure, surface to user.
 
-This replaces prior "Retrofit Analysis Triggers." Under the new discipline, most candidates land in the Considered-but-not-pursued closure-log; filing a ticket is a residual outcome, not a default.
+This replaces prior "Retrofit Analysis Triggers." Under the new discipline, most candidates land in the Considered-but-not-pursued closure-log or become ratchet allowlist entries; filing a ticket is a residual outcome, not a default. (Field data behind the ratchet preference: per-surface propagation tickets went 14 opened / 0 closed; ratchets cost ~1-2 hours and never rot.)

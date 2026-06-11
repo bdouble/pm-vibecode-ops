@@ -5,7 +5,9 @@ description: Use when about to write `class NewService`, `export function`, new 
 
 # Service Reuse Enforcement
 
-Before creating ANYTHING new, check existing inventory first.
+Before creating anything new, consult the inventory — it tells you where things live in this codebase.
+
+Duplication is the one AI-era code-quality failure that never faded: longitudinal data across 211M changed lines shows duplicated blocks up 8x and copy/paste exceeding refactoring for the first time (GitClear 2025; see `docs/MODEL_CALIBRATION.md`). The inventory check is cheap; a parallel implementation is expensive forever.
 
 <!-- @protected reason="foundational principle from v4.5; SkillOpt §3.6 protects slow-state content from automated rewrites — removing the analog cost SpreadsheetBench 22pts" -->
 **Violating the letter of this skill is violating the spirit of this skill.** Searching with one keyword and concluding "nothing exists", creating a parallel utility with slightly different naming, or "extending the inventory after the fact" instead of before — all violate the spirit. The default is reuse; new code is the exception. Spirit over letter, always.

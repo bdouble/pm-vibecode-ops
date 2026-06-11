@@ -88,7 +88,7 @@ Before posting, validate the report contains these fields. If ANY required field
 | Implementation | Status, Summary, Files Changed, Quality Gates (lint/typecheck/test results) |
 | Testing | Status, Gate #0 result, Gate #1 result, Gate #2 result, Gate #3 result |
 | Documentation | Status, Summary, Documentation Updated or Docs Created |
-| Code Review | Review Status, Requirements Checklist, Files Reviewed |
+| Code Review | Review Status, Requirements Checklist, Files Reviewed, Convention Guard Verification |
 | Codex Review | Summary with finding counts by priority, Auto-Fixed Items section, User-Reviewed Items section, Declined by Codex section |
 | Security Scan | Status, Security Checklist or OWASP assessment |
 | Security Review | Status, Security Checklist, OWASP assessment, Remediation Summary |
