@@ -478,20 +478,20 @@ IF still missing after retry:
 5. **Update related epics** (if downstream analysis was performed):
    - Use `mcp__linear-server__save_comment` to add guidance to dependent epics
 
-6. **Close the epic**:
+6. **Apply CLAUDE.md updates (Phase 6 prose pruning)** - Use Edit tool to update project CLAUDE.md — both additions AND the Phase 6 prose retirements (guarded rules → one-line `[enforced:]` pointers; surviving rules tagged `[prose-only]`). This step **produces** the discipline-debt tag census (`prose_only_count` / `enforced_count`) that Step 7 emits, so it MUST run before the `epic_completed` event is written — otherwise the counts reflect a census that hasn't happened yet.
+
+7. **Close the epic**:
    - Use `mcp__linear-server__update_issue` to mark epic as "Done"
    - Add appropriate labels (e.g., "epic-completed", "followups-complete")
    - **Emit `epic_completed` JSONL event** (v4.7 universal — historically only emitted for PRO-1142):
      ```json
      {"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":null,"event":"epic_completed","data":{"subticket_count":<n>,"followups_filed":<n>,"closure_log_items":<n>,"boundary_question_invocations":<n>,"epic_wall_clock_seconds":<n>,"prose_only_count":<n|null>,"enforced_count":<n|null>}}
      ```
-     The `prose_only_count` / `enforced_count` fields carry the Phase 6 tag census (the discipline-debt metric); `null` if the target repo has no tagged rules yet.
+     The `prose_only_count` / `enforced_count` fields carry the **final post-pruning** tag census from Step 6 (the discipline-debt metric); `null` if the target repo has no tagged rules yet.
      Append to `.swarm/observability/<epic-id>/_epic.jsonl` (epic-level stream, distinct from per-ticket streams). Canonical schema: `commands/references/observability-schema.md`. If the candidate-count pre-cap exceeded 3 anywhere during follow-up discipline, ALSO emit `followup_cap_blocked`:
      ```json
      {"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":null,"event":"followup_cap_blocked","data":{"candidate_count_pre_cap":<n>,"candidate_count_post_cap":<n>,"escalated_to_user":<bool>}}
      ```
-
-7. **Apply CLAUDE.md updates** - Use Edit tool to update project CLAUDE.md — both additions AND the Phase 6 prose retirements (guarded rules → one-line `[enforced:]` pointers; surviving rules tagged `[prose-only]`)
 
 8. **Verify success** - Confirm the comment was added, the Convention Guards table is present (Phase 2.5 verified or explicitly "None"), follow-up tickets created (≤3), closure-log present, deferred recovery tickets created, and epic is closed
 
@@ -670,14 +670,14 @@ These were approved scope cuts. Consider reviewing in a future cycle.
 2. **For each convention, verify ONE of:**
    - A guard artifact exists (enforcement-ladder rung 1–5: type chokepoint, source-scanning guard test, drift test, ratchet, runtime assert) — confirm the artifact file exists and its test passes; do not take a phase report's word for it.
    - The rule carries an explicit `[prose-only]` tag plus a one-line rationale for why no guard can express it.
-3. **Neither present → CRITICAL finding, closure BLOCKED.** Resolution paths: ship the guard now (typically a ~200-line rung-2 test, 1–2 hours — recipes in `skills/production-code-standards/references/enforcement-ladder.md`), or surface to the user for explicit prose-only approval.
+3. **Neither present → CRITICAL finding, closure BLOCKED.** Resolution paths: ship the guard now (typically a ~200-line rung-2 test, 1–2 hours — recipes in `skills/production-code-standards/references/enforcement-ladder.md`), or surface to the user for explicit prose-only approval. **Ratchet exception:** if the convention is a partially-migrated cross-cutting pattern whose natural guard is a **ratchet** (rung 4, shrink-only allowlist), install the ratchet here rather than blocking — it is the same artifact Phase 3's boundary question would otherwise file as a propagation ticket, so installing it at this gate satisfies both phases (Phase 3 then merely records `decision: "single-enforcement-point"`). This gate is for conventions left with NO enforcement, not for deferring ratchet installation to a later phase.
 
 **Agent output:** the `### Convention Guards` table (Convention | Guard artifact + rung, or `[prose-only]` + rationale | Verified), or "None — no conventions established by this epic."
 
 **Orchestrator emission** — one `convention_guard_check` event summarizing the audit, appended to `.swarm/observability/<epic-id>/_epic.jsonl`:
 
 ```json
-{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":"close-epic","event":"convention_guard_check","data":{"conventions_introduced":["..."],"guards_shipped":["..."],"prose_only_tagged":["..."],"missing":[]}}
+{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":null,"event":"convention_guard_check","data":{"conventions_introduced":["..."],"guards_shipped":["..."],"prose_only_tagged":["..."],"missing":[]}}
 ```
 
 A non-empty `missing` array means closure is blocked until resolved.
@@ -700,7 +700,7 @@ Generic "for" content ("users", "developers", "the codebase", "maintainability",
 - No chokepoint expressible + bar clears → install a **ratchet** (shrink-only allowlist guard test) — it replaces the propagation ticket entirely. Only if neither guard nor ratchet is expressible: ONE propagation ticket with surfaces as checklist (NEVER one per surface)
 - Enforcement not viable + bar fails → all surfaces → closure-log
 
-The agent writes one sentence stating what boundary mechanism (including a ratchet) was considered and why it isn't expressible, argued from the architecture. A shipped ratchet maps to `outcome: "single-enforcement-installed"` in the `boundary_question_answered` event.
+The agent writes one sentence stating what boundary mechanism (including a ratchet) was considered and why it isn't expressible, argued from the architecture. A shipped ratchet maps to `decision: "single-enforcement-point"` in the `boundary_question_answered` event (canonical field names: `commands/references/observability-schema.md`).
 
 **Rule C — Absolute cap of 3 filed follow-ups per epic closure.** If the agent's recommendations exceed 3 after Rules A and B, the bar or boundary question was not properly applied. Re-dispatch the agent to trim or move items to closure-log.
 
@@ -714,13 +714,13 @@ The agent writes one sentence stating what boundary mechanism (including a ratch
 For **every candidate that fails the impact bar** (moved to closure-log instead of filed as a ticket), emit one `impact_bar_rejected` event:
 
 ```json
-{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":"close-epic","event":"impact_bar_rejected","data":{"candidate_title":"<title>","reason":"<one-line — generic-for, no-prod-behavior-change, etc.>","disposition":"closure-log"}}
+{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":null,"event":"impact_bar_rejected","data":{"candidate_summary":"<title>","why_below_bar":"<one-line — generic-for, no-prod-behavior-change, etc.>"}}
 ```
 
 For **every boundary-question answer** (Rule B was invoked because the candidate was a cross-cutting pattern), emit one `boundary_question_answered` event:
 
 ```json
-{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":"close-epic","event":"boundary_question_answered","data":{"candidate_title":"<title>","outcome":"single-enforcement-installed | propagation-ticket-filed | propagation-bar-failed","mechanism":"<one-line — what enforcement was considered>"}}
+{"ts":"<iso8601>","epic_id":"<epic-id>","ticket_id":null,"phase":null,"event":"boundary_question_answered","data":{"concern":"<title>","decision":"single-enforcement-point | per-surface-tickets | bar-failed-closure-log","mechanism":"<one-line — what enforcement was considered>","outcome_tickets_filed":<n>}}
 ```
 
 Both events feed the `IMPACT BAR & CLOSURE-LOG` dashboard section in `/swarm-stats`. Without them the v4.6 anti-sprawl discipline is invisible to operators — the metric structurally cannot exist.

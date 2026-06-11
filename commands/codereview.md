@@ -450,9 +450,13 @@ If security issues are noticed during review:
   - **Fix**: Document why existing solutions couldn't be used
 
 ### 🛡️ Convention Guard Verification
+*One block per convention this change establishes (or a single "None" line). List every convention separately — the orchestrator derives the per-convention `conventions_introduced` / `guards_shipped` / `prose_only_tagged` / `missing` arrays for the `convention_guard_check` event from these blocks, so a change that establishes two conventions where one is guarded and one is MISSING must show BOTH (a single status line cannot represent a per-convention split).*
 - **Convention introduced**: [convention description, or "None — no conventions established by this change"]
   - **Guard**: [artifact path + rung, e.g. `tests/guards/x.test.ts` (rung 2)] or **[prose-only]**: [one-line ceiling rationale]
   - **Status**: [GUARD_SHIPPED / PROSE_ONLY_TAGGED / MISSING → CHANGES_REQUESTED]
+- **Convention introduced**: [next convention, if any — repeat the block per convention]
+  - **Guard**: …
+  - **Status**: …
 
 ### 🔒 Security Concerns (Logged for Security Review)
 - **Concern**: [Security issue noticed]
@@ -912,8 +916,11 @@ After completing the code review, add the following structured comment to the Li
 - [List of specific fixes made with commit references]
 
 ### 🛡️ Convention Guard Verification
+*One bullet pair per convention this change establishes (or a single "None"). Any MISSING convention must also appear as a CHANGES_REQUESTED blocking finding.*
 - **Convention introduced**: [description, or "None"]
 - **Guard**: [artifact + rung] / **[prose-only]**: [rationale] / **MISSING** (blocks approval)
+- **Convention introduced**: [next convention, if any — repeat per convention]
+- **Guard**: …
 
 ### 🔒 Security Concerns (Logged Only)
 - **Security Issues Noticed**: Y concerns

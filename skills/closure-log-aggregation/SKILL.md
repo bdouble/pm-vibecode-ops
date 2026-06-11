@@ -66,7 +66,7 @@ Skipping this skill at step 2 means the epic ships without an audit trail of wha
 
 ## Observability Emission
 
-After aggregation completes, the orchestrator emits one `epic_completed` event to `.swarm/observability/<epic-id>/_epic.jsonl` with `data.closure_log_items` set to the count (the canonical field name per `commands/references/observability-schema.md` and the writer at `commands/close-epic.md` Step 6). If the candidate follow-up count exceeded 3, ALSO emit `followup_cap_blocked`. Both are documented in `commands/references/observability-schema.md` — read it for the canonical envelope.
+After aggregation completes, the orchestrator emits one `epic_completed` event to `.swarm/observability/<epic-id>/_epic.jsonl` with `data.closure_log_items` set to the count (the canonical field name per `commands/references/observability-schema.md` and the writer at `commands/close-epic.md` Step 7). If the candidate follow-up count exceeded 3, ALSO emit `followup_cap_blocked`. Both are documented in `commands/references/observability-schema.md` — read it for the canonical envelope.
 
 ## Rationalization Prevention
 

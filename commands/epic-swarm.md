@@ -255,7 +255,7 @@ Some tickets may be in "In Progress" in Linear despite having completed all 7 ph
    a. Fetch the ticket's Linear comments (`mcp__linear-server__list_comments`)
    b. Verify all 7 required report headers exist (same check as hard checkpoint §3.3)
    c. Verify the security scan report contains `Status: PASS`
-   d. If all reports present + security PASS → mark Done: `mcp__linear-server__save_issue(id=ticket-id, state="Done")`
+   d. If all reports present + security PASS → mark Done: `mcp__linear-server__update_issue(id=ticket-id, state="Done")`
    e. Log: "Auto-closed [ticket-id] from prior session (all 7 reports verified)"
 2. If any report is missing or security didn't PASS, leave the ticket as-is and log a warning.
 3. Do NOT use `AskUserQuestion` for this — the hard checkpoint verification is sufficient.
@@ -1352,7 +1352,7 @@ After §3.2.4 reclassification, every `AC-DEFERRED` entry must carry a valid `##
      - `Catastrophic condition:` with a value of `1`, `2`, `3`, or `4`
      - `Evidence:` with a concrete external fact (not "complex", "tricky", "would take time", "is hard", "needs more thought")
      - `Confidence the catastrophic condition applies:` with `HIGH`, `MEDIUM`, or `LOW`
-     - `Specific blocker that prevents doing the work in this session:` with a factual description (not effort/time language)
+     - `Specific blocker preventing the work this session:` with a factual description (not effort/time language)
    - **If the block is MISSING, malformed, or cites a condition outside 1-4** → `DEFERRAL_INVALID` → re-dispatch (see below).
    - **If the block cites condition #4 (user authorization needed) but the Deferred Item fuzzy-matches an AC** → `DEFERRAL_OVERRIDDEN` → re-dispatch with "this is in scope per AC X" supplemental.
 

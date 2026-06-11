@@ -208,13 +208,19 @@ Emitted when a cross-cutting concern surfaces and the boundary question is answe
   "event": "boundary_question_answered",
   "data": {
     "concern": "CSRF protection across form routes",
-    "decision": "single-enforcement-point | per-surface-tickets",
+    "decision": "single-enforcement-point | per-surface-tickets | bar-failed-closure-log",
+    "mechanism": "Zod schema enforced at the mutation chokepoint",
     "outcome_tickets_filed": 0
   }
 }
 ```
 
-**v5.0 note:** a shipped **ratchet** (shrink-only allowlist guard test — see `skills/production-code-standards/references/enforcement-ladder.md`) IS a single enforcement point; emit `decision: "single-enforcement-point"` for it. No enum change — existing aggregations stay valid.
+- `concern` — the cross-cutting pattern / candidate under the boundary question.
+- `decision` — `single-enforcement-point` (a guard or ratchet was installed), `per-surface-tickets` (one propagation ticket filed), or `bar-failed-closure-log` (impact bar failed → all surfaces to the closure-log).
+- `mechanism` — one line on the enforcement that was considered (the chokepoint, ratchet, or why none is expressible).
+- `outcome_tickets_filed` — count of propagation tickets actually filed (0 for `single-enforcement-point` and `bar-failed-closure-log`).
+
+**v5.0 note:** a shipped **ratchet** (shrink-only allowlist guard test — see `skills/production-code-standards/references/enforcement-ladder.md`) IS a single enforcement point; emit `decision: "single-enforcement-point"` for it. The `mechanism` field and the `bar-failed-closure-log` value were added in v5.0; count-only aggregations (e.g. `/swarm-stats`) are unaffected.
 
 #### `followup_cap_blocked` *(NEW v4.7)*
 
@@ -405,13 +411,13 @@ Emitted by `/close-epic` after all sub-tickets are Done/Cancelled and the closur
 | `deferral_accepted` | Step 3.6 / Step 3.9 user-decision branches | §3.6 / §3.9 same | — | per-ticket |
 | `impact_bar_rejected` | — | — | Phase 3 — one event per candidate moved to closure-log (see `commands/close-epic.md` Phase 3 emission block) | epic-level (`_epic.jsonl`) |
 | `boundary_question_answered` | — | — | Phase 3 — one event per cross-cutting candidate's Rule B answer (see `commands/close-epic.md` Phase 3 emission block) | epic-level (`_epic.jsonl`) |
-| `followup_cap_blocked` | — | — | Step 6 when candidate count > 3 pre-cap | epic-level (`_epic.jsonl`) |
+| `followup_cap_blocked` | — | — | Step 7 when candidate count > 3 pre-cap | epic-level (`_epic.jsonl`) |
 | `codex_finding_resolved` | Step 3.8 per finding | §3.8 per finding | — | per-ticket |
 | `codex_scope_escape` | Step 3.8 SCOPE_EXPANSION_ESCAPE branch | §3.8 same | — | per-ticket |
 | `convention_guard_check` | Step 3 loop, after codereview report parsed | §3.2 same | Phase 2.5 Convention Guard Audit (`ticket_id: null`) | per-ticket; epic-level for `/close-epic` |
 | `ticket_completed` | Step 4 after Linear set to Done | §3.5.6 after Linear set to Done | — | per-ticket |
 | `ticket_failed` | Step 4 on any halt | §3.2.7 / §3.3 fail / §3.5 conflict | — | per-ticket |
-| `epic_completed` | — | — | Step 6 after closure comment lands | epic-level (`_epic.jsonl`) |
+| `epic_completed` | — | — | Step 7 after CLAUDE.md prose pruning + closure comment land | epic-level (`_epic.jsonl`) |
 | `entropy_scorecard_recorded` | — (emitted by `/entropy-audit`) | — | — | repo-level (`_audit.jsonl`) |
 
 ---

@@ -1412,7 +1412,7 @@ For every `AC-DEFERRED` entry (whether classified by the agent or reclassified b
    - `Catastrophic condition:` value is `1`, `2`, `3`, or `4`
    - `Evidence:` contains a concrete external fact (not "complex," "tricky," "would take time," any time/effort language)
    - `Confidence the catastrophic condition applies:` is `HIGH`, `MEDIUM`, or `LOW`
-   - `Specific blocker that prevents doing the work in this session:` contains a factual description
+   - `Specific blocker preventing the work this session:` contains a factual description
 3. **If MISSING/MALFORMED/CONDITION-OUT-OF-RANGE** → `DEFERRAL_INVALID` → re-dispatch (Pass 3)
 4. **If condition #4 cited but the deferred item fuzzy-matches an AC** → `DEFERRAL_OVERRIDDEN` → re-dispatch (Pass 3)
 
