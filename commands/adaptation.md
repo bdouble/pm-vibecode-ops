@@ -232,6 +232,19 @@ Before making ANY recommendations:
 2. Do not speculate about code you have not inspected
 3. Search for existing implementations before suggesting new ones
 4. Understand existing patterns before recommending approaches
+5. **Verify, don't recall**: claims in the ticket, discovery report, or CLAUDE.md about existing patterns/services/migrations are hypotheses — verify them against HEAD before building the guide on them. A claim that fails verification is a finding to report (and the stale memory gets corrected as part of this ticket). See the `model-aware-behavior` skill.
+
+## Vendor-Surface Discipline
+
+Adding a vendor/SaaS dependency (npm package wrapping an external service, a new API integration, an observability vendor) requires the same justification rigor as deferring an acceptance criterion. Every external service is a behavioral coupling that will eventually change underneath the project — field data: one deployment was bitten by five separate vendor behavior changes and carried five package patches for one upstream bug.
+
+Before the guide mandates a new vendor dependency:
+1. **Name the concrete problem it solves** — not "industry standard."
+2. **Search the service inventory first** — an existing integration or internal solution wins by default.
+3. **Name the coupling cost** — what breaks when the vendor changes behavior, and how it would be detected.
+4. **Observability vendors get extra scrutiny** — each one fragments the debugging story (the 3am incident path should not require four systems).
+
+If the justification can't be written, the guide recommends the existing/internal path. Record rejected vendor candidates in the report's closure-log.
 
 ## Adaptation Workflow
 
@@ -305,6 +318,7 @@ The adaptation process documents the following IN THE LINEAR COMMENT:
 - **Test Requirements**: Comprehensive test cases and coverage targets following existing test patterns
 - **Implementation Steps**: Sequential development approach with mandatory reuse checkpoints
 - **Anti-Duplication Checklist**: Explicit list of what NOT to create because it already exists
+- **Convention Guards**: If this ticket establishes a convention (a pattern other code must follow, an "always/never" rule), the guide names the guard to ship with it — rung + artifact (e.g., "rung-2 source-scanning test at `tests/guards/<name>.test.ts`"); see `skills/production-code-standards/references/enforcement-ladder.md`. The code review phase treats a mandated-but-missing guard as a SCOPE_GAP.
 
 ## Linear Project and Subticket Implementation
 

@@ -67,11 +67,11 @@ Your prompt will include:
 
 ---
 
-## Opus 4.7 Operating Constraints
+## Operating Constraints (Current Frontier Models)
 
-You are running on Opus 4.7. Its system card documents behaviors that will silently break this workflow unless you counter them.
+These counter-measures target failure modes still documented for current frontier models — fabricated completion claims, intent-without-action stalls, output verbosity. Re-validated each model generation; evidence in `docs/MODEL_CALIBRATION.md`.
 
-1. **"Declaring sufficiency" is not completion.** Per system card §6.2.2.2, the model is prone to saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. For planning phases: once you have enough context to make a decision, make it — do not continue exploring to confirm.
+1. **"Declaring sufficiency" is not completion.** A persistent frontier-model failure mode is saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. For planning phases: once you have enough context to make a decision, make it — do not continue exploring to confirm.
 
 2. **Decisions, not options.** For adaptation, the ticket needs a concrete plan, not a menu. If two approaches are both viable, pick one, note the alternative in Deferred Items with reasoning, and move on. The model's tendency to surface genuine ambiguities is useful for requirements gaps but harmful when it produces unnecessary option lists.
 
@@ -86,7 +86,7 @@ You are running on Opus 4.7. Its system card documents behaviors that will silen
 
 5. **Structured reports only, under 6,000 characters.** Your report is the ONLY thing the orchestrator sees; it is re-passed to every downstream phase, so every extra paragraph multiplies across the workflow. Use tables, not prose. Reference files by absolute path + line number; never paste file contents. Include tool-call counts in your Status block.
 
-6. **Counter the verbosity regression.** Per system card §2.2.5.1 and §4.4.2, 4.7 is markedly more verbose than prior models. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
+6. **Keep output lean.** Frontier models trend verbose, and every extra report paragraph multiplies across downstream phases. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
 
 ---
 
@@ -389,6 +389,12 @@ Every architectural analysis must produce structured output:
    - Assess technical debt and constraint areas
    - **Document event-driven patterns**: Identify where events should be used instead of direct coupling
 
+5. **Doc-Truth Verification (Memory vs HEAD)**
+   - Project memory (CLAUDE.md, READMEs, env docs, old tickets) decays — treat its load-bearing claims as hypotheses
+   - Verify a sample against HEAD (grep/read the actual code) and, where reachable, the live environment: pattern-coverage claims, "X is handled by Y", migration completeness, flag states
+   - Every discrepancy is a finding ("the memory is lying to every session") — report it with the correction; fixing the memory is part of the work
+   - If `[enforced:]` / `[prose-only]` status tags are present, count them and report the ratio (discipline-debt baseline)
+
 ### Phase 2: Requirements Decomposition with Reuse Analysis
 1. **Requirement Analysis**
    - Parse PRDs, technical specs, and design documents using `Read`
@@ -405,8 +411,14 @@ Every architectural analysis must produce structured output:
    - Break features into independently testable units
    - Size tickets for single-agent execution (2-4 hours max)
    - Define specific acceptance criteria INCLUDING reuse requirements
+   - **Guard-as-AC**: when a ticket establishes a convention (pattern others must follow, "always/never" rule), write its structural guard into the acceptance criteria (rung + artifact — see `skills/production-code-standards/references/enforcement-ladder.md`); for adaptation guides, name the guard in a Convention Guards section so code review treats its absence as a SCOPE_GAP
 
-3. **Dependency Management**
+3. **Vendor-Surface Discipline**
+   - A new vendor/SaaS dependency requires AC-deferral-grade justification: the concrete problem it solves, an inventory search showing no existing path, and the named coupling cost (every external service eventually changes behavior underneath the project)
+   - Observability vendors get extra scrutiny — each one fragments the debugging story
+   - Rejected vendor candidates go in the report's closure-log
+
+4. **Dependency Management**
    - Create dependency graphs between tickets
    - **Identify service reuse dependencies**: Which existing services each ticket needs
    - **Flag duplication risks**: Warn if tickets might recreate existing functionality

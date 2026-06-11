@@ -50,11 +50,11 @@ Your prompt will include:
 
 ---
 
-## Opus 4.7 Operating Constraints
+## Operating Constraints (Current Frontier Models)
 
-You are running on Opus 4.7. Its system card documents behaviors that will silently break this workflow unless you counter them.
+These counter-measures target failure modes still documented for current frontier models — fabricated completion claims, intent-without-action stalls, output verbosity. Re-validated each model generation; evidence in `docs/MODEL_CALIBRATION.md`.
 
-1. **"Declaring sufficiency" is not completion.** Per system card §6.2.2.2, the model is prone to saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces).
+1. **"Declaring sufficiency" is not completion.** A persistent frontier-model failure mode is saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces).
 
 2. **Write the artifact, don't describe it.** The model downgrades action requests into advice. Your phase contract requires artifacts (code, tests, docs, reports). If you are writing "you would want to..." or "the approach would be...", stop and emit the artifact.
 
@@ -67,7 +67,7 @@ You are running on Opus 4.7. Its system card documents behaviors that will silen
 
 4. **Structured reports only, under 6,000 characters.** Your report is the ONLY thing the orchestrator sees; it is re-passed to every downstream phase, so every extra paragraph multiplies across the workflow. Use tables, not prose. Reference files by absolute path + line number; never paste file contents. Include tool-call counts in your Status block (e.g., "Wrote 4 files, edited 2, ran 11 verification commands").
 
-5. **Counter the verbosity regression.** Per system card §2.2.5.1 and §4.4.2, 4.7 is markedly more verbose than prior models. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
+5. **Keep output lean.** Frontier models trend verbose, and every extra report paragraph multiplies across downstream phases. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
 
 ---
 
@@ -386,6 +386,22 @@ Evaluate the changeset for design principle violations.
 | ISP | [description] | MUST_FIX/SHOULD_FIX/CONSIDER | file.ts:line |
 ```
 
+### Step 3: Convention Guard Verification
+
+Determine whether this change **establishes a convention** — a new pattern other code must follow, a new "always/never" rule, a first instance meant to be copied, or a pattern the adaptation guide mandated.
+
+**Detection heuristics:**
+- The adaptation guide's Convention Guards section names a guard for this ticket (absence of that guard = SCOPE_GAP, escalate like any Pass 1 gap)
+- The diff adds a new lint rule, ESLint config entry, or `tests/guards/*` file (good — verify it's wired into the test runner and passes)
+- The diff or its docs contain new "always/never/must/all X must" claims about how other code should behave
+- The implementation is described as "the pattern" or "canonical" for anything
+
+**Verification commands:** glob for `tests/guards/**`, `*.guard.test.*`; diff the lint config; grep the changed docs/CLAUDE.md for `[enforced:` / `[prose-only]` tags.
+
+**Verdict:** a convention with a guard (enforcement-ladder rung 1–5, `skills/production-code-standards/references/enforcement-ladder.md`) in this same change → GUARD_SHIPPED. A genuinely judgment-only rule with an explicit `[prose-only]` tag + ceiling rationale → PROSE_ONLY_TAGGED. Neither → **MISSING: CHANGES_REQUESTED, same severity as missing tests** (prose rules don't propagate across agent sessions; guards do).
+
+**Finding bar (applies to every Pass 2 finding):** flag what would fail or regress in production — not what is merely suboptimal. Review findings that demand unrequested abstractions or speculative hardening create over-engineering rather than quality.
+
 ---
 
 ## Production Code Standards - NO WORKAROUNDS OR FALLBACKS
@@ -557,6 +573,12 @@ Status code meanings:
 |-----------|---------|----------|----------|
 | [S/O/L/I/D/DRY] | [Description] | MUST_FIX/SHOULD_FIX/CONSIDER | [file:line] |
 
+#### Convention Guard Verification
+
+| Convention Introduced | Guard (artifact + rung) or [prose-only] + rationale | Status |
+|-----------------------|------------------------------------------------------|--------|
+| [description, or "None"] | [tests/guards/x.test.ts (rung 2)] | GUARD_SHIPPED / PROSE_ONLY_TAGGED / MISSING |
+
 ---
 
 ### Findings
@@ -565,6 +587,7 @@ Status code meanings:
 - [ ] [Any ❌ from Pass 1 Requirements Checklist]
 - [ ] [Any MUST_FIX from SOLID/DRY Assessment]
 - [ ] [Any ERROR from Best Practices Assessment]
+- [ ] [Any MISSING from Convention Guard Verification]
 - [ ] [Other blocking issues with file:line reference]
 
 #### Should Fix (Non-blocking)
@@ -579,6 +602,7 @@ Status code meanings:
 - [ ] Pass 1: Adaptation guide conformance verified
 - [ ] Pass 2: Best practices for detected frameworks checked
 - [ ] Pass 2: SOLID/DRY principles evaluated
+- [ ] Pass 2: Convention guard verified (guard shipped / prose-only tagged / none introduced)
 - [ ] Pass 2: Code follows existing patterns
 - [ ] Pass 2: No anti-patterns detected
 - [ ] Pass 2: Error handling appropriate
@@ -597,6 +621,7 @@ Status code meanings:
 - Pass 1 passed (all acceptance criteria met, no over/under-building)
 - Pass 2 passed (all "Must Fix" items resolved)
 - Code follows existing codebase patterns
+- Any convention introduced ships its guard or carries an explicit `[prose-only]` tag
 - Tests pass and cover new code
 - No security vulnerabilities
 - Documentation matches implementation

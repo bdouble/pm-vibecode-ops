@@ -167,6 +167,17 @@ If you think any of these, you are about to add documentation noise.
 | "I should document the workaround so future devs understand" | Document the workaround? No — fix the workaround. Code that needs a workaround comment fails `production-code-standards`. |
 | "I'll write JSDoc that restates the type signature for clarity" | TypeScript IS the documentation for types. Restating creates two sources of truth, one of which will drift. |
 
+## Convention Documentation: Status Tags and Pruning
+
+Conventions and rules written into project memory (CLAUDE.md, convention docs) follow the same "why, not what" economics — and one more rule: **every documented convention carries an inline status tag.**
+
+- `[enforced: <artifact path>]` — a structural guard exists (lint rule, guard test, drift test, ratchet). The prose should be a **one-line pointer**: "X is enforced by `tests/guards/x.test.ts` — see that file for details." An enforced rule needs near-zero prose forever; the guard's error message does the teaching.
+- `[prose-only]` — no guard exists. Requires one line on why the rule can't be structurally enforced (genuinely operational judgment).
+
+**The pruning rule:** when a guard ships for a previously documented rule, retire the paragraph to the one-line `[enforced:]` pointer in the same change. Project memory is append-only by default and decays — every retired paragraph is context-window cost saved in every future session.
+
+**The discipline-debt metric:** the `[prose-only]` count is countable and trendable — `/close-epic` reports it at each closure, `/entropy-audit` trends it. See `production-code-standards` → `references/enforcement-ladder.md`.
+
 ## Architecture Decisions
 
 For significant architectural decisions affecting multiple files, use an ADR.
@@ -178,7 +189,7 @@ See `references/adr-template.md` for template and examples.
 - **`examples/adr-example.md`** — Complete ADR example showing the decision record format in practice
 
 ## Related Skills
-- **production-code-standards**: TODO/FIXME/HACK comments are banned in code AND in documentation
+- **production-code-standards**: TODO/FIXME/HACK comments are banned in code AND in documentation; the enforcement ladder defines the status tags above
 - **verify-implementation**: Documentation claims about behavior must match verifiable code behavior
 - **no-silent-deferrals**: `/** TODO: document later */` is a silent deferral
 - **security-patterns**: Security-sensitive and PII-handling code REQUIRES documentation of the security implications

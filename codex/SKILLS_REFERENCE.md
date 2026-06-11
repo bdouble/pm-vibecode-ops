@@ -71,7 +71,7 @@ cat codex/skills/production-code-standards/SKILL.md \
 
 #### Discovery Phase
 **Primary Skills:**
-- `model-aware-behavior` - Read all relevant files before proposing changes
+- `model-aware-behavior` - Verify doc/memory claims against the code; read before proposing changes
 - `service-reuse` - Catalog existing services for the inventory
 - `divergent-exploration` - Explore multiple architectural approaches
 
@@ -198,7 +198,7 @@ Include MVD principles to prevent over-documentation or placeholder content.
 
 #### Code Review Phase
 **Primary Skills:**
-- `production-code-standards` - Verify no workarounds in reviewed code
+- `production-code-standards` - Verify no workarounds in reviewed code; any convention introduced must ship its guard or carry a `[prose-only]` tag
 - `verify-implementation` - Ensure claims are verified before approval
 
 **How to Apply:**
@@ -225,7 +225,7 @@ cat codex/skills/security-patterns/SKILL.md \
 
 #### Epic Closure Phase
 **Primary Skills:**
-- `epic-closure-validation` - **CRITICAL** - All sub-tickets must be Done/Cancelled
+- `epic-closure-validation` - **CRITICAL** - All sub-tickets must be Done/Cancelled; conventions the epic established must have guards (or `[prose-only]` tags); cross-cutting follow-ups are ratchet-first
 - `verify-implementation` - Verify all completion claims
 
 **How to Apply:**
@@ -254,16 +254,16 @@ Include epic-closure-validation to enforce the requirement that all sub-tickets 
 
 | Skill | One-Line Description | Key Trigger |
 |-------|---------------------|-------------|
-| `production-code-standards` | Blocks workarounds, TODO comments, empty catches, fallback logic | Any production code writing |
-| `service-reuse` | Requires checking service inventory before creating new services | Creating services, utilities, helpers |
-| `testing-philosophy` | Fix existing broken tests before writing new; accuracy first | Any test writing or debugging |
-| `mvd-documentation` | Document "why" not "what"; no placeholders; complete or nothing | Writing docs, README, API docs |
-| `security-patterns` | OWASP patterns: auth, parameterized queries, input validation | Auth code, API endpoints, DB queries |
-| `model-aware-behavior` | Read all files before changes; no speculation; search first | Exploring code, proposing changes |
+| `production-code-standards` | Blocks workarounds, TODO comments, empty catches, fallback logic, speculative abstractions; conventions ship with their structural guards (enforcement ladder) | Any production code writing; establishing a convention |
+| `service-reuse` | Requires checking service inventory before creating new services — duplication is the AI-era failure that never faded | Creating services, utilities, helpers |
+| `testing-philosophy` | Fix existing broken tests before writing new; accuracy first; anti-ballast (assert contracts, never hard-code or delete failing tests) | Any test writing or debugging |
+| `mvd-documentation` | Document "why" not "what"; no placeholders; conventions carry [enforced:]/[prose-only] status tags and guarded prose gets pruned | Writing docs, README, convention docs |
+| `security-patterns` | OWASP patterns: auth, parameterized queries, input validation; recurring rules become rung-2 guard tests | Auth code, API endpoints, DB queries |
+| `model-aware-behavior` | Verification over recall: docs/memory/tickets are hypotheses — verify against the code; do only what was requested | Acting on doc/memory claims, modifying code |
 | `using-pm-workflow` | Guide through correct workflow phases | Session start, phase transitions |
-| `verify-implementation` | Verify claims with evidence before saying "complete" | Before any completion claim |
+| `verify-implementation` | Verify claims with evidence before saying "complete"; audit every claim against actual tool results | Before any completion claim |
 | `divergent-exploration` | Explore 3-5 alternatives before converging on solution | Architecture, design, planning |
-| `epic-closure-validation` | All sub-tickets must be Done/Cancelled before epic closure | Closing epics |
+| `epic-closure-validation` | All sub-tickets Done/Cancelled; convention guard audit; ratchet-first for cross-cutting follow-ups | Closing epics |
 
 ---
 

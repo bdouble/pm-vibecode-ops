@@ -20,47 +20,53 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 ### 1. production-code-standards
 
-**Activates when**: Writing code, implementing features, fixing bugs, creating services
+**Activates when**: Writing code, implementing features, fixing bugs, creating services — and (v5.0) establishing any convention or "always/never" rule other code must follow
 
 **Enforces**:
 - No workarounds or temporary solutions
 - No fallback logic that hides errors
 - No TODO/FIXME/HACK comments
 - No mocked services in production code
+- No speculative abstractions or "flexibility" nobody requested
 - Fail-fast error handling
 - Repository pattern for data access
+- **The enforcement ladder (v5.0)**: conventions ship their structural guard in the same PR — rung 1 (type chokepoint), 2 (static-guard test), 3 (drift test), 4 (ratchet), 5 (runtime assert), or 6 (prose, tagged `[prose-only]` with rationale). Guarded rules get one-line `[enforced:]` pointers. Full recipes: `references/enforcement-ladder.md`
 
-**Example trigger**: "Implement the user registration endpoint"
+**Example trigger**: "Implement the user registration endpoint" or "I'll document the convention for future agents"
 
 ### 2. service-reuse
 
 **Activates when**: Creating new services, utilities, helpers, middleware, guards, infrastructure
 
 **Enforces**:
-- Check service inventory before creating anything new
+- Check service inventory before creating anything new — the inventory is context ("where things live in this codebase"), not policing
 - Reuse existing authentication services
 - Reuse existing validation utilities
 - Extend existing base classes
 - Use event-driven patterns over direct coupling
 
+**Why it survived the v5.0 recalibration**: duplication is the one AI-era code-quality failure that never faded — GitClear's 211M-line longitudinal data shows duplicated blocks up 8x and copy/paste exceeding refactoring for the first time (see `docs/MODEL_CALIBRATION.md`)
+
 **Example trigger**: "Create a new email notification service"
 
 ### 3. testing-philosophy
 
-**Activates when**: Writing tests, debugging test failures, improving coverage
+**Activates when**: Writing tests, debugging test failures, improving coverage — or when tempted to skip/delete a failing test, chase a coverage number, or assert how a function was called rather than what it produced
 
 **Enforces**:
-- Fix existing broken tests BEFORE writing new tests
+- Fix existing broken tests BEFORE writing new tests (Gate 0); never remove, skip, or edit a failing test just to make it pass
 - Verify actual API via code reading before testing
 - Tests must compile (zero TypeScript errors)
 - Tests must execute (zero runtime errors)
 - Strategic test creation (quality over coverage)
+- No hard-coded values or special-casing to make specific test inputs pass
+- **Anti-Ballast Doctrine (v5.0)**: test mass is not confidence — assert behavior and contracts, not call shapes; a handful of real-infrastructure integration tests outrank thousands of mocked unit tests for the data layer; static guards count as tests; watch the mock:integration ratio (`/entropy-audit` trends it)
 
 **Example trigger**: "Write tests for the payment module"
 
 ### 4. mvd-documentation
 
-**Activates when**: Writing JSDoc, README files, API docs, inline comments
+**Activates when**: Writing JSDoc, README files, API docs, inline comments — or documenting a convention in project memory (CLAUDE.md, convention docs)
 
 **Enforces**:
 - Document "why", not "what" (TypeScript shows "what")
@@ -68,6 +74,7 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 - Security-sensitive functions require documentation
 - No placeholder content (TODO, TBD)
 - Complete documentation or none
+- **Status tags + pruning (v5.0)**: every documented convention carries `[enforced: <artifact>]` (guarded — prose retires to a one-line pointer) or `[prose-only]` (with one line on why no guard can express it); when a guard ships, the paragraph is pruned in the same change. The `[prose-only]` count is the trendable discipline-debt metric
 
 **Example trigger**: "Document the authentication API"
 
@@ -82,32 +89,33 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 - Input validation at system boundaries
 - No sensitive data in error responses
 - Security event logging
+- **Recurring rules become guards (v5.0, Step 5)**: recurring security rules ("every mutation handler validates input", "all webhook handlers verify signatures") are prime rung-2 guard candidates — ship the source-scanning guard test instead of re-flagging the rule per-surface at review time
 
 **Example trigger**: "Add login endpoint with password validation"
 
 ### 6. model-aware-behavior
 
-**Activates when**: Exploring codebases, proposing code changes, making architectural decisions, using tools for code modification
+**Activates when**: About to act on a claim from docs, project memory, or a ticket without verifying it against the actual code; tempted to guess a signature or import path from memory; or about to make unrequested improvements ("while I'm here…")
 
-**Enforces**:
-- Read all relevant files before proposing any changes
-- Never speculate about code not yet inspected
-- Search for existing implementations before creating new ones
-- Make only requested changes (no unrequested improvements)
+**Enforces** (rewritten in v5.0 — Verification Over Recall + Scope Control):
+- Docs, project memory, and tickets are hypotheses about the code, not facts — verify load-bearing claims against HEAD before acting on them
+- A claim that fails verification is itself a finding; fixing the stale memory is part of the ticket
+- Read what you modify; verify what you rely on — never speculate about code not yet inspected
+- Make only requested changes (no unrequested improvements, refactors, or "flexibility" for hypothetical futures — the most common way strong models damage a codebase today)
 - No helpers/utilities for one-time operations
-- Parallel tool execution when operations are independent
+- The three-question gate before any change beyond the explicit request: Was it requested? Is it required? Is this the smallest change that works?
 
-**Example trigger**: "Implement the user profile feature"
+**Example trigger**: "The CLAUDE.md says the migration is complete" or "While I'm here, I'll also refactor this"
 
 ### 7. using-pm-workflow
 
-**Activates when**: Starting any PM workflow session, before responding to requests, when switching contexts, or when unsure which command to use
+**Activates when**: User asks "what command do I run", "where do I start", "what's next", or is unsure which workflow phase to invoke
 
 **Enforces**:
-- Check which skills apply BEFORE any action (including clarifying questions)
 - Follow the correct workflow phase sequence
 - Use project-level commands (phases 1-4) for new projects
-- Use ticket-level commands (phases 5-10) for each ticket
+- Use ticket-level commands (phases 5-10) for each ticket — `/execute-ticket` recommended
+- `/close-epic` after all tickets complete; **`/entropy-audit` (v5.0)** as recurring maintenance every 3–6 months or ~10 epics, or when project memory looks stale
 - Explain technical decisions clearly for non-engineers
 
 **Example trigger**: Session start, or "What command should I use?"
@@ -121,8 +129,11 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 - Run actual tests before saying "tests pass"
 - Execute builds before saying "build succeeds"
 - Demonstrate features before saying "feature works"
-- Show output/evidence for every completion claim
+- Show output/evidence for every completion claim — a claim without a tool result behind it is a fabrication
 - Avoid speculation phrases like "should work" or "probably passes"
+- Verify subagent success reports independently (check the diff, run the tests) — an agent's self-report is a claim, not evidence
+
+**Why it was strengthened in v5.0**: fabricated completion claims are the one agentic failure mode that has *worsened* with model capability (see `docs/MODEL_CALIBRATION.md`) — this is the best-supported guardrail class in the toolkit
 
 **Example trigger**: "I've finished implementing the feature"
 
@@ -141,12 +152,14 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 ### 10. epic-closure-validation
 
-**Activates when**: Closing epics, marking epics complete, finishing epic-level work
+**Activates when**: Closing epics, marking epics complete, finishing epic-level work — or when the epic established a convention whose guard may not exist yet
 
 **Enforces**:
 - ALL sub-tickets must be Done or Cancelled before epic closure
 - No workarounds or temporary solutions shipped in any ticket
 - Business value was delivered against original success criteria
+- **Convention Guard Audit (v5.0, Step 4.5)**: every convention the epic established has a verified guard artifact (enforcement-ladder rung 1–5) or an explicit `[prose-only]` tag with rationale — neither present is a CRITICAL finding that blocks closure
+- Follow-up discipline: ≤3 closure-generated tickets, each past the impact bar; ratchets preferred over propagation tickets
 - Block closure if any sub-ticket is incomplete
 
 **Example trigger**: "Close EPIC-123" or "Mark epic as done"
@@ -167,7 +180,7 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 
 ### 12. no-silent-deferrals
 
-**Activates when**: An agent is about to defer in-scope work — especially when saying "I'll defer", "follow-up ticket", "TODO", "out of scope", "future work", "subsequent iteration", "downstream", "punt to". Also when writing a Deferred Items table entry for any acceptance-criterion-related work.
+**Activates when**: An agent is about to defer in-scope work — especially when saying "I'll defer", "follow-up ticket", "TODO", "out of scope", "future work", "subsequent iteration", "downstream", "punt to". Also when writing a Deferred Items table entry for any acceptance-criterion-related work, or (v5.0) when proposing defensive runtime machinery — a retry tier, reconciliation job, sweep, or recovery cron — "just in case".
 
 **Enforces**:
 - Default disposition: complete the work in scope. Deferral is the most expensive disposition.
@@ -176,8 +189,10 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 - AC-DEFERRED entries MUST include the `### Deferral Justification (CATASTROPHIC — required)` block with four populated fields
 - Orchestrator re-dispatches agents that defer without valid justification (max 1 re-dispatch per phase)
 - Silent deferrals (work omitted without a Deferred Items entry) are detected at code review as SCOPE_GAP
+- **The Symmetric Bar (v5.0)**: the impact bar applies symmetrically to ADDING defensive machinery — building a retry tier/sweep/reconciliation job requires a concrete observed failure (an incident, a red test, a logged error), not "this could theoretically fail". Machinery that clears the bar ships with its activation metric; `/entropy-audit` later flags zero-activation machinery for retirement. Same rigor for new vendor/SaaS dependencies
+- Cross-cutting concerns answer the boundary question — a guard or ratchet beats per-surface propagation tickets (field data: 14 opened / 0 closed)
 
-**Example trigger**: "This edge case is tricky, I'll create a follow-up ticket" or "Adding TODO for the rate limit"
+**Example trigger**: "This edge case is tricky, I'll create a follow-up ticket" or "A reconciliation cron here would make this more resilient"
 
 ### 13. codex-finding-resolution
 
@@ -198,6 +213,7 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 **Enforces**:
 - Every phase posts its structured report to the sub-ticket as a Linear comment BEFORE the next phase begins
 - Phase reports follow the canonical template (Status / Summary / Files Changed / Issues / Recommendations)
+- Per-phase required-field validation — the Code Review report (v5.0) must include a Convention Guard Verification section alongside Review Status, Requirements Checklist, and Files Reviewed
 - The hard checkpoint at the end of the per-ticket pipeline verifies all 7 phase reports exist; a missing report blocks the ticket from advancing to merge
 
 **Example trigger**: Phase transition inside `/epic-swarm` after testing completes for a sub-ticket
@@ -209,6 +225,7 @@ Skills shift enforcement LEFT - catching issues during creation rather than at r
 **Enforces**:
 - Consult the observability stream FIRST — not Linear comments, not orchestrator logs, not memory
 - Use `/swarm-stats` or `scripts/swarm-stats.sh`, never ad-hoc `jq` on the JSONL (re-introduces bugs the dashboard already fixed)
+- The stream's 17 event types (v5.0) fall into six families — profile lifecycle, phase lifecycle, deferral discipline, judgment scaffolding, convention guards + audit (`convention_guard_check`, `entropy_scorecard_recorded`), and codex + lifecycle
 - Map the user's question to the dashboard section that answers it; don't dump the whole dashboard for one question
 - Pre-v4.7 epics get a legacy badge; do NOT infer or backfill missing v4.5/v4.6 data
 

@@ -39,15 +39,22 @@ All progress is saved in tickets, PRs, and code—starting fresh sessions doesn'
 | Command | Description |
 |---------|-------------|
 | `/generate-service-inventory` | Catalog existing codebase services |
-| `/discovery` | Analyze patterns and architecture |
+| `/discovery` | Analyze patterns and architecture (incl. doc-truth verification of project memory) |
 | `/epic-planning` | Create business-focused epics |
-| `/planning` | Decompose epics into tickets |
+| `/planning` | Decompose epics into tickets (convention tickets get their guard written into the ACs) |
+| `/execute-ticket` | Orchestrate all ticket phases automatically (recommended) |
+| `/epic-swarm` | Run every ticket in an epic sequentially with checkpoints |
+| `/epic-swarm-workflow` | Run the epic pipeline as a dynamic workflow (right-sized tiers) |
 | `/adaptation` | Create implementation guide for a ticket |
 | `/implementation` | Write production code |
 | `/testing` | Build and run test suite |
 | `/documentation` | Generate docs |
-| `/codereview` | Quality assessment |
+| `/codereview` | Quality assessment (incl. Convention Guard Verification) |
+| `/codex-review` | Cross-model adversarial review |
 | `/security-review` | Final gate - closes ticket |
+| `/close-epic` | Close completed epic (Convention Guard Audit + prose pruning + follow-up discipline) |
+| `/swarm-stats` | Observability dashboard (incl. Discipline Debt section) |
+| `/entropy-audit` | Recurring cross-epic health audit with machine-diffable scorecard |
 
 **Remember:** Run each command in its own fresh session for best results.
 

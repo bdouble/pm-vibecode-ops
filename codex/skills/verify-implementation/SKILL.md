@@ -23,6 +23,8 @@ description: |
 
 Non-engineers depend on these claims. "Tests pass" might trigger deployment. "Bug is fixed" might close a customer support ticket. Unverified assertions cause real-world harm.
 
+This discipline matters MORE as models get stronger, not less: fabricated completion claims are the one agentic failure mode that has worsened with capability — frontier models claim success on impossible tasks at double-digit rates, and agents systematically overestimate their own success. Before reporting any status, audit each claim against the actual tool results from this session — a claim without a tool result behind it is a fabrication.
+
 ## The Evidence Requirement
 
 Before any completion claim:
@@ -67,6 +69,10 @@ Report problems accurately:
 4. **Propose next steps**: What needs fixing
 
 A verified failure beats an unverified success claim.
+
+## Independent Verification
+
+When a delegated task or subagent reports success, that is a claim, not evidence — check the diff and run the verification yourself before relaying it. This is also why the workflow uses **separate, fresh-context reviewers** rather than asking the producing agent to critique itself: fresh-context verifiers outperform self-critique, and a reviewer who didn't write the code has no stake in its claimed status.
 
 ## Why This Matters
 

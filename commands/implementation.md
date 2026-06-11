@@ -79,9 +79,10 @@ Use the Task tool to invoke the appropriate engineer agent with ALL context embe
 
 ### Your Task
 1. READ the implementation guide above
-2. IMPLEMENT the functionality following the guide
-3. COMMIT code to the feature branch
-4. RETURN a structured implementation report
+2. IMPLEMENT the functionality following the guide — exactly the requested scope; no unrequested abstractions, cleanup, or flexibility
+3. If the guide names a Convention Guard (rung + artifact), SHIP the guard in this phase's commits — a convention without its guard is an incomplete implementation (see skills/production-code-standards/references/enforcement-ladder.md)
+4. COMMIT code to the feature branch
+5. RETURN a structured implementation report
 
 **DO NOT:**
 - Perform security reviews or code reviews

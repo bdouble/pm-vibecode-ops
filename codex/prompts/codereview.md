@@ -94,6 +94,10 @@ Review code quality, patterns, and architecture. Security issues found are LOGGE
 - Document out-of-scope findings in a "Future Improvements" section
 - Keep the review laser-focused on the ticket's actual changes
 
+**FINDING BAR**:
+- Flag what would fail or regress in production — correctness, security, unmet ACs, missing guards, duplication
+- Do NOT flag what is merely suboptimal; findings that demand unrequested abstractions or speculative hardening create over-engineering, not quality
+
 ## Code Quality Standards - NO WORKAROUNDS OR FALLBACKS
 
 **CRITICAL: Flag and Fix Production-Ready Code Violations**
@@ -200,6 +204,13 @@ async function getUserById(id: string): Promise<User>
 - [ ] **Pattern Adherence**: Verify established patterns are followed consistently across all modules
 - [ ] **Abstraction Layer Bypass**: Check for code that bypasses abstraction layers to access lower levels directly
 
+### Convention Enforcement (CRITICAL — the Enforcement Ladder)
+- [ ] **Convention Introduced?** Does this change establish a pattern other code must follow, a new "always/never" rule, or a first instance meant to be copied?
+- [ ] **Guard Ships With It**: If yes, the convention's structural guard is in this same change — a type chokepoint, source-scanning guard test, drift test, ratchet (shrink-only allowlist), or runtime assert (rungs 1–5; see the production-code-standards skill's Enforcement Ladder, `codex/skills/production-code-standards/SKILL.md`)
+- [ ] **Prose-Only Is Explicit**: If no guard can express the rule, it carries a `[prose-only]` tag plus one line on why rung 6 is the ceiling
+- [ ] **Mandated Guards Present**: Any guard the adaptation guide or ticket ACs named exists and passes — absence is a SCOPE_GAP
+- **Verdict**: Convention without guard or tag → CHANGES_REQUESTED, same severity as missing tests. Prose rules don't propagate across agent sessions; guards do.
+
 ### Module & Dependency Hygiene
 - [ ] **Explicit Dependencies**: All module dependencies are explicitly declared, not implicitly assumed
 - [ ] **Circular Dependencies**: Document any circular dependencies with justification
@@ -276,6 +287,15 @@ If security issues are noticed during review:
 - **Missing Reuse Justification**: New [service/component] lacks "why not reuse" documentation
   - **Fix**: Document why existing solutions couldn't be used
 
+### 🛡️ Convention Guard Verification
+*One block per convention this change establishes (or a single "None" line). List every convention separately — a change that establishes two conventions where one is guarded and one is MISSING must show BOTH (a single status line cannot represent a per-convention split).*
+- **Convention introduced**: [convention description, or "None — no conventions established by this change"]
+  - **Guard**: [artifact path + rung, e.g. `tests/guards/x.test.ts` (rung 2)] or **[prose-only]**: [one-line ceiling rationale]
+  - **Status**: [GUARD_SHIPPED / PROSE_ONLY_TAGGED / MISSING → CHANGES_REQUESTED]
+- **Convention introduced**: [next convention, if any — repeat the block per convention]
+  - **Guard**: …
+  - **Status**: …
+
 ### 🔒 Security Concerns (Logged for Security Review)
 - **Concern**: [Security issue noticed]
   - **Status**: Logged - will be addressed in security review phase
@@ -299,14 +319,13 @@ If security issues are noticed during review:
 - Code follows established architectural patterns
 - Proper error handling implemented
 - No obvious performance regressions
+- Conventions introduced by this change ship with a guard (rung 1–5) or an explicit `[prose-only]` tag
 
 ### Should Pass Requirements
 - Clean code principles followed
-- Appropriate abstraction levels
+- Appropriate abstraction levels — no speculative flexibility
 - Clear naming conventions
-- **JSDoc present for all public functions/classes/methods**
-- **@param and @returns tags properly documented**
-- **Complex logic has inline explanatory comments**
+- **Documentation follows MVD**: complex/security-sensitive logic explains the "why"; no JSDoc that restates types
 
 ### Security Handling
 - Security issues are LOGGED ONLY, not fixed in this phase
@@ -603,8 +622,8 @@ function detectDuplication(implementation, serviceInventory) {
 ```
 - `refactor: improve [component] based on review feedback`
 - `style: fix formatting and code style issues`
-- `docs: add missing JSDoc to [functions/classes]`
-- `docs: complete JSDoc with @param/@returns/@throws tags`
+- `docs: add why-explaining JSDoc to [complex/security-sensitive function]`
+- `docs: remove JSDoc that restates types (MVD)`
 - `docs: add inline comments for complex logic`
 NOTE: NO security fixes in this phase - security issues are logged only
 
@@ -656,6 +675,13 @@ After completing the code review, add the following structured comment to the Li
 - **Custom Implementations Replaced**: Y utilities replaced with shared versions
 - **Direct Coupling Fixed**: Z instances converted to event patterns
 - [List of specific duplication fixes with commit references]
+
+### 🛡️ Convention Guard Verification
+*One bullet pair per convention this change establishes (or a single "None"). Any MISSING convention must also appear as a CHANGES_REQUESTED blocking finding.*
+- **Convention introduced**: [description or "None"]
+- **Guard**: [artifact + rung] / **[prose-only]**: [rationale] / **MISSING** (blocks approval)
+- **Convention introduced**: [next convention, if any — repeat per convention]
+- **Guard**: …
 
 ### ⚠️ Code Quality Issues Found & Fixed
 - **Architecture Issues**: X issues identified and fixed

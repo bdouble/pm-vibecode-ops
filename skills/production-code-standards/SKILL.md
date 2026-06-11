@@ -1,6 +1,6 @@
 ---
 name: production-code-standards
-description: Use when writing, editing, or reviewing production code — especially when tempted to add a TODO/FIXME/HACK comment, a fallback like `value || default`, an empty catch block, a `setTimeout` to mask a race condition, a `console.log`, or an `any` type. Also use when saying "quick fix", "workaround", "just a prototype", "temporary", or "I'll clean it up later".
+description: Use when writing, editing, or reviewing production code — especially when tempted to add a fallback like `value || default`, an empty catch block, a workaround for a blocker, or speculative abstractions and flexibility nobody asked for. Also use when establishing a convention or pattern other code must follow, writing an "always/never" rule, adding a lint rule or guard test, or tempted to document a convention instead of enforcing it. Also use when saying "quick fix", "workaround", "temporary", or "I'll add the guard later".
 ---
 
 # Production Code Standards
@@ -16,20 +16,21 @@ All production code must be permanent, complete, and production-grade.
 
 ## Enforcement Workflow
 
-1. **Before writing**: Plan the complete, permanent solution
+1. **Before writing**: Plan the complete, permanent solution — exactly the scope that was asked
 2. **While writing**: Check against prohibited patterns
-3. **When blocked**: STOP, document, create ticket - never workaround
-4. **Before committing**: Verify no prohibited patterns exist
+3. **When blocked**: Stop, document, create a ticket — never workaround
+4. **Before committing**: Run the pre-commit verification below
 
 ## Prohibited Patterns
 
-| Pattern | Why Blocked |
+| Pattern | Why blocked |
 |---------|-------------|
-| `value \|\| default` | Hides errors silently |
-| `TODO/FIXME/HACK` | Temporary code in production |
+| `value \|\| default` / `value ?? default` masking absence | Hides errors silently — fail fast so problems surface |
+| `TODO/FIXME/HACK` comments | Deferral receipts in production; file a ticket instead |
 | `catch (e) { }` | Swallows errors |
 | Mock services in src/ | Test artifacts in production |
-| `setTimeout` for race conditions | Workaround, not fix |
+| `setTimeout` to mask a race condition | Workaround, not a fix |
+| Speculative abstractions, configurability, or "flexibility" nobody requested | Over-engineering — build what the ticket asks; a bug fix doesn't need surrounding cleanup |
 
 ## Required Patterns
 
@@ -40,91 +41,80 @@ All production code must be permanent, complete, and production-grade.
 | Error propagation | Let errors bubble to handlers |
 | Repository pattern | Data access abstraction |
 
-## TypeScript-Specific Anti-Patterns
+## The Enforcement Ladder — Conventions Ship With Their Guards
 
-For TypeScript projects, additional anti-patterns and ESLint rules apply. See `references/typescript-anti-patterns.md` for the full catalog including `any` type usage, floating promises, non-null assertions, `console.log` in production, and the recommended ESLint configuration to enforce these at lint time.
+If your change **establishes a convention** — a new pattern other code must follow, a new "always/never" rule, a first instance meant to be copied — the convention is incomplete without its structural guard, same severity as missing tests. Prose rules don't propagate across amnesiac agent sessions; guards do (field data: guarded conventions had zero post-merge regressions; the most-documented prose rule regressed four times).
+
+Climb as high as the rule allows, and ship the artifact **in the same PR**:
+
+| Rung | Mechanism |
+|---|---|
+| 1 | Make the wrong thing unrepresentable (types, single chokepoint function) |
+| 2 | Static-guard test — scans the source tree, fails on the pattern, `EXEMPTIONS` list requires ticket + reason |
+| 3 | Drift test — pins derived/duplicated data to its source of truth |
+| 4 | Ratchet — shrink-only allowlist of current offenders; replaces propagation tickets entirely |
+| 5 | Runtime assert at the chokepoint |
+| 6 | Prose — last resort, tagged `[prose-only]` with one line on why no guard can express it |
+
+Rules already guarded get documented as one-line pointers tagged `[enforced: <artifact>]`. Full recipes (the ~200-line rung-2 test shape, the ratchet pattern): `references/enforcement-ladder.md`.
+
+This is also where the old style rules live now: bans like no-TODO are best enforced as a rung-2 lint/guard in the target repo, not as paragraphs aimed at the model.
 
 ## Schema Quality Standards
 
-### Banned Schema Patterns
+| Banned | Use instead |
+|--------|-------------|
+| `z.record(z.string(), z.unknown())` for known fields | Typed schema with actual field definitions |
+| `z.string()` where valid values are known | `z.enum([...])` |
+| `.optional()` on every field of a known structure | Required fields stay required |
+| Duplicated schema field definitions | Import and extend the canonical source schema |
 
-| Pattern | Why Blocked |
-|---------|-------------|
-| `z.record(z.string(), z.unknown())` for known fields | Use a typed schema with actual field definitions |
-| `z.string()` where valid values are known | Use `z.enum([...])` with known values |
-| `.optional()` on every field in a known structure | Required fields should not be optional |
-| Duplicated schema field definitions | Import and extend from canonical source schema |
-
-### Required Schema Patterns
-
-| Pattern | Purpose |
-|---------|---------|
-| Derive inter-module schemas from canonical source | Single source of truth for contracts |
-| `z.enum()` or `z.literal()` for known value sets | Type-safe value constraints |
-| Comment on `.passthrough()` | Explain why unknown fields are expected |
-| Schema tests for valid, edge, and malformed payloads | Verify schema rejects bad data |
-
-**When to apply:** Schemas for stage inputs/outputs, API request/response bodies, and inter-module contracts. Simple internal utility schemas are exempt.
+Applies to stage inputs/outputs, API bodies, and inter-module contracts; simple internal utility schemas are exempt. Comment any `.passthrough()` with why unknown fields are expected, and test schemas against valid, edge, and malformed payloads.
 
 ## Pre-Commit Verification
 
-Before committing any production code, run this verification against the changed files:
+Run against changed files before committing:
 
-1. **Search for prohibited patterns** — grep changed files for `TODO`, `FIXME`, `HACK`, `console.log`, `debugger`, empty `catch` blocks
-2. **Search for type safety violations** — grep for `: any`, `as any`, `JSON.parse(` without schema validation
-3. **Verify error handling** — confirm no empty catch blocks, no swallowed errors, fail-fast validation at entry points
-4. **Check schema quality** — if schemas were added or modified, verify they use `z.enum()` for known values, do not use `.optional()` excessively, and derive from canonical sources
+1. Grep for `TODO`, `FIXME`, `HACK`, `console.log`, `debugger`, empty `catch` blocks
+2. Grep for `: any`, `as any`, `JSON.parse(` without schema validation
+3. Confirm fail-fast validation at entry points, no swallowed errors
+4. If schemas changed: enums for known values, no blanket `.optional()`, derived from canonical sources
+5. If the change establishes a convention: its guard is in this diff, or the rule carries `[prose-only]` + why
 
-If any prohibited pattern is found, fix it before committing. Do not commit with a plan to "fix it later."
+Fix findings before committing — there is no "fix it later."
 
 ## When Blocked
 
-If proper implementation is blocked:
-
-1. **STOP** - Do not create a workaround
-2. **DOCUMENT** - State what's blocking
-3. **CREATE TICKET** - File ticket for the blocker
-4. **WAIT** - Blocker must be fixed first
-
-**If implementation requires a workaround, do not implement. Communicate the blocker clearly.**
+If proper implementation is blocked: stop, state what's blocking, file a ticket for the blocker, and report it. Do not ship a workaround in its place — a workaround converts a visible blocker into an invisible bug.
 
 ## Red Flags — STOP
 
-When you notice ANY of these in your own thinking or writing, you are about to ship a workaround. Stop and write the permanent solution instead.
-
-- `// TODO:` / `// FIXME:` / `// HACK:` / `// XXX:` / `// WORKAROUND:`
-- `value || default` or `value ?? default` to silently mask missing data
-- `try { ... } catch (e) { /* swallow */ }`
-- `setTimeout(() => ..., 0)` to mask a race condition
-- `: any` / `as any` / `JSON.parse(raw)` without schema validation
-- `console.log` / `console.error` in production paths
-- "Just for now" / "Temporary fix" / "I'll clean it up"
-- "It's just a prototype" / "Quick prototype"
-- Mock or stub service inside `src/` (outside `__tests__/`)
+- "Just for now" / "temporary fix" / "I'll clean it up later"
+- A fallback or default that masks missing data instead of failing fast
 - "Skip this check, the upstream code already validates"
+- A mock or stub inside `src/` (outside tests)
+- "I'll add the guard later" / "I'll document the convention for future agents" — the guard ships in this PR or the rule is tagged `[prose-only]`
+- Adding abstractions or options the ticket didn't ask for
 
-**All of these mean: write the permanent solution now.** If genuinely blocked, follow the "When Blocked" procedure — STOP, DOCUMENT, CREATE TICKET, WAIT. Never ship a workaround.
-
-## Rationalizations -- STOP
-
-If you think any of these, you are about to violate this skill.
+## Rationalizations — STOP
 
 | Excuse | Reality |
 |--------|---------|
-| "This is just a quick prototype" | There is no prototype code in this workflow. All code is production code. |
-| "I'll clean it up later" | Later never comes. Write it correctly now. |
-| "The TODO is just a reminder" | TODOs are banned. Create a Linear ticket instead. |
 | "This fallback makes it more resilient" | Fallbacks hide bugs. Fail fast so problems surface immediately. |
-| "Tests don't need production standards" | Test code with workarounds creates false confidence. Tests must be accurate. |
-| "This is a minor change, standards don't apply" | Minor changes are where standards slip. Apply them especially here. |
+| "It's a quick fix / prototype" | There is no prototype code in this workflow. All code is production code. |
+| "I documented the convention in CLAUDE.md" | Prose doesn't propagate across sessions. Ship the guard (rung 1–5) or tag `[prose-only]` with why. |
+| "Other surfaces can adopt the pattern via follow-up tickets" | Propagation tickets rot (field data: 14 opened, 0 closed). Install a ratchet instead. |
+| "More flexibility makes this future-proof" | Unrequested flexibility is over-engineering. Build what was asked. |
 
 ## Related Skills
 - **testing-philosophy**: Test code may use mocks and fixtures; production code must not
 - **verify-implementation**: Verify all claims before marking work complete
-- **no-silent-deferrals**: TODO/FIXME/HACK comments are silent deferrals — banned for the same reason
+- **no-silent-deferrals**: Deferral discipline, the impact bar, and the symmetric bar for defensive machinery
+- **model-aware-behavior**: Scope restraint — do only what was requested
 
 ## Additional Resources
 
-- **`references/typescript-anti-patterns.md`** — Full TypeScript anti-pattern catalog and ESLint configuration
+- **`references/enforcement-ladder.md`** — The full enforcement ladder: rung recipes, ratchets, status tags, pruning rule
+- **`references/typescript-anti-patterns.md`** — TypeScript anti-pattern catalog and the ESLint configuration that enforces them at lint time (rung 2)
 - **`references/anti-patterns.md`** — Detailed code examples of prohibited and required patterns
 - **`examples/error-handling-patterns.md`** — Practical before/after transformations

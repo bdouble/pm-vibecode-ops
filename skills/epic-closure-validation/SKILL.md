@@ -1,6 +1,6 @@
 ---
 name: epic-closure-validation
-description: Use when about to call /close-epic, when about to mark an epic state=Done, when evaluating epic completion, or when user says "close this epic", "epic done", "is the epic complete", or references an epic ID with closure intent. Also use when any sub-ticket is Todo, In Progress, Blocked, or shipped with a workaround — any of these block closure. Also use when writing the epic closure comment, when deciding whether to file retrofit or follow-up tickets, when about to file more than 3 follow-up tickets per closure, when filing per-surface tickets for a cross-cutting concern, when writing or validating the "Considered but not pursued" closure-log section, or when evaluating whether a candidate follow-up clears the impact bar.
+description: Use when about to call /close-epic, when about to mark an epic state=Done, when evaluating epic completion, or when user says "close this epic", "epic done", "is the epic complete", or references an epic ID with closure intent. Also use when any sub-ticket is Todo, In Progress, Blocked, or shipped with a workaround — any of these block closure. Also use when writing the epic closure comment, when deciding whether to file retrofit or follow-up tickets, when about to file more than 3 follow-up tickets per closure, when filing per-surface tickets for a cross-cutting concern, when writing or validating the "Considered but not pursued" closure-log section, when evaluating whether a candidate follow-up clears the impact bar, or when the epic established a convention or pattern whose guard may not exist yet.
 ---
 
 # Epic Closure Validation
@@ -36,6 +36,7 @@ Fetch all sub-tickets for the epic and categorize each by status:
 | Sub-ticket Blocked | BLOCK - Must resolve blocker |
 | Workaround shipped | BLOCK - Must fix before closure |
 | Security issue unresolved | BLOCK - Must address finding |
+| Convention established without guard or `[prose-only]` tag | BLOCK - Ship the guard (rung 1–5) or obtain explicit user approval for prose-only status |
 
 If ANY blocking condition exists, stop. List all incomplete tickets with their current status and required action. Do not proceed to closure analysis.
 
@@ -46,6 +47,10 @@ See the Business Value Verification section below.
 ### 4. Scan for Workarounds
 
 See the Workaround Detection section below.
+
+### 4.5. Audit Convention Guards
+
+See the Convention Guard Audit section below.
 
 ### 5. Apply the Follow-Up-Ticket Cap and Boundary Question
 
@@ -143,6 +148,22 @@ Review each completed ticket's Linear comments for:
 | Known security finding unaddressed | CRITICAL | Block closure, fix before shipping |
 | Minor code quality note in closure-log (no AC match, impact-bar disqualifying phrasing) | LOW | Allow closure, item stays in closure-log only — do NOT promote to ticket |
 
+## Convention Guard Audit
+
+An epic that introduced a canonical pattern cannot close until the pattern's guard exists. Prose rules don't propagate across amnesiac agent sessions; guards do (field data: guarded conventions had zero post-merge regressions; the most-documented prose rule regressed four times).
+
+### Procedure
+
+1. **Enumerate conventions the epic established.** Sources: the orchestrator log's "Patterns Used" and "Key Interfaces Defined" sections, adaptation reports, and any "always/never" rules added to CLAUDE.md or convention docs during the epic.
+2. **For each convention, verify ONE of:**
+   - A guard artifact exists on the enforcement ladder (rungs 1–5: type chokepoint, static-guard test, drift test, ratchet, runtime assert) — confirm the artifact file exists and its test passes, don't take the report's word for it.
+   - The rule carries an explicit `[prose-only]` tag with a one-line rationale for why no guard can express it.
+3. **Neither present → CRITICAL finding, blocks closure** — same severity as a shipped workaround. Resolution: ship the guard now (typically a ~200-line rung-2 test, 1–2 hours — see `production-code-standards` → `references/enforcement-ladder.md`) or surface to the user for explicit prose-only approval.
+
+### Output
+
+The closure comment's `### Convention Guards` table records the audit: Convention | Guard artifact + rung (or `[prose-only]` + rationale) | Verified. This feeds the `convention_guard_check` observability event and the prose-only/enforced counts in `epic_completed`.
+
 ## Follow-Up Ticket Discipline
 
 This section replaces the prior "create one retrofit ticket per remaining surface" behavior. Three rules govern when closure can produce follow-up tickets and how many.
@@ -161,13 +182,13 @@ When the epic established a pattern that future or existing work could violate (
 
 > **"Is there a single point of enforcement that makes the unsafe version impossible to produce — and if so, has this epic installed it?"**
 
-- **Enforcement exists or was installed by this epic** → no propagation tickets. The pattern cannot be skipped by future work. Remaining un-migrated surfaces become a closure-log entry, or at most ONE small migration ticket if migration itself clears the impact bar for a current named concern.
-- **Enforcement is not viable AND the impact bar clears for remaining surfaces** → file ONE propagation epic/ticket with all remaining surfaces enumerated as a checklist in its description. Not one per surface.
-- **Enforcement is not viable AND no remaining surface clears the impact bar** → all remaining surfaces become closure-log entries with "no enforcement viable, no current named-impact concern" rationale.
+- **Enforcement exists or was installed by this epic** → no propagation tickets. The pattern cannot be skipped by future work. Remaining un-migrated surfaces become a closure-log entry, or a ratchet allowlist that shrinks opportunistically.
+- **No single chokepoint is expressible AND the impact bar clears for remaining surfaces** → attempt a **ratchet first** (shrink-only allowlist guard test — it usually replaces the propagation ticket entirely; field data: propagation tickets went 14 opened / 0 closed, ratchets cost ~1-2 hours and never rot). Only if neither a guard nor a ratchet is technically expressible: file ONE propagation epic/ticket with all remaining surfaces enumerated as a checklist in its description. Never one per surface — a propagation epic of per-surface tickets is an anti-pattern.
+- **No enforcement viable AND no remaining surface clears the impact bar** → all remaining surfaces become closure-log entries with "no enforcement viable, no current named-impact concern" rationale.
 
-Before falling back to outcomes 2 or 3, the agent must write one sentence stating what boundary mechanism was considered and why it isn't viable here. "Not viable" cannot be a free-form opt-out.
+Before falling back to outcomes 2 or 3, the agent must write one sentence stating what boundary mechanism (including a ratchet) was considered and why it isn't expressible here — argued from the architecture. "Not viable" cannot be a free-form opt-out.
 
-See `no-silent-deferrals` Part 3 for the full boundary-question specification.
+See `no-silent-deferrals` Part 3 for the full boundary-question specification and `production-code-standards` → `references/enforcement-ladder.md` for the ratchet recipe.
 
 ### Rule 3: Absolute Cap on Closure-Generated Tickets
 
@@ -221,6 +242,7 @@ If the closure-log contains more than ~8 items, the agent is probably padding. B
 | Security reviews | ALL implementation tickets passed |
 | Workarounds | NONE in production code |
 | Business value | Original goals must be met |
+| Convention guards | Every pattern the epic established has a guard (rung 1–5) or an explicit `[prose-only]` tag |
 | Follow-up tickets | ≤3 total, each clears the impact bar, cross-cutting concerns answered the boundary question |
 | Considered-but-not-pursued section | Present (may be "None"), reviewed against anti-padding rules |
 
@@ -248,6 +270,7 @@ When you notice ANY of these in your own thinking or writing, you are about to c
 - "The security finding is just medium severity"
 - "Retrofit tickets will catch anything we missed"
 - "I should file one retrofit per remaining surface to be thorough"
+- "The pattern is documented in CLAUDE.md, that's enough for closure"
 - "The closure-log is empty, let me add some items so it looks complete"
 - "The user asked me to close it, so close it"
 - A follow-up ticket count growing past 2 as you assess (smell — impact bar not applied)
@@ -267,7 +290,8 @@ If you think any of these, you are about to close an epic that isn't actually do
 | "Cancelling the remaining tickets clears the queue" | Cancellation requires a documented reason and business-value verification. It isn't a closure shortcut. |
 | "The workaround is acceptable for now" | Workarounds in production code block closure. Period. |
 | "Retrofit analysis will catch any gaps" | Retrofit tickets are evidence of failed prevention. Don't pre-emptively rely on them to justify closure. |
-| "I should file a ticket per remaining surface for the new pattern" | Apply the boundary question. One enforcement point beats ten propagation tickets. If enforcement isn't viable, file ONE propagation epic, not N tickets. |
+| "I should file a ticket per remaining surface for the new pattern" | Apply the boundary question. One enforcement point beats ten propagation tickets. A ratchet usually replaces the propagation ticket entirely; only when neither a guard nor a ratchet is expressible does ONE propagation epic get filed — never N tickets. |
+| "The convention is documented, the guard can come later" | An epic that introduced a canonical pattern cannot close until the pattern's guard exists or the user approves `[prose-only]` status. Prose regresses; guards don't. |
 | "Codex/lint flagged it so it must be ticket-worthy" | Tool flags are input. Apply the impact bar. Most flagged items below P1 are closure-log. |
 | "More items in the closure-log shows I was thorough" | The closure-log is for rejections of plausible ticket candidates. Padding it with trivia is the new failure mode. Trim it. |
 | "This generates ten retrofit tickets but that's just how big this epic is" | If closure generates more than 3 follow-ups, the impact bar wasn't applied properly. Block closure, surface to user. |
@@ -275,7 +299,7 @@ If you think any of these, you are about to close an epic that isn't actually do
 ## Related Skills
 - **no-silent-deferrals**: Defines the catastrophic conditions for AC-deferral, the impact bar for would-be tickets, the closure-log outcome, and the boundary question for cross-cutting concerns. Closure validation enforces all four.
 - **verify-implementation**: Business value claims ("delivered the epic's goal") require evidence, not assertion
-- **production-code-standards**: Workarounds in production code block closure
+- **production-code-standards**: Workarounds in production code block closure; the enforcement ladder (`references/enforcement-ladder.md`) defines the guards and ratchets the Convention Guard Audit verifies
 - **codex-finding-resolution**: Codex P1/P2 findings fix-in-branch; P3 → closure-log. Closure must not file tickets for P3 findings.
 - **using-pm-workflow**: Epic closure is the final phase; tickets must have passed security review first
 

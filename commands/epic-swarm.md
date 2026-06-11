@@ -164,9 +164,9 @@ These tools do not invoke the shell and never trigger glob expansion.
 
 This rule applies to the orchestrator AND to every dispatched subagent. The agent prompt template in §3.2.1 enforces it for subagents.
 
-### 10. Opus 4.7 context efficiency and quality gates
+### 10. Context efficiency and quality gates (Current Frontier Models)
 
-You are orchestrating a swarm on Opus 4.7, which per its system card (§2.2.5.1, §4.4.2, §6.2.2.2) is markedly more verbose than Opus 4.6, prone to "declaring sufficiency without acting," and prone to downgrading action requests into advice. Apply these counter-measures:
+These counter-measures target failure modes still documented for current frontier models — fabricated completion claims, intent-without-action stalls, output verbosity (evidence and per-countermeasure retirement conditions: `docs/MODEL_CALIBRATION.md`). The artifact-evidence checks below are the best-supported guardrail class in the toolkit: fabricated status reports are the one agentic failure that has *worsened* with model capability.
 
 **10a. Hard phase-completion checkpoint before marking any ticket Done.** Constraint #4 already requires all 7 phases and a Linear report per phase. Enforce it mechanically: BEFORE any `mcp__linear-server__update_issue(state='Done')` call for a ticket, verify that you have dispatched 7 phase agents for this ticket AND posted 7 structured reports to Linear for this ticket in this session. Count them. If the count is < 7, do NOT mark the ticket Done — post a `state='In Progress'` update with a `phase-incomplete` label, HALT the swarm, and report to the user which phases are missing. This rule supersedes any pressure you feel from context bloat to "just move on."
 
@@ -174,9 +174,9 @@ You are orchestrating a swarm on Opus 4.7, which per its system card (§2.2.5.1,
 
 **10c. Do NOT re-fetch posted reports via `list_comments`.** Once you have received a phase report from a subagent, you already hold it in your context AND posted it to Linear. Do not call `mcp__linear-server__list_comments` during subsequent phase dispatches to "re-ingest" prior reports for the next agent. Instead, persist each received report to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (write the raw report content, nothing else) and include the FILE PATH in the next phase agent's prompt. The agent will Read the file if it needs the content. Forensic analysis of a 6-ticket epic-swarm run showed this re-fetch loop accounted for ~300 KB of duplicated context.
 
-**10d. Observability logging (v4.7 expanded schema — 15 event types).** Emit JSONL events to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` using the common envelope `{ts, epic_id, ticket_id, phase, event, data}`. Canonical reference: `commands/references/observability-schema.md`. The pre-v4.7 single-line per-phase record is now the `phase_completed` event in the expanded catalog. Required emissions during a tier execution: `phase_started` before each agent dispatch, `phase_completed` after each report parse, `phase_skipped_na` for each N/A posted in §3.2.5b, `deferral_redispatch` / `deferral_accepted` at §3.6 branches, `codex_finding_resolved` / `codex_scope_escape` at §3.8 per finding, `ticket_completed` at §3.5.6 after Linear set to Done, `ticket_failed` on any halt. The schema doc enumerates payloads and emission points exhaustively.
+**10d. Observability logging (v5.0 expanded schema — 17 event types).** Emit JSONL events to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` using the common envelope `{ts, epic_id, ticket_id, phase, event, data}`. Canonical reference: `commands/references/observability-schema.md`. The pre-v4.7 single-line per-phase record is now the `phase_completed` event in the expanded catalog. Required emissions during a tier execution: `phase_started` before each agent dispatch, `phase_completed` after each report parse, `phase_skipped_na` for each N/A posted in §3.2.5b, `deferral_redispatch` / `deferral_accepted` at §3.6 branches, `convention_guard_check` after each Code Review report parse (arrays from the report's Convention Guard Verification section), `codex_finding_resolved` / `codex_scope_escape` at §3.8 per finding, `ticket_completed` at §3.5.6 after Linear set to Done, `ticket_failed` on any halt. The schema doc enumerates payloads and emission points exhaustively.
 
-**10e. Re-dispatch on empty Write/Edit count.** If an implementation/testing/documentation agent returns `Status: DONE` but its reported `write_calls + edit_calls == 0`, the agent declared sufficiency without acting (§6.2.2.2). Re-dispatch the same phase with the directive `PRIOR DISPATCH PRODUCED NO ARTIFACTS. Your next tool call must be Write or Edit. Do not explore further.` appended to the prompt. If the second dispatch also returns zero artifacts, HALT and surface to the user.
+**10e. Re-dispatch on empty Write/Edit count.** If an implementation/testing/documentation agent returns `Status: DONE` but its reported `write_calls + edit_calls == 0`, the agent declared sufficiency without acting. Re-dispatch the same phase with the directive `PRIOR DISPATCH PRODUCED NO ARTIFACTS. Your next tool call must be Write or Edit. Do not explore further.` appended to the prompt. If the second dispatch also returns zero artifacts, HALT and surface to the user.
 
 **10f. Report-size verification.** Agents are instructed to keep structured reports under 6,000 characters (10,000 for epic-closure). If a received report exceeds the cap by >50%, log a warning to observability and proceed — but do not attempt to re-invoke just for length.
 
@@ -255,7 +255,7 @@ Some tickets may be in "In Progress" in Linear despite having completed all 7 ph
    a. Fetch the ticket's Linear comments (`mcp__linear-server__list_comments`)
    b. Verify all 7 required report headers exist (same check as hard checkpoint §3.3)
    c. Verify the security scan report contains `Status: PASS`
-   d. If all reports present + security PASS → mark Done: `mcp__linear-server__save_issue(id=ticket-id, state="Done")`
+   d. If all reports present + security PASS → mark Done: `mcp__linear-server__update_issue(id=ticket-id, state="Done")`
    e. Log: "Auto-closed [ticket-id] from prior session (all 7 reports verified)"
 2. If any report is missing or security didn't PASS, leave the ticket as-is and log a warning.
 3. Do NOT use `AskUserQuestion` for this — the hard checkpoint verification is sufficient.
@@ -1096,8 +1096,8 @@ For each phase of the current ticket:
 
    If a tool has NO working-directory flag, issue two serial Bash calls —
    do NOT chain them. This rule is non-negotiable and applies to EVERY
-   Bash call you make. The permission-interruption class observed on
-   Opus 4.7 + effort=xhigh is almost entirely caused by compound commands.
+   Bash call you make. The permission-interruption class observed in
+   production swarm runs is almost entirely caused by compound commands.
 
    SHELL HAZARD — Bracket paths (Next.js dynamic routes, etc.):
    This shell is zsh. Paths containing brackets like [id], [slug], [...slug]
@@ -1165,7 +1165,10 @@ For each phase of the current ticket:
 
    Do NOT call `mcp__linear-server__list_comments` to re-ingest reports you already received from the subagent in this session — you have them. List_comments is for Phase 1 context gathering and resume-from-interruption only.
 
-5. **Phase-specific instructions** from the relevant agent definition
+5. **Phase-specific instructions** from the relevant agent definition. Three phases carry additional doctrine blocks (canonical wording in `commands/execute-ticket.md` §3.3 item 3 — keep the two orchestrators in lockstep):
+   - **adaptation**: verify claims against HEAD; Vendor-Surface Discipline for new external dependencies; name the guard (rung + artifact) for any convention the ticket establishes
+   - **testing**: the four anti-ballast rules (behavior/contract assertions, real-infra over mock mass, static guards count, ratio discipline)
+   - **codereview**: Convention Guard Verification — convention without guard or `[prose-only]` tag → CHANGES_REQUESTED; mandated-but-missing guard → SCOPE_GAP
 
 6. **Interface contracts** that this ticket defines or consumes
 
@@ -1309,7 +1312,7 @@ After each agent returns, verify file changes landed in the correct worktree:
 | Implementation | `Status:`, `Summary:`, `Files Changed:`, Quality Gates (lint/typecheck/test results) |
 | Testing | `Status:`, `Gate #0` result, `Gate #1` result, `Gate #2` result, `Gate #3` result |
 | Documentation | `Status:`, `Summary:`, `Documentation Updated` or `Docs Created` |
-| Code Review | `Review Status:`, `Requirements Checklist`, `Files Reviewed:`. If `Pass 1 Result: PASS`, also require `Best Practices Assessment` and `SOLID/DRY Assessment`. |
+| Code Review | `Review Status:`, `Requirements Checklist`, `Files Reviewed:`, `Convention Guard Verification` ("None — no conventions established" is valid). If `Pass 1 Result: PASS`, also require `Best Practices Assessment` and `SOLID/DRY Assessment`. After a valid parse, emit the `convention_guard_check` event (per 10d). |
 | Codex Review | Summary with finding counts by priority, Auto-Fixed Items section, User-Reviewed Items section, Declined by Codex section |
 | Security Scan | `Status:`, `Security Checklist` or findings list |
 
@@ -1349,7 +1352,7 @@ After §3.2.4 reclassification, every `AC-DEFERRED` entry must carry a valid `##
      - `Catastrophic condition:` with a value of `1`, `2`, `3`, or `4`
      - `Evidence:` with a concrete external fact (not "complex", "tricky", "would take time", "is hard", "needs more thought")
      - `Confidence the catastrophic condition applies:` with `HIGH`, `MEDIUM`, or `LOW`
-     - `Specific blocker that prevents doing the work in this session:` with a factual description (not effort/time language)
+     - `Specific blocker preventing the work this session:` with a factual description (not effort/time language)
    - **If the block is MISSING, malformed, or cites a condition outside 1-4** → `DEFERRAL_INVALID` → re-dispatch (see below).
    - **If the block cites condition #4 (user authorization needed) but the Deferred Item fuzzy-matches an AC** → `DEFERRAL_OVERRIDDEN` → re-dispatch with "this is in scope per AC X" supplemental.
 
@@ -1385,6 +1388,8 @@ Record every re-dispatch in `.swarm/observability/[epic-id]/[ticket-id].jsonl`:
 ```
 
 **Why this exists:** Across the last 100+ tickets in this workflow, ~80-90% of deferrals should never have happened. The AC fuzzy-match in §3.2.4 catches deferrals that match an AC, but it does not enforce that the deferral has a valid catastrophic reason. This section is that enforcement.
+
+**Symmetric-additions check (v5.0):** the impact bar applies to *additions* too. Scan the report for **unrequested defensive runtime machinery** — a retry tier, reconciliation job, sweep, recovery cron, or new error-taxonomy layer no AC asked for. If the report doesn't name a concrete **observed** failure it answers plus an activation metric, re-dispatch ONCE with "remove the machinery (or name its observed failure + activation metric); record the idea in the closure-log instead" — same one-retry-then-user escalation as above. See `no-silent-deferrals` → The Symmetric Bar.
 
 #### 3.2.5 Post Report to Linear + Quality Labels
 

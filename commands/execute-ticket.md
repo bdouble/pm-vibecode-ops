@@ -14,11 +14,11 @@ Execute all 6 ticket-level workflow phases automatically for the specified ticke
 - `npx --prefix <abs-path> <bin>` (not `cd <path> && npx <bin>`)
 - `docker compose --project-directory <abs-path> <command>`
 
-If a tool has no working-dir flag, run two serial Bash calls instead of chaining. This applies to the orchestrator AND to every agent dispatched by this workflow. Agent prompts include this rule verbatim via the agent's own "Opus 4.7 Operating Constraints" section.
+If a tool has no working-dir flag, run two serial Bash calls instead of chaining. This applies to the orchestrator AND to every agent dispatched by this workflow. Agent prompts include this rule verbatim via the agent's own "Operating Constraints (Current Frontier Models)" section.
 
-## Opus 4.7 Orchestrator Operating Constraints
+## Orchestrator Operating Constraints (Current Frontier Models)
 
-You are running on Opus 4.7, which per its system card (§2.2.5.1, §4.4.2, §6.2.2.2) is markedly more verbose than Opus 4.6, prone to "declaring sufficiency without acting," and prone to downgrading action requests into advice. Apply these counter-measures:
+These counter-measures target failure modes still documented for current frontier models — fabricated completion claims, intent-without-action stalls, output verbosity (evidence and per-countermeasure retirement conditions: `docs/MODEL_CALIBRATION.md`). The artifact-evidence checks below are the best-supported guardrail class in the toolkit: fabricated status reports are the one agentic failure that has *worsened* with model capability.
 
 1. **Sufficiency-stall detection.** After receiving a phase agent's report, validate its Status block against the reported tool-call counts:
    - If phase is `implementation`, `testing`, or `documentation` AND `Status: DONE` AND `write_calls + edit_calls == 0`: re-dispatch the same phase with `PRIOR DISPATCH PRODUCED NO ARTIFACTS. Your next tool call must be Write or Edit. Do not explore further.` appended. If the second dispatch also reports zero artifacts, HALT and surface to user with options: (a) retry with a stricter "write code now" directive, (b) review manually, (c) reduce scope.
@@ -28,7 +28,7 @@ You are running on Opus 4.7, which per its system card (§2.2.5.1, §4.4.2, §6.
 
 3. **No re-fetch loop.** Once an agent returns a phase report, you already have it in context AND post it to Linear. Do NOT call `mcp__linear-server__list_comments` to re-ingest prior reports for the next phase's prompt. Instead, persist each report to `$REPORTS_DIR/<phase>.md` (the path resolved in Step 1) and pass the FILE PATH to the next-phase agent. The agent Reads it on demand. Epic context resolves to `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md`; solo context resolves to `.swarm/context/_solo/<ticket-id>/reports/<phase>.md`.
 
-4. **Observability logging (v4.7 expanded schema — 15 event types).** Emit JSONL events to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` (or `.swarm/observability/_solo/<ticket-id>.jsonl` if no epic context). Every event uses the common envelope `{ts, epic_id, ticket_id, phase, event, data}`. The catalog and emission points are defined in `commands/references/observability-schema.md` — the canonical reference. The pre-v4.7 single-line `phase_completed`-shaped record is now one of fifteen event types; see Step 3 phase loop, Step 3.6 deferral branches, Step 3.8 codex branches, and Step 4 closure for the specific emission points.
+4. **Observability logging (v5.0 expanded schema — 17 event types).** Emit JSONL events to `.swarm/observability/<epic-id>/<ticket-id>.jsonl` (or `.swarm/observability/_solo/<ticket-id>.jsonl` if no epic context). Every event uses the common envelope `{ts, epic_id, ticket_id, phase, event, data}`. The catalog and emission points are defined in `commands/references/observability-schema.md` — the canonical reference. The pre-v4.7 single-line `phase_completed`-shaped record is now one of seventeen event types; see Step 3 phase loop, Step 3.6 deferral branches, Step 3.8 codex branches, and Step 4 closure for the specific emission points.
 
 5. **Keep your orchestrator narration terse.** Under 4.7's verbosity regression, every extra paragraph you write multiplies across phase transitions. One-sentence status updates between phases: "Phase N complete. Dispatching Phase N+1." No recap, no re-summarization.
 
@@ -994,7 +994,10 @@ Agent tool parameters:
   0. SHELL COMMAND POLICY block (prescriptive, at TOP of prompt) — see below
   1. Ticket details (title, full description, all acceptance criteria, all Technical Notes — verbatim)
   2. Prior phase reports — pass as FILE PATHS to `$REPORTS_DIR/<phase>.md` (resolved in Step 1 — epic context → `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md`; solo → `.swarm/context/_solo/<ticket-id>/reports/<phase>.md`), NOT verbatim inline. Exception: reports under 2,000 chars may be inlined verbatim to save a Read round-trip.
-  3. Specific phase instructions
+  3. Specific phase instructions. Three phases carry additional doctrine blocks:
+     - **adaptation**: verify ticket/discovery claims about existing patterns/services against HEAD before building the guide (verification over recall); apply Vendor-Surface Discipline to any new external dependency; if the ticket establishes a convention, name its guard (rung + artifact) in a Convention Guards section (see `commands/adaptation.md`)
+     - **testing**: the four anti-ballast rules — assert behavior/contracts not call shapes; few real-infra integration tests outrank thousands of mocks for the data layer; static guards count as tests; don't inflate the mock:integration ratio (see `commands/testing.md`)
+     - **codereview**: Convention Guard Verification — if the change establishes a convention, its guard (enforcement-ladder rung 1–5) ships in this same change or carries an explicit `[prose-only]` tag; neither → CHANGES_REQUESTED, and a guard the adaptation guide mandated but is absent → SCOPE_GAP (see `commands/codereview.md`)
   4. Expected output format (structured report, under 6,000 characters; include tool-call counts in Status block)
   5. Current branch name (so agent can verify it is on the correct branch)
   6. Referenced project documents and external content from Step 3.1.1 (formatted per Step E)
@@ -1107,7 +1110,7 @@ Before posting to Linear, validate the agent report contains required fields:
 | implementation | `Status:`, `Summary:`, `Files Changed:` |
 | testing | `Status:`, `Gate #0`, `Gate #1`, `Gate #2`, `Gate #3` results |
 | documentation | `Status:`, `Summary:`, `Documentation Updated` or `Docs Created` |
-| codereview | Always: `Review Status:`, `Requirements Checklist`, `Files Reviewed:`. If `Pass 1 Result: PASS`, also require `Best Practices Assessment` and `SOLID/DRY Assessment`. |
+| codereview | Always: `Review Status:`, `Requirements Checklist`, `Files Reviewed:`, `Convention Guard Verification`. If `Pass 1 Result: PASS`, also require `Best Practices Assessment` and `SOLID/DRY Assessment`. |
 | security-review | `Status:`, `Security Checklist` or findings list |
 
 **Validation algorithm:**
@@ -1125,8 +1128,14 @@ If ANY required field is missing or empty:
 ```
 
 **Codereview conditional validation:**
-- If report contains `Pass 1 Result: FAIL`, treat "Pass 2 skipped" as valid and do NOT require Pass 2 sections.
-- If report contains `Pass 1 Result: PASS` (or does not specify Pass 1), require both `Best Practices Assessment` and `SOLID/DRY Assessment`.
+- If report contains `Pass 1 Result: FAIL`, treat "Pass 2 skipped" as valid and do NOT require Pass 2 sections (including Convention Guard Verification).
+- If report contains `Pass 1 Result: PASS` (or does not specify Pass 1), require `Best Practices Assessment`, `SOLID/DRY Assessment`, and `Convention Guard Verification` ("None — no conventions established" is a valid entry).
+
+**Codereview observability emission (v5.0):** after parsing a valid codereview report, emit one `convention_guard_check` event to the per-ticket stream:
+```json
+{"ts":"<iso8601>","epic_id":"<epic-id|null>","ticket_id":"<ticket-id>","phase":"codereview","event":"convention_guard_check","data":{"conventions_introduced":[...],"guards_shipped":[...],"prose_only_tagged":[...],"missing":[...]}}
+```
+Populate the arrays from the report's Convention Guard Verification section (empty arrays when "None"). A non-empty `missing` array always accompanies `Review Status: CHANGES_REQUESTED`.
 
 **IMPORTANT:** Auto-retry happens automatically before pausing. This preserves full automation in most cases.
 
@@ -1403,7 +1412,7 @@ For every `AC-DEFERRED` entry (whether classified by the agent or reclassified b
    - `Catastrophic condition:` value is `1`, `2`, `3`, or `4`
    - `Evidence:` contains a concrete external fact (not "complex," "tricky," "would take time," any time/effort language)
    - `Confidence the catastrophic condition applies:` is `HIGH`, `MEDIUM`, or `LOW`
-   - `Specific blocker that prevents doing the work in this session:` contains a factual description
+   - `Specific blocker preventing the work this session:` contains a factual description
 3. **If MISSING/MALFORMED/CONDITION-OUT-OF-RANGE** → `DEFERRAL_INVALID` → re-dispatch (Pass 3)
 4. **If condition #4 cited but the deferred item fuzzy-matches an AC** → `DEFERRAL_OVERRIDDEN` → re-dispatch (Pass 3)
 
@@ -1468,7 +1477,9 @@ This restores the audit trail: every orchestrator intervention is a Linear-visib
 
 **This validation runs for ALL phases**, not just implementation. Code review and testing agents can also improperly defer items that match AC.
 
-**Why this exists:** The user has observed ~80-90% deferral rates with most deferrals being inappropriate. The AC fuzzy-match catches deferrals that map to acceptance criteria, but it does not enforce that the deferral has a valid catastrophic reason. Pass 2 + Pass 3 provide that enforcement at the orchestrator level. See `no-silent-deferrals` skill for the policy rationale.
+**Pass 4 — Symmetric-additions check (v5.0):** the impact bar applies to *additions* too. Scan the report for **unrequested defensive runtime machinery** — a retry tier, reconciliation job, sweep, recovery cron, or new error-taxonomy layer that no AC asked for. For each: does the report name a **concrete observed failure** it answers (an incident, red test, logged error, vendor behavior that actually bit) plus an activation metric? If not, re-dispatch ONCE with "remove the machinery (or name its observed failure + activation metric); record the idea in the closure-log instead" — mirror of the deferral re-dispatch above, same one-retry-then-user escalation. "Could theoretically fail" does not clear the bar. See `no-silent-deferrals` → The Symmetric Bar.
+
+**Why this exists:** The user has observed ~80-90% deferral rates with most deferrals being inappropriate. The AC fuzzy-match catches deferrals that map to acceptance criteria, but it does not enforce that the deferral has a valid catastrophic reason. Pass 2 + Pass 3 provide that enforcement at the orchestrator level; Pass 4 applies the same discipline symmetrically to speculative additions (with agents, unjustified machinery accumulates as fast as unjustified deferrals). See `no-silent-deferrals` skill for the policy rationale.
 
 #### 3.6.1 Commit and Create Draft PR (Implementation Phase Only)
 

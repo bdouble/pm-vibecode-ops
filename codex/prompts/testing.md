@@ -119,6 +119,15 @@ Create **focused, high-value** test coverage ensuring quality and preventing reg
 6. Type definitions and interfaces
 7. Styling and layout code
 
+### Anti-Ballast Doctrine (Test Mass Is Not Confidence)
+
+Tests are generated at near-zero marginal cost, so a suite can accrete until it resists refactoring more than it catches bugs. Four rules keep the suite load-bearing:
+
+1. **Assert behavior and contracts, not call shapes.** `toHaveBeenCalledTimes`/`toHaveBeenCalledWith` on internal collaborators pins implementation shape, not correctness — a smell unless the call IS the contract (e.g., "exactly one billing dispatch"). Default to asserting returns, persisted state, and emitted events.
+2. **A handful of real-infrastructure integration tests outrank thousands of mocked unit tests for the data layer.** A mocked DB client cannot catch a constraint violation, a transaction-isolation bug, or migration drift.
+3. **Static guards count as tests** — of the architecture. One source-scanning guard test beats 30 per-surface mocked re-assertions of the same convention (see the production-code-standards skill's Enforcement Ladder, `codex/skills/production-code-standards/SKILL.md`).
+4. **Watch the ratio.** Rising mock:integration ratio or call-count-assertion density = ballast accreting.
+
 ## Code Quality Standards - NO WORKAROUNDS IN PRODUCTION CODE
 
 **CRITICAL: Test Code vs Production Code Standards**
@@ -147,6 +156,7 @@ During test generation and implementation, the agent MUST enforce different stan
 - Don't write tests that pass because of workarounds
 - Ensure tests will still pass after workarounds are fixed
 - Test error cases should expect proper errors, not fallback behavior
+- **No gaming the gates**: never hard-code values to make specific test inputs pass; never delete or skip a failing test to make it pass — report suspected-wrong tests instead
 
 ## 🚨 CRITICAL: Test Remediation Priority
 

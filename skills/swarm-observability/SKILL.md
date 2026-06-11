@@ -25,13 +25,13 @@ The observability layer has exactly two consumption surfaces. Pick the right one
 | `/swarm-stats <epic-id-or-ticket-id>` | Interactive operator question, single epic or ticket | Formatted dashboard, headline number, legacy badge for pre-v4.7 epics |
 | `scripts/swarm-stats.sh <id> [--per-skill] [--audit-deltas]` | CI, batch comparison, scripting | Same output, no LLM in loop, parseable |
 
-**Never read `.swarm/observability/*.jsonl` directly to answer a metrics question.** The stream has 15 event types with a common envelope; ad-hoc `jq` runs reproduce bugs that `swarm-stats.sh` already fixed (legacy detection, `_epic.jsonl` filtering, top-level vs nested `.data.profile`). Use the tool.
+**Never read `.swarm/observability/*.jsonl` directly to answer a metrics question.** The stream has 17 event types with a common envelope; ad-hoc `jq` runs reproduce bugs that `swarm-stats.sh` already fixed (legacy detection, `_epic.jsonl` filtering, top-level vs nested `.data.profile`). Use the tool.
 
 Direct stream reads are appropriate for ONE case: debugging the observability layer itself (an event that wasn't emitted, a field that's wrong). Always-default to the dashboard.
 
-## The 15-Event Schema
+## The 17-Event Schema
 
-Every event uses the same envelope: `{ts, epic_id, ticket_id, phase, event, data}`. The 15 event types fall into five families. The canonical reference is `commands/references/observability-schema.md` — read it before authoring new emission points or extending the schema.
+Every event uses the same envelope: `{ts, epic_id, ticket_id, phase, event, data}`. The 17 event types fall into six families. The canonical reference is `commands/references/observability-schema.md` — read it before authoring new emission points or extending the schema.
 
 | Family | Events | What it tells you |
 |---|---|---|
@@ -39,7 +39,8 @@ Every event uses the same envelope: `{ts, epic_id, ticket_id, phase, event, data
 | Phase lifecycle | `phase_started`, `phase_completed`, `phase_skipped_na` | What ran live vs. N/A-skipped per profile; agent dispatch counts; per-phase tool-call metrics |
 | Deferral discipline | `deferral_redispatch`, `deferral_accepted` | How often the orchestrator rejected an agent's deferral; how often a catastrophic justification held up |
 | Judgment scaffolding (v4.6) | `impact_bar_rejected`, `boundary_question_answered`, `followup_cap_blocked` | How often the impact bar caught a low-value follow-up; cross-cutting concern resolutions; ≤3 cap interventions |
-| Codex + lifecycle | `codex_finding_resolved`, `codex_scope_escape`, `ticket_completed`, `ticket_failed`, `epic_completed` | Codex auto-fix rates by disposition; ticket and epic outcomes |
+| Convention guards + audit (v5.0) | `convention_guard_check`, `entropy_scorecard_recorded` | Whether conventions shipped with their guards; the entropy-audit scorecard trend (discipline debt, guard counts, test ballast) |
+| Codex + lifecycle | `codex_finding_resolved`, `codex_scope_escape`, `ticket_completed`, `ticket_failed`, `epic_completed` | Codex auto-fix rates by disposition; ticket and epic outcomes (now incl. prose-only/enforced counts) |
 
 A pre-v4.7 epic only has `profile_assigned` events. `swarm-stats` renders a "Pre-v4.7 epic — partial data only" badge and shows `—` for the other rows. **Do not infer or backfill missing v4.5/v4.6 data** — the inference would invent signal that isn't in the stream.
 

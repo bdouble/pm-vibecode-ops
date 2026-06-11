@@ -216,6 +216,29 @@ Document findings that affect implementation:
 - **Scalability Issues**: [Single points of failure]
 ```
 
+### 5.5. Doc-Truth Verification (Memory vs HEAD)
+
+Project memory decays: CLAUDE.md/AGENTS.md, READMEs, env docs, and old tickets accumulate claims that drift from reality, and every stale claim primes every future agent session with a falsehood. Treat load-bearing claims in project memory as **hypotheses** and verify a sample against HEAD and, where reachable, the live environment (deployed flags, actual configs):
+
+```markdown
+## 🔍 Doc-Truth Verification
+
+### Claims Verified
+| Claim (source) | Verification | Verdict |
+|----------------|--------------|---------|
+| "All data access goes through repositories" (AGENTS.md) | grep for direct ORM imports outside repositories/ | ✅ Holds / ❌ 3 violations found |
+| "FEATURE_X is disabled in prod" (env docs) | checked deployed env config | ❌ Enabled — docs are stale |
+| "Migration Y is complete" (ticket PROJ-12) | counted remaining call sites | ⚠️ 4 of 17 surfaces unmigrated |
+
+### Discrepancies (each is a finding — fixing the memory is part of this discovery)
+- [stale claim] → [actual state] → [correction applied / to apply]
+
+### Convention Status Tags (if present)
+- `[enforced:]` rules: X | `[prose-only]` rules: Y (discipline-debt baseline for entropy audits)
+```
+
+A claim that fails verification is itself a finding — the project's memory is lying to every session. Include the memory fix in the discovery output.
+
 ### 6. Implementation Recommendations
 Based on discovery, provide clear guidance:
 ```markdown

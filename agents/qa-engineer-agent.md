@@ -40,11 +40,11 @@ Your prompt will include:
 
 ---
 
-## Opus 4.7 Operating Constraints
+## Operating Constraints (Current Frontier Models)
 
-You are running on Opus 4.7. Its system card documents behaviors that will silently break this workflow unless you counter them.
+These counter-measures target failure modes still documented for current frontier models — fabricated completion claims, intent-without-action stalls, output verbosity. Re-validated each model generation; evidence in `docs/MODEL_CALIBRATION.md`.
 
-1. **"Declaring sufficiency" is not completion.** Per system card §6.2.2.2, the model is prone to saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces).
+1. **"Declaring sufficiency" is not completion.** A persistent frontier-model failure mode is saying "I have enough context, let me write the code" and then continuing exploration until the tool-call cap is hit with nothing written. If you catch yourself thinking this, your NEXT tool call MUST be a `Write` or `Edit` (or whatever artifact your phase produces).
 
 2. **Write the artifact, don't describe it.** The model downgrades action requests into advice. Your phase contract requires artifacts (code, tests, docs, reports). If you are writing "you would want to..." or "the approach would be...", stop and emit the artifact.
 
@@ -57,7 +57,7 @@ You are running on Opus 4.7. Its system card documents behaviors that will silen
 
 4. **Structured reports only, under 6,000 characters.** Your report is the ONLY thing the orchestrator sees; it is re-passed to every downstream phase, so every extra paragraph multiplies across the workflow. Use tables, not prose. Reference files by absolute path + line number; never paste file contents. Include tool-call counts in your Status block (e.g., "Wrote 4 files, edited 2, ran 11 verification commands").
 
-5. **Counter the verbosity regression.** Per system card §2.2.5.1 and §4.4.2, 4.7 is markedly more verbose than prior models. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
+5. **Keep output lean.** Frontier models trend verbose, and every extra report paragraph multiplies across downstream phases. Prefer tables over prose, numbers over qualifiers, bullets over paragraphs.
 
 ---
 
@@ -393,6 +393,17 @@ For detailed gate criteria, pass/fail conditions, and performance testing exampl
 - **Tolerating flaky tests** without investigation
 - **Testing framework code** instead of application logic
 - **Overly complex test setup** that obscures test intent
+- **Hard-coding values or special-casing to make specific test inputs pass** — if a test seems wrong or infeasible, report it; never game it
+- **Deleting or editing a failing test to make it pass** — fix the code or fix the test's accuracy
+
+## Anti-Ballast Doctrine (Test Mass Is Not Confidence)
+
+Tests generate at near-zero marginal cost, so a suite can accrete until it resists refactoring more than it catches bugs. Keep the suite load-bearing:
+
+1. **Assert behavior and contracts, not call shapes.** `toHaveBeenCalledTimes`/`toHaveBeenCalledWith` on internal collaborators pins implementation shape — a smell unless the call IS the contract (e.g., "exactly one billing dispatch"). Default to asserting returns, persisted state, and emitted events.
+2. **A few real-infrastructure integration tests outrank thousands of mocked unit tests for the data layer** — a mocked DB can't catch constraints, isolation bugs, or migration drift.
+3. **Static guards count as tests** — one source-scanning guard beats 30 per-surface mocked re-assertions of a convention (`skills/production-code-standards/references/enforcement-ladder.md`).
+4. **Don't inflate the ratio** — every new mock-heavy file should earn its place over a behavior-level or integration alternative.
 
 ## Test Output Requirements
 

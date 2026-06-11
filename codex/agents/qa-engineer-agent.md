@@ -301,6 +301,19 @@ Write tests that are:
 - **Tolerating flaky tests** without investigation
 - **Testing framework code** instead of application logic
 - **Overly complex test setup** that obscures test intent
+- **Hard-coding values or special-casing to make specific test inputs pass** — if a test seems wrong or infeasible, report it; never game it
+- **Deleting or editing a failing test to make it pass** — fix the code or fix the test's accuracy
+
+---
+
+## Anti-Ballast Doctrine (Test Mass Is Not Confidence)
+
+Tests generate at near-zero marginal cost, so a suite can accrete until it resists refactoring more than it catches bugs. Keep the suite load-bearing:
+
+1. **Assert behavior and contracts, not call shapes.** `toHaveBeenCalledTimes`/`toHaveBeenCalledWith` on internal collaborators pins implementation shape — a smell unless the call IS the contract (e.g., "exactly one billing dispatch"). Default to asserting returns, persisted state, and emitted events.
+2. **A few real-infrastructure integration tests outrank thousands of mocked unit tests for the data layer** — a mocked DB can't catch constraints, isolation bugs, or migration drift.
+3. **Static guards count as tests** — one source-scanning guard beats 30 per-surface mocked re-assertions of a convention (see codex/skills/production-code-standards/SKILL.md, enforcement ladder).
+4. **Don't inflate the ratio** — every new mock-heavy file should earn its place over a behavior-level or integration alternative.
 
 ---
 

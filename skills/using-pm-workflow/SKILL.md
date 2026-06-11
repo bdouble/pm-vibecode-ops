@@ -35,7 +35,10 @@ Use only when a specific phase needs manual control, rerun, or debugging:
 | 10 | `/security-review` | OWASP assessment (closes tickets) |
 
 **Epic-Level (after all tickets complete):**
-11. `/close-epic` — Close epic with follow-up discipline (impact bar + boundary question + ≤3 cap) and Considered-but-not-pursued closure-log
+11. `/close-epic` — Close epic with follow-up discipline (impact bar + boundary question + ≤3 cap), Convention Guard Audit, CLAUDE.md pruning, and Considered-but-not-pursued closure-log
+
+**Recurring Maintenance (every 3–6 months or N epics):**
+12. `/entropy-audit "<north-star>"` — Cross-epic consolidation audit: mechanical census + judgment review, machine-diffable scorecard (prose-only count, guard count, test-ballast ratios), doc-truth verification of project memory
 
 ## Closure Rules
 
@@ -57,5 +60,7 @@ Standard ticket to implement?    → /execute-ticket <ticket-id>
 Whole epic ready to execute?     → /epic-swarm <epic-id>
 Rerun one phase on a ticket?     → individual phase command (e.g., /testing <ticket-id>)
 All tickets in an epic done?     → /close-epic <epic-id>
+Months since last health check?  → /entropy-audit "<north-star>"
+Codebase drifting / memory stale? → /entropy-audit "<north-star>"
 Unsure where to start?           → /generate-service-inventory → /discovery
 ```

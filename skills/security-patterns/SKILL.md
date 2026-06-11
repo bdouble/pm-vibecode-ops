@@ -74,6 +74,10 @@ Write security controls at each trust boundary, not just at the perimeter:
 
 Run through the enforcement checklist above. Grep the changed files for security review triggers (see below). Confirm no secrets, no raw queries, no missing auth checks.
 
+### Step 5: Encode Recurring Rules as Guards
+
+Recurring security rules — "every mutation handler validates input", "no raw queries", "all webhook handlers verify signatures" — are prime rung-2 guard candidates: a single source-scanning guard test enforces the rule on every future surface, instead of re-flagging it per-surface at review time. When you establish or rely on such a rule, prefer recommending (or shipping) the guard over documenting the rule in prose. See `production-code-standards` → `references/enforcement-ladder.md` for the ~200-line guard-test recipe.
+
 ## Common Vulnerability Patterns
 
 These inline examples cover the three most critical vulnerability categories. See `references/owasp-patterns.md` for the complete catalog.

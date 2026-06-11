@@ -39,7 +39,10 @@ This skill establishes the foundational behavior for all PM workflow sessions.
 10. **Security Review** - OWASP assessment (closes tickets)
 
 **Epic-Level (after all tickets complete):**
-11. **Close Epic** - Close epic with retrofit analysis
+11. **Close Epic** - Close epic with follow-up discipline (impact bar + boundary question + ≤3 cap), Convention Guard Audit, and CLAUDE.md prose pruning
+
+**Recurring Maintenance (every 3-6 months or ~10 epics, between epics):**
+12. **Entropy Audit** - Cross-epic consolidation: mechanical census + judgment review, machine-diffable scorecard (prose-only count, guard count, test-ballast ratios), doc-truth verification of project memory
 
 ## Session Start Checklist
 
@@ -58,7 +61,10 @@ Working on a ticket?
   -> Documentation -> Code Review -> Security Review
 
 All tickets in epic done?
-  -> Close Epic (retrofit analysis, creates follow-up tickets)
+  -> Close Epic (follow-up discipline, Convention Guard Audit, CLAUDE.md pruning)
+
+Codebase drifting / project memory stale / months since last health check?
+  -> Entropy Audit (census + scorecard + doc-truth sweep)
 
 "Where do I start?"
   -> Check if service inventory exists
@@ -87,9 +93,15 @@ All tickets in epic done?
 ## Epic Closure Rules
 
 - **Only Close Epic closes epics** - marks epic as "Done" when all sub-tickets are Done/Cancelled
-- Includes retrofit analysis, downstream impact propagation
-- Creates retrofit tickets for lessons learned
+- Includes follow-up discipline (impact bar + boundary question + ≤3 filed tickets), the Convention Guard Audit (every convention the epic established needs a guard or an explicit [prose-only] tag — else closure is blocked), downstream impact propagation, and CLAUDE.md prose pruning
+- Default disposition for candidates is the Considered-but-not-pursued closure-log, not a ticket; ratchets replace propagation tickets
 - Epic remains "In Progress" until all sub-tickets pass security review
+
+## Entropy Audit Rules (recurring)
+
+- Run every 3-6 months or ~10 epics, between epics
+- Produces a machine-diffable scorecard (prose-only rule count, guard count, zero-activation machinery, mock:integration test ratio) plus a judgment-layer report
+- Verifies project memory (AGENTS.md / convention docs) against the actual code — stale rules get flagged
 
 ---
 
