@@ -286,7 +286,7 @@ For each group, provide:
 - A descriptive theme name
 - Which source tickets contributed items
 - The highest classification in the group (AC-DEFERRED > DISCOVERED > OUT-OF-SCOPE)
-- A recommendation: CREATE TICKET, ACCEPT DEFERRAL, or MERGE WITH RETROFIT
+- A recommendation: CREATE TICKET, ACCEPT DEFERRAL, or MERGE WITH FOLLOW-UP
 - Reasoning for the recommendation
 - If CREATE TICKET: suggested priority (P0-P3), estimated effort, and acceptance criteria
 
@@ -909,7 +909,7 @@ Before completing your analysis, verify:
 - [ ] All deferred items from all tickets aggregated into raw table
 - [ ] Exact duplicates removed, cross-ticket duplicates preserved
 - [ ] Related items grouped by theme with descriptive names
-- [ ] Each group has recommendation (CREATE TICKET / ACCEPT DEFERRAL / MERGE WITH RETROFIT)
+- [ ] Each group has recommendation (CREATE TICKET / ACCEPT DEFERRAL / MERGE WITH FOLLOW-UP)
 - [ ] CREATE TICKET groups have: Priority, Effort, Acceptance Criteria
 - [ ] Overlap check against follow-up candidates completed
 - [ ] AC-DEFERRED items always visible (even if --skip-deferred-review)

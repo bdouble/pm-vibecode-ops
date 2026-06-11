@@ -606,7 +606,7 @@ During ticket execution, agents defer work items and record them in structured D
 **Agent output includes:**
 - Raw per-ticket deferred items table (audit trail)
 - Consolidated grouped recommendations (actionable)
-- Per-group recommendation: CREATE TICKET | ACCEPT DEFERRAL | MERGE WITH RETROFIT
+- Per-group recommendation: CREATE TICKET | ACCEPT DEFERRAL | MERGE WITH FOLLOW-UP
 - Reasoning for each recommendation
 - Overlap table with follow-up candidates
 
