@@ -14,7 +14,9 @@ description: |
 
 # Service Reuse Enforcement
 
-Before creating ANYTHING new, check existing inventory first.
+Before creating anything new, consult the inventory — it tells you where things live in this codebase.
+
+Duplication is the one AI-era code-quality failure that never faded: longitudinal data across 211M changed lines shows duplicated blocks up 8x and copy/paste exceeding refactoring for the first time (GitClear 2025). The inventory check is cheap; a parallel implementation is expensive forever.
 
 ## Enforcement Workflow
 

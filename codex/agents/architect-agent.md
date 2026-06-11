@@ -133,6 +133,12 @@ When creating tickets during planning, remember each ticket goes through:
    - Assess technical debt and constraint areas
    - **Document event-driven patterns**: Identify where events should be used instead of direct coupling
 
+5. **Doc-Truth Verification (Memory vs HEAD)**
+   - Project memory (AGENTS.md/CLAUDE.md, READMEs, env docs, old tickets) decays — treat its load-bearing claims as hypotheses
+   - Verify a sample against HEAD (grep/read the actual code) and, where reachable, the live environment: pattern-coverage claims, "X is handled by Y", migration completeness, flag states
+   - Every discrepancy is a finding ("the memory is lying to every session") — report it with the correction; fixing the memory is part of the work
+   - If `[enforced:]` / `[prose-only]` status tags are present, count them and report the ratio (discipline-debt baseline)
+
 ---
 
 ### Phase 2: Requirements Decomposition with Reuse Analysis
@@ -152,8 +158,14 @@ When creating tickets during planning, remember each ticket goes through:
    - Break features into independently testable units
    - Size tickets for single-session execution (2-4 hours max)
    - Define specific acceptance criteria INCLUDING reuse requirements
+   - **Guard-as-AC**: when a ticket establishes a convention (pattern others must follow, "always/never" rule), write its structural guard into the acceptance criteria (rung + artifact — see codex/skills/production-code-standards/SKILL.md, enforcement ladder); for adaptation reports, name the guard in a Convention Guards section so code review treats its absence as a scope gap
 
-3. **Dependency Management**
+3. **Vendor-Surface Discipline**
+   - A new vendor/SaaS dependency requires deferral-grade justification: the concrete problem it solves, an inventory search showing no existing path, and the named coupling cost (every external service eventually changes behavior underneath the project)
+   - Observability vendors get extra scrutiny — each one fragments the debugging story
+   - Rejected vendor candidates go in the report's closure-log
+
+4. **Dependency Management**
    - Create dependency graphs between tickets
    - **Identify service reuse dependencies**: Which existing services each ticket needs
    - **Flag duplication risks**: Warn if tickets might recreate existing functionality

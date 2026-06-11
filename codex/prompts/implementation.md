@@ -179,7 +179,7 @@ function validateImplementationPlan(adaptationGuide, serviceInventory) {
    - Apply existing infrastructure components
    - Integrate via events where specified
    - ONLY create new code when no alternative exists
-6. **Core Implementation**: Follow guide step-by-step, implement ONLY ticket functionality
+6. **Core Implementation**: Follow guide step-by-step, implement ONLY ticket functionality — exactly the requested scope; no unrequested abstractions, cleanup, or flexibility
 7. **Scoped Quality Assurance**: Run linting and type checking ONLY on files modified for this ticket
 8. **Documentation**: Add inline comments ONLY to code created for this ticket
 9. **Commit Changes**: Stage and commit ONLY ticket-related changes to feature branch
@@ -194,6 +194,7 @@ function validateImplementationPlan(adaptationGuide, serviceInventory) {
 - **MANDATORY: Reuse all services specified in adaptation guide**
 - **MANDATORY: Use event patterns where specified**
 - **MANDATORY: Apply existing infrastructure components**
+- **MANDATORY: Ship any Convention Guard the adaptation guide names (rung + artifact)** — a convention without its guard is an incomplete implementation (see the production-code-standards skill's Enforcement Ladder, `codex/skills/production-code-standards/SKILL.md`)
 - Error handling for the new code being added
 - Basic validation for new inputs/endpoints
 - **Meaningful JSDoc comments following MVD principles** (see Documentation Standards section)

@@ -138,6 +138,17 @@ async createUser(@Body() data: CreateUserDto)
 
 **Best documentation = code that doesn't need documentation.**
 
+## Convention Documentation: Status Tags and Pruning
+
+Conventions and rules written into project memory (AGENTS.md/CLAUDE.md, convention docs) follow the same "why, not what" economics — and one more rule: **every documented convention carries an inline status tag.**
+
+- `[enforced: <artifact path>]` — a structural guard exists (lint rule, guard test, drift test, ratchet). The prose should be a **one-line pointer**: "X is enforced by `tests/guards/x.test.ts` — see that file for details." An enforced rule needs near-zero prose forever; the guard's error message does the teaching.
+- `[prose-only]` — no guard exists. Requires one line on why the rule can't be structurally enforced (genuinely operational judgment).
+
+**The pruning rule:** when a guard ships for a previously documented rule, retire the paragraph to the one-line `[enforced:]` pointer in the same change. Project memory is append-only by default and decays — every retired paragraph is context-window cost saved in every future session.
+
+**The discipline-debt metric:** the `[prose-only]` count is countable and trendable — report it at each epic closure and trend it in entropy audits. See the production-code-standards skill (enforcement ladder) for the guard recipes behind the tags.
+
 ## Architecture Decisions
 
 For significant architectural decisions affecting multiple files, use an ADR.

@@ -50,6 +50,10 @@ When writing security-relevant code:
 - **Least privilege**: Minimal permissions required
 - **Secure defaults**: Safe configuration out of the box
 
+## Encode Recurring Rules as Guards
+
+Recurring security rules — "every mutation handler validates input", "no raw queries", "all webhook handlers verify signatures" — are prime rung-2 guard candidates: a single source-scanning guard test enforces the rule on every future surface, instead of re-flagging it per-surface at review time. When you establish or rely on such a rule, prefer recommending (or shipping) the guard over documenting the rule in prose. See the production-code-standards skill (enforcement ladder) for the guard-test recipe.
+
 See `references/owasp-patterns.md` for detailed code examples for each OWASP Top 10 vulnerability.
 
 ---

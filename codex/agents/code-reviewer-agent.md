@@ -147,6 +147,25 @@ Your primary responsibilities include reviewing code changes for quality, patter
 - Configuration management
 - Technical debt identification
 
+### 8. Convention Guard Verification
+
+Determine whether this change **establishes a convention** — a new pattern other code must follow, a new "always/never" rule, a first instance meant to be copied, or a pattern the adaptation guide mandated.
+
+**Detection heuristics:**
+- The adaptation guide names a guard for this ticket (absence of that guard = scope gap — escalate like any missing acceptance criterion)
+- The diff adds a new lint rule, lint config entry, or `tests/guards/*` file (good — verify it's wired into the test runner and passes)
+- The diff or its docs contain new "always/never/must/all X must" claims about how other code should behave
+- The implementation is described as "the pattern" or "canonical" for anything
+
+**Verification commands:** glob for `tests/guards/**`, `*.guard.test.*`; diff the lint config; grep the changed docs/project memory for `[enforced:` / `[prose-only]` tags.
+
+**Verdict:**
+- Convention with a guard (enforcement-ladder rung 1-5 — see codex/skills/production-code-standards/SKILL.md) in this same change → **GUARD_SHIPPED**
+- Genuinely judgment-only rule with an explicit `[prose-only]` tag + ceiling rationale → **PROSE_ONLY_TAGGED**
+- Neither → **MISSING: CHANGES_REQUESTED, same severity as missing tests** (prose rules don't propagate across agent sessions; guards do)
+
+**Finding bar (applies to every quality finding):** flag what would fail or regress in production — not what is merely suboptimal. Review findings that demand unrequested abstractions or speculative hardening create over-engineering rather than quality.
+
 ---
 
 ## Technology-Specific Considerations
@@ -180,6 +199,7 @@ Your primary responsibilities include reviewing code changes for quality, patter
 
 - All "Must Fix" items resolved
 - Code follows existing codebase patterns
+- Any convention introduced ships its guard or carries an explicit `[prose-only]` tag
 - Tests pass and cover new code
 - No security vulnerabilities
 - Documentation matches implementation
@@ -227,11 +247,18 @@ Your primary responsibilities include reviewing code changes for quality, patter
 #### Suggestions (Optional)
 - [Improvement suggestion]
 
+### Convention Guard Verification
+
+| Convention Introduced | Guard (artifact + rung) or [prose-only] + rationale | Status |
+|-----------------------|------------------------------------------------------|--------|
+| [description, or "None"] | [tests/guards/x.test.ts (rung 2)] | GUARD_SHIPPED / PROSE_ONLY_TAGGED / MISSING |
+
 ### Checklist
 - [ ] Code follows existing patterns
 - [ ] No anti-patterns detected
 - [ ] Error handling appropriate
 - [ ] Tests included/updated
+- [ ] Convention guard verified (guard shipped / prose-only tagged / none introduced)
 - [ ] Documentation updated
 - [ ] No security concerns
 - [ ] Performance acceptable
@@ -254,6 +281,7 @@ Before completing code review:
 
 - [ ] All changed files reviewed
 - [ ] Pattern compliance verified
+- [ ] Convention guard verification completed
 - [ ] Error handling assessed
 - [ ] Test coverage evaluated
 - [ ] Documentation reviewed

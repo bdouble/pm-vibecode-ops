@@ -88,6 +88,22 @@ Analyze the completed work for:
 - Improved type safety
 - Enhanced documentation patterns
 
+**Cross-Cutting Candidates: Ratchet First, Never Per-Surface**
+
+When a candidate proposes propagating a pattern across multiple surfaces, ask the boundary question first:
+
+> "Is there a single point of enforcement that makes the unsafe version impossible to produce — and if so, has this epic installed it?"
+
+Enforcement points include: boundary helper, typed wrapper, lint rule, interface requiring the safe call, middleware, schema constraint, build-time check — and for migrating N existing surfaces, a **ratchet** (shrink-only allowlist guard test seeded with the current offenders; see codex/skills/production-code-standards/SKILL.md, enforcement ladder).
+
+A propagation epic of per-surface tickets is an anti-pattern (field data: 14 opened / 0 closed; ratchets cost ~1-2 hours and never rot). Three outcomes:
+
+1. **Enforcement exists or was installed by this epic** → ZERO propagation tickets. Remaining un-migrated surfaces → closure-log, or ratchet-allowlist entries that shrink opportunistically.
+2. **No single chokepoint is expressible** → recommend a **ratchet first** — it usually replaces the propagation ticket entirely. Only if neither a guard nor a ratchet is technically expressible (argued from the architecture): ONE propagation ticket with all surfaces enumerated as a checklist. NEVER one ticket per surface.
+3. **Enforcement is not viable AND no remaining surface has named production impact** → all surfaces → closure-log entries, not tickets.
+
+Before settling on the propagation-ticket fallback or outcome 3, write one sentence stating what boundary mechanism (including a ratchet) you considered and why it isn't expressible. "Not viable" cannot be a free-form opt-out.
+
 **Output Format for Retrofit Recommendations:**
 
 ```markdown
@@ -120,6 +136,27 @@ Analyze the completed work for:
 - [ ] [Specific, testable criterion 2]
 - [ ] Tests updated to verify new pattern
 - [ ] No regressions in existing functionality
+```
+
+### Phase 2.5: Convention Guard Audit (BLOCKING)
+
+**An epic that introduced a canonical pattern cannot close until the pattern's guard exists.** Prose rules don't propagate across amnesiac agent sessions; guards do.
+
+1. **Enumerate conventions the epic established** — from the implementation reports and adaptation guides in your context, and any "always/never" rules added to project memory or convention docs during the epic.
+2. **For each convention, verify ONE of:**
+   - A guard artifact exists (enforcement-ladder rung 1-5; see codex/skills/production-code-standards/SKILL.md) — confirm the artifact file exists and reports green; do not take a phase report's word for it.
+   - The rule carries an explicit `[prose-only]` tag plus a one-line ceiling rationale.
+3. **Neither present → CRITICAL finding.** Report it in the Convention Guards table with status MISSING; closure is blocked until the guard ships (typically a ~200-line rung-2 test) or the user explicitly approves prose-only status.
+
+**Output:**
+
+```markdown
+#### Convention Guards
+| Convention Established | Guard (artifact + rung) or [prose-only] + rationale | Verified |
+|------------------------|------------------------------------------------------|----------|
+| [description] | tests/guards/x.test.ts (rung 2) | exists, green / MISSING |
+
+*(If none: "None — no conventions established by this epic.")*
 ```
 
 ### Phase 3: Downstream Impact Analysis
@@ -236,7 +273,13 @@ For each gap identified in Phase 4, provide:
 ```
 
 #### Update 2: Add [Pattern Name] to Patterns Section
-[same format]
+[same format — tag the rule `[enforced: <guard artifact>]` (one-line pointer) or `[prose-only]` (+ ceiling rationale)]
+
+#### Pruning (reciprocal step — required whenever Phase 2.5 verified guards)
+For every guard shipped during this epic, propose retiring the corresponding project-memory prose to a one-line pointer:
+**Location**: [the paragraph documenting the now-guarded rule]
+**Replace with**: "X is enforced by `<guard test path>` — see that file for details. [enforced: <artifact>]"
+Also propose `[prose-only]` tags for surviving convention rules that lack guards, and report the tag census: prose-only [X -> Y], enforced [A -> B].
 ```
 
 ### Phase 6: Closure Summary
@@ -268,6 +311,11 @@ For each gap identified in Phase 4, provide:
 - **P1 (High)**: X patterns identified
 - **P2 (Medium)**: X patterns identified
 - **Total Estimated Effort**: ~X hours
+
+### Convention Guards Summary
+- **Conventions established**: X | **Guards verified**: X | **Prose-only tagged**: X | **MISSING (blocks closure)**: X
+- **Boundary-Question Answer**: [enforcement installed (incl. ratchet shipped) / neither guard nor ratchet expressible + single propagation ticket / not viable + closure-log only / not applicable]
+- **Tag census**: prose-only [X -> Y], enforced [A -> B]
 
 ### Downstream Impact Summary
 - **Epics Updated**: X
@@ -302,6 +350,9 @@ For each gap identified in Phase 4, provide:
 
 ### Phase 2: Retrofit Recommendations
 [Full ticket-ready retrofit specifications]
+
+### Phase 2.5: Convention Guard Audit
+[Convention Guards table — every convention the epic established with its verified guard artifact + rung, or [prose-only] + rationale. NOT skippable.]
 
 ### Phase 3: Downstream Impact
 [Full downstream analysis output if not skipped]
@@ -353,6 +404,8 @@ Before completing your analysis, verify:
 
 - [ ] All sub-tickets were analyzed for patterns worth propagating
 - [ ] No workarounds or temporary solutions were missed
+- [ ] Convention Guards table is present (even if "None — no conventions established")
+- [ ] Cross-cutting candidates answered the boundary question (ratchet first, never per-surface tickets)
 - [ ] Retrofit recommendations have clear priority and effort estimates
 - [ ] Downstream guidance is actionable and specific
 - [ ] Documentation gaps are identified with specific locations
