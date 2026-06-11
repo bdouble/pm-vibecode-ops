@@ -25,6 +25,7 @@ Audits aren't on a calendar — they're driven by signal from the observability 
 3. **Diagnose.** Map dashboard signals to audit candidates using the table below.
 4. **Audit.** When a signal crosses threshold (cadence rule: *discipline-skill audits quarterly OR triggered by 3+ observed compliance failures in the wild*), pick that skill and run the 11-step pass below.
 5. **Re-measure.** Next epic's dashboard tells you whether the audit moved the needle. If yes, audit budget consumed for that skill; if no, the next pass starts from the REFACTOR-phase rationalizations you logged at Step 8.
+6. **Recalibrate on model-generation change.** When the underlying models jump a generation (e.g., Opus 4.x → Fable 5), re-check each skill's countermeasures against the failure-mode and countermeasure ledgers in `docs/MODEL_CALIBRATION.md` — every retained countermeasure there carries an explicit retirement condition. The observability signal for this stage is a counter sitting at ~0 across many consecutive epics (e.g., `deferral_redispatch` ≈ 0, empty-retry never firing): machinery that never fires is policing a failure mode the models may no longer have. Retire it (or reduce it to one line) rather than letting it accumulate as instruction ballast — over-constraining strong models measurably degrades them.
 
 ### Diagnostic signals → audit candidates
 
@@ -119,6 +120,8 @@ Per SkillOpt §3.1, three splits:
 4. Pass criteria — concrete verification
 
 **Tip: pull verbatim from real failures.** A scenario authored from a real session transcript (`/Users/brian/.claude/projects/-Users-brian-ProductLobster/`) is automatically grounded; a scenario authored from imagination drifts. The audit is only as good as the scenarios.
+
+**Caveat — test awareness confounds scenarios.** Scenario-based skill testing can be confounded by models recognizing they're being evaluated and verbalizing test-awareness (current frontier models do this in double-digit percentages of eval transcripts) — prefer scenarios indistinguishable from real work, which is one more reason verbatim transcript material beats authored hypotheticals.
 
 ---
 

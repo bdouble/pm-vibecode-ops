@@ -25,12 +25,15 @@ Questions from Product Managers using AI-powered development workflows.
 - [Can I skip steps to move faster?](#can-i-skip-steps-to-move-faster)
 - [What if my team doesn't use Linear?](#what-if-my-team-doesnt-use-linear)
 - [Do I need to run the full workflow every time?](#do-i-need-to-run-the-full-workflow-every-time)
+- [What's a ratchet and why didn't the AI file propagation tickets?](#whats-a-ratchet-and-why-didnt-the-ai-file-propagation-tickets)
+- [How often should I run /entropy-audit?](#how-often-should-i-run-entropy-audit)
 
 **Quality & Control**
 - [How do I know the code is good quality?](#how-do-i-know-the-code-is-good-quality)
 - [What if the AI makes a mistake?](#what-if-the-ai-makes-a-mistake)
 - [Can this replace my engineering team?](#can-this-replace-my-engineering-team)
 - [How do I verify AI work without reading code?](#how-do-i-verify-ai-work-without-reading-code)
+- [Why did the skills get shorter in v5.0?](#why-did-the-skills-get-shorter-in-v50)
 
 **PRDs & Requirements**
 - [How detailed should my PRD be?](#how-detailed-should-my-prd-be)
@@ -57,6 +60,7 @@ Questions from Product Managers using AI-powered development workflows.
 - [Security review found critical issues. Now what?](#security-review-found-critical-issues-now-what)
 - [The implementation doesn't match my PRD. Help!](#the-implementation-doesnt-match-my-prd-help)
 - [Epic closure is running out of context on large epics. How do I fix this?](#epic-closure-is-running-out-of-context-on-large-epics-how-do-i-fix-this)
+- [Why did my epic closure get blocked on a "missing guard"?](#why-did-my-epic-closure-get-blocked-on-a-missing-guard)
 
 ---
 
@@ -524,6 +528,41 @@ Does this create new user-facing functionality?
 
 ---
 
+### What's a ratchet and why didn't the AI file propagation tickets?
+
+**Short answer**: A ratchet is a shrink-only allowlist test — and it exists because propagation tickets don't get done.
+
+**The old pattern**: The AI establishes a better pattern in one place (say, input validation on API endpoints), notices 14 other places that should adopt it, and files 14 migration tickets.
+
+**The field data**: Across a large production deployment, those per-surface propagation tickets went **14 opened, 0 closed**. They rot in the backlog while the inconsistency they describe persists.
+
+**The v5.0 replacement — the ratchet**:
+1. A guard test enforces the pattern, with an allowlist naming the current offenders (the migration backlog, encoded where it can't be ignored)
+2. Any NEW code violating the pattern → red build (adoption is mandatory going forward)
+3. The allowlist may only SHRINK — whoever touches a listed file migrates it and removes its entry in the same PR
+
+**What you get instead of 14 tickets**: One ~1-2 hour test that guarantees the problem never grows and shrinks opportunistically. No backlog, no rot, no tracking overhead.
+
+**Where you'll see it**: Epic closure reports and code reviews will say "ratchet shipped (N-entry allowlist)" instead of listing follow-up tickets. That's the system working as designed.
+
+---
+
+### How often should I run /entropy-audit?
+
+**Default cadence**: Every 3–6 months, or every ~10 epics — whichever comes first.
+
+**Re-run early when**:
+- A scorecard number moved the wrong way on the last audit (e.g., prose-only rules climbing, mock-heavy tests piling up)
+- An AI agent acted on stale project memory — it did something based on a claim in CLAUDE.md or a doc that turned out to be no longer true. That's a signal the project's memory has drifted, and the audit's doc-truth sweep will find what else is stale.
+
+**What it costs**: 30–60 minutes of AI time. You provide one sentence — your "north star" (e.g., "workflow completion outranks cost strictness; maintainability outranks scale") — so the audit ranks findings by what YOU care about, not a generic rubric.
+
+**What you get back**: A scorecard you can compare run-over-run, stale documentation corrected on the spot, a "Leave It Alone" list of things that look like problems but aren't, and exactly ONE highest-conviction recommendation. It deliberately does NOT produce a long list of tickets — most findings live in the report, not your backlog.
+
+**Why it's not part of the normal workflow**: Every other command optimizes within a ticket or epic. Nothing else looks *across* epics — that's where duplicate vocabularies, dead machinery, and stale memory accumulate unseen.
+
+---
+
 ## Quality & Control
 
 ### How do I know the code is good quality?
@@ -714,6 +753,32 @@ All checks passing ✅
 2. Describe what's wrong
 3. AI will fix and re-run quality gates
 4. Verify again
+
+---
+
+### Why did the skills get shorter in v5.0?
+
+**Short answer**: The toolkit was recalibrated to the current generation of AI models — and over-instructing a strong model measurably hurts it.
+
+**The history**: This toolkit's original rules were written when AI coding models needed babysitting. They left TODO comments, wrote "// rest of the code here", forgot to read files before editing them, and abandoned work halfway. The rules policing those habits were necessary and effective.
+
+**What changed**: 2026 frontier models simply don't have those habits anymore — some have inverted (today's models *over*-explore and *over*-engineer rather than under-deliver). Meanwhile, both Anthropic and OpenAI now officially warn that aggressive, over-prescriptive instructions degrade output: bloated instruction files cause models to miss the rules that actually matter.
+
+**What v5.0 kept (and strengthened)** — the rules that protect YOU:
+- Evidence required for every completion claim (the one failure mode that has gotten *worse* with stronger models is overconfident "it's done!" reporting)
+- Security review as the final gate
+- Closure gates, deferral discipline, service reuse (code duplication never faded as a problem)
+- The ban on deleting or gaming tests
+
+**What v5.0 retired** — the rules that babysat the model:
+- Read-before-edit step-by-step mandates (the tooling enforces this now)
+- Anti-laziness and anti-stub policing apparatus
+- Prescriptive step recipes for things models now plan better than humans prescribe
+- ALL-CAPS emphasis everywhere (vendors now say to dial it back)
+
+**The receipts**: Every keep/cut decision is documented in [docs/MODEL_CALIBRATION.md](docs/MODEL_CALIBRATION.md) with dates, sources, and an explicit "bring it back if…" retirement condition. Nothing was deleted on vibes.
+
+**What this means for you**: Same protection, sharper AI. If you ever wonder why a rule disappeared, the calibration ledger has the answer.
 
 ---
 
@@ -1709,6 +1774,24 @@ If epic closure discovers issues (hardcoded secrets, security vulnerabilities, i
 | MEDIUM/LOW | Documented, closure proceeds |
 
 This ensures audit trail without context overhead.
+
+---
+
+### Why did my epic closure get blocked on a "missing guard"?
+
+**What happened**: Your epic established a convention — a pattern other code must follow, a new "always/never" rule — and `/close-epic`'s Convention Guard Audit (Phase 2.5, blocking) found that the rule has neither an automatic test enforcing it (a "guard") nor an explicit `[prose-only]` tag approving it as judgment-only.
+
+**Why this is blocking**: Prose rules don't propagate — future AI sessions never read them reliably. Field data: rules with guards had zero regressions; the single most-documented prose rule regressed four separate times. An epic that ships a rule without its enforcement is shipping a wish.
+
+**Your two resolution paths**:
+
+1. **Ship the guard** (recommended, usually 1–2 hours): Ask the AI to write the guard test — typically a ~200-line test that scans the source code and fails on violations. It runs in your existing test suite, no new tooling. Once it's green, closure proceeds.
+
+2. **Explicitly approve prose-only status**: If the rule genuinely can't be expressed as a test (e.g., "never reset the staging database without asking" — operational judgment, not code), approve tagging it `[prose-only]` with a one-line rationale. Closure proceeds, and the rule counts toward your discipline-debt number.
+
+**What NOT to do**: Don't ask the AI to "just close it anyway" — the gate exists precisely because a convention without enforcement will regress after everyone (human and AI) forgets this conversation.
+
+**Where to see the result**: The closure report includes a Convention Guards table listing every convention the epic established and its enforcement status. `/swarm-stats` tracks the prose-only vs enforced counts over time.
 
 ---
 

@@ -932,6 +932,126 @@ Code Review → Security Review → Documentation → Ship
 
 ---
 
+## v5.0 Terms
+
+### Activation Metric
+**PM Definition**: A counter or log line attached to a piece of defensive machinery (a retry, a cleanup job, a recovery process) that records whether it has ever actually fired.
+
+**Why it matters**: With AI, building "just in case" machinery is nearly free — so it accumulates. The activation metric is how you find out, months later, that a safety net has caught zero falls since the problem it guarded was fixed. Machinery with zero activations is a retirement candidate; `/entropy-audit` checks this.
+
+**Analogy**: Like a "days since last incident" sign — if a fire extinguisher has never been touched in 10 years and the building is now concrete, maybe you don't need six of them per room.
+
+---
+
+### Anti-Ballast (Testing)
+**PM Definition**: The v5.0 doctrine that test *quantity* is not test *confidence* — a bloated test suite can resist improvements more than it catches bugs.
+
+**The rules**: Tests should check what code *produces* (results, saved data), not *how* it was called internally; a few tests against real infrastructure beat thousands against fakes; one structural guard can replace dozens of repetitive tests.
+
+**Why it matters**: AI writes tests at near-zero cost, so suites balloon. "We have 17,000 tests" sounds safe but can mean the suite is mostly ballast — dead weight that makes every future change slower. `/entropy-audit` trends the warning signs.
+
+---
+
+### Discipline Debt
+**PM Definition**: The count of project rules that exist only as prose (tagged `[prose-only]`) rather than as automatic tests (guards). It's the number of rules you're taking on faith.
+
+**Why it matters**: This is a number a non-engineer can watch. Every epic closure reports it (before → after), `/swarm-stats` shows it in the DISCIPLINE DEBT section, and `/entropy-audit` trends it quarterly. Down is good.
+
+**PM action**: If the prose-only count isn't shrinking over time, ask why guards aren't shipping.
+
+---
+
+### Drift Test
+**PM Definition**: A test that pins two copies of the same information to each other, so they can't silently disagree (rung 3 on the [enforcement ladder](#enforcement-ladder)).
+
+**Example**: Your pricing tiers exist in a database table AND in a marketing display map. A drift test fails the build the moment someone updates one without the other.
+
+**Why it matters**: Duplicated information always drifts apart eventually — the drift test makes the disagreement visible the day it happens, not the day a customer notices.
+
+---
+
+### Enforcement Ladder
+**PM Definition**: The v5.0 ranking of ways to enforce a rule, from strongest (the wrong thing is impossible to write) to weakest (the rule is written down in prose). Six rungs: type chokepoint, static-guard test, drift test, ratchet, runtime assert, tagged prose.
+
+**The principle**: Every rule the AI establishes climbs as high on the ladder as its nature allows, and the enforcement ships in the same PR as the rule.
+
+**Why it matters**: Field data shows guarded rules had zero regressions while the most-documented prose rule regressed four times. AI sessions don't remember rules — but they can't ignore a red test.
+
+**Reference**: `skills/production-code-standards/references/enforcement-ladder.md`
+
+---
+
+### `[enforced:]` / `[prose-only]` Status Tags
+**PM Definition**: Inline labels on every rule written into project documentation. `[enforced: <test file>]` means a guard test enforces the rule automatically (the prose shrinks to a one-line pointer). `[prose-only]` means no guard exists, with one line explaining why.
+
+**Why it matters**: The tags make rule enforcement *countable*. The `[prose-only]` count is your [discipline debt](#discipline-debt) — and untagged rules are debt that isn't even counted yet.
+
+---
+
+### Entropy Audit
+**PM Definition**: A recurring health check (`/entropy-audit`, every 3–6 months or ~10 epics) that looks *across* epics for the decay no single ticket ever sees: duplicate concepts under different names, dead-but-maintained machinery, stale project memory, test ballast.
+
+**What you get**: A [scorecard](#scorecard-entropy) you can trend run-over-run, a mandatory "Leave It Alone" list (things that look like problems but aren't), and exactly ONE highest-conviction recommendation — never a refactoring wishlist.
+
+**When to re-run early**: A scorecard number moves the wrong way, or an AI agent acted on project documentation that turned out to be stale.
+
+---
+
+### Model Calibration
+**PM Definition**: The practice of re-checking, at each new AI model generation, which of the toolkit's rules are still needed — and retiring the ones that police problems models no longer have.
+
+**Why it matters**: Over-instructing a strong model measurably degrades it. v5.0's calibration kept every rule that protects the operator (evidence, security, closure gates) and retired the model-babysitting (read-before-edit reminders, anti-laziness apparatus).
+
+**The receipts**: `docs/MODEL_CALIBRATION.md` — every kept rule is dated and sourced, with an explicit retirement condition.
+
+---
+
+### Ratchet
+**PM Definition**: A shrink-only allowlist (rung 4 on the [enforcement ladder](#enforcement-ladder)). When a new pattern should eventually cover N existing places in the code, the ratchet lists the current offenders and enforces two directions: no NEW violations ever, and the list may only get shorter.
+
+**Why it matters**: It replaces "migration tickets" entirely. Field data: per-surface propagation tickets went 14 opened, 0 closed — they rot in the backlog. A ratchet costs 1–2 hours, never rots, and migration happens opportunistically as files get touched.
+
+**PM translation**: Instead of 14 tickets nobody will ever do, one test that guarantees the problem only shrinks.
+
+---
+
+### Scorecard (Entropy)
+**PM Definition**: The machine-comparable JSON file each entropy audit produces — discipline debt counts, guard/ratchet inventory, dead-machinery list, test-ballast ratios — saved to `.swarm/entropy/scorecard-<date>.json` and embedded in the audit's Linear comment.
+
+**Why it matters**: Run-over-run deltas turn "is my codebase getting better?" from a feeling into a numbers trend a non-engineer can read. Every number states how it was measured and what it might have missed.
+
+---
+
+### Static-Guard Test
+**PM Definition**: A test that scans the *source code itself* (not the running app) and fails if any file breaks a project rule — "never call the database directly," "every endpoint validates input" (rung 2 on the [enforcement ladder](#enforcement-ladder)).
+
+**Why it matters**: It's the workhorse guard — roughly 200 lines, no new tooling, runs in CI like any other test. A violating change is a red build at commit time, caught even when the AI that wrote it never read the rule. The error message teaches the rule at exactly the right moment.
+
+---
+
+### Structural Guard
+**PM Definition**: Umbrella term for any automatic enforcement of a project rule — a type chokepoint, [static-guard test](#static-guard-test), [drift test](#drift-test), [ratchet](#ratchet), or runtime assert (rungs 1–5 of the [enforcement ladder](#enforcement-ladder)).
+
+**The slogan**: "A pattern that ships without its guard is a wish." Prose rules don't propagate across AI sessions; guards do.
+
+**Why PMs care**: "Guard test: green" is a verification you can perform without reading code.
+
+---
+
+### Symmetric Bar
+**PM Definition**: The v5.0 rule that the same justification bar applied to *skipping* work also applies to *adding* defensive machinery. Building a retry system, cleanup job, or recovery process requires naming a concrete failure that actually happened — "this could theoretically fail" doesn't qualify.
+
+**Why it matters**: With AI, building machinery costs almost nothing, so speculative infrastructure accumulates forever. The symmetric bar keeps the system as small as the evidence justifies — and anything built must ship with an [activation metric](#activation-metric) so the next audit can check whether it ever fired.
+
+---
+
+### Verification Over Recall
+**PM Definition**: The v5.0 doctrine that documentation, project memory, and tickets are *hypotheses* about the code — not facts. Before acting on a claim like "the migration is complete," the AI verifies it against the actual code.
+
+**Why it matters**: Project memory drifts — field audits found multiple confidently-stated claims in one project's documentation that were simply no longer true, priming every AI session with falsehoods. Under this doctrine a stale claim is itself a finding, and fixing the documentation is part of the job.
+
+---
+
 ## Still Confused?
 
 **For more context**: See [PM_GUIDE.md](PM_GUIDE.md) for detailed explanations with examples.

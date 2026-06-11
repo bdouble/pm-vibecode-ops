@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-4.8.0-blue.svg)
+![Version](https://img.shields.io/badge/version-5.0.0-blue.svg)
 
 **A production development workflow for Product Managers who build with AI.**
 
@@ -35,6 +35,17 @@ PM Vibe Code Ops provides that structure through discovery, planning, implementa
 
 ---
 
+## What's New in 5.0 — Structural Guards, Bespoke Fit
+
+Two complementary upgrades, grounded in a field audit of the largest pm-vibecode-ops deployment (~56 epics) and a mid-2026 recalibration against current frontier models:
+
+1. **Conventions now ship with structural guards.** Field data showed prose rules regress (the most-documented rule regressed four times post-merge; per-surface propagation tickets went 14 opened / 0 closed) while guarded conventions had **zero** regressions. v5.0 adds the **enforcement ladder**: every convention the workflow establishes ships a permanent artifact in your repo — a lint rule, a source-scanning guard test, a drift test, or a shrink-only ratchet — in the same PR. Code review checks it, epic closure gates on it, and CLAUDE.md prose retires to one-line `[enforced:]` pointers as guards ship. The `[prose-only]` count becomes a discipline-debt number you can watch go down.
+2. **The toolkit was re-fitted to current models.** Guardrails written for 2024-era model failures (TODO-stubbing, lazy truncation, forgetting to read files) were retired or slimmed — vendors now document that over-prompting *degrades* current models — while the guardrails today's models still need (evidence for every completion claim, scope restraint against over-engineering, anti-reward-hacking, service reuse) were kept and strengthened. The full evidence ledger lives in [docs/MODEL_CALIBRATION.md](docs/MODEL_CALIBRATION.md) and gets re-validated each model generation.
+
+Plus: **`/entropy-audit`**, a recurring cross-epic audit with a machine-diffable scorecard — the codebase health dashboard a non-engineer can read unaided.
+
+---
+
 ## What Makes This Different
 
 ### AI knows what exists before writing a single line
@@ -49,7 +60,7 @@ Your **ticketing system becomes AI's memory**. Discovery findings, architectural
 
 ### Specialized agents with strict scope boundaries
 
-Instead of one generic AI trying to do everything at once, **10 specialized agents** each handle their phase. The architect creates implementation guidance and never writes code. The backend engineer follows that guidance and never makes architecture decisions. The reviewer catches problems and never adds features. Each agent stays in its lane.
+Instead of one generic AI trying to do everything at once, **11 specialized agents** each handle their phase. The architect creates implementation guidance and never writes code. The backend engineer follows that guidance and never makes architecture decisions. The reviewer catches problems and never adds features. Each agent stays in its lane.
 
 ### Security review blocks completion
 
@@ -201,14 +212,20 @@ For cases requiring phase-by-phase control:
 
 | Command | Purpose |
 |---------|---------|
-| `/close-epic` | Close completed epic with deferred work recovery and retrofit analysis |
+| `/close-epic` | Close completed epic with the Convention Guard Audit (every pattern the epic established ships a structural guard or an explicit `[prose-only]` tag), deferred work recovery, impact-bar-disciplined follow-ups (≤3), and CLAUDE.md updates with prose pruning |
 | `/epic-swarm [epic-id]` | Execute all tickets in an epic sequentially through the full 7-phase pipeline with dependency ordering, hard checkpoints, and dual security review |
 
-### Observability (v4.7)
+### Recurring Maintenance (v5.0)
 
 | Command | Purpose |
 |---------|---------|
-| `/swarm-stats [epic-id-or-ticket-id]` | Render the per-epic or per-ticket workflow dashboard from the 15-event JSONL observability stream. Backs meta-questions ("are we deferring too much", "did the impact bar help", "what's the codex auto-fix rate"). Pre-v4.7 epics render with a legacy badge. |
+| `/entropy-audit "<north-star>"` | Cross-epic consolidation audit, run every 3–6 months or N epics: a mechanical census (canonical-pattern coverage, prose-only rule count, guard/ratchet inventory, dead machinery, test-ballast ratios) plus a judgment review with a pragmatism filter, Chesterton's-fence verdicts, a mandatory Leave It Alone list, and one forced highest-conviction change. Emits a machine-diffable scorecard — the codebase dashboard a non-engineer can read unaided. |
+
+### Observability (v4.7, expanded v5.0)
+
+| Command | Purpose |
+|---------|---------|
+| `/swarm-stats [epic-id-or-ticket-id]` | Render the per-epic or per-ticket workflow dashboard from the 17-event JSONL observability stream — including the v5.0 Discipline Debt section (prose-only vs enforced rule counts, guard-check results, latest entropy scorecard). Backs meta-questions ("are we deferring too much", "did the impact bar help", "what's the codex auto-fix rate"). Pre-v4.7 epics render with a legacy badge. |
 
 ### Dynamic Workflow (v4.8)
 
@@ -251,8 +268,8 @@ The plugin system automatically provides all components:
 
 | Component | What It Does |
 |-----------|-------------|
-| **Commands** | 16 workflow phases you invoke (`/adaptation`, `/implementation`, `/execute-ticket`, `/epic-swarm`, `/epic-swarm-workflow`, `/swarm-stats`, etc.) |
-| **Agents** | 10 specialized AI roles (architect, backend engineer, QA, security engineer, etc.) |
+| **Commands** | 17 workflow phases you invoke (`/adaptation`, `/implementation`, `/execute-ticket`, `/epic-swarm`, `/epic-swarm-workflow`, `/entropy-audit`, `/swarm-stats`, etc.) |
+| **Agents** | 11 specialized AI roles (architect, backend engineer, QA, security engineer, entropy auditor, etc.) |
 | **Skills** | 16 auto-activated quality standards (production code, security patterns, testing philosophy, observability, etc.) |
 | **Workflows** | `epic-swarm-workflow` — a dynamic multi-agent workflow (JavaScript `Workflow` runtime) launched via `/epic-swarm-workflow`; see [workflows/](workflows/) |
 | **Hooks** | Session automation for workflow context |

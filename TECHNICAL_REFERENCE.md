@@ -188,7 +188,7 @@ These commands run for each individual ticket through the development lifecycle.
 **Key Features**:
 - **Agentic execution**: Runs adaptation, implementation, testing, documentation, code review, and security review automatically
 - **Git branch creation**: Uses Linear's `gitBranchName` field for consistent branch naming
-- **Epic-aware bookkeeping** (v4.7): When the ticket has a Linear parent that is an epic, writes to the same epic-level artifacts as `/epic-swarm` — `.swarm/orchestrator-log-<epic-id>.md` (PASSED/FAILED entries), `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (phase reports), `.swarm/observability/<epic-id>/<ticket-id>.jsonl` (15-event schema), `.swarm/state/<epic-id>.json` (ticket row). Solo tickets write to `_solo/`/`-tickets/` parallel paths. A shared `.swarm/.locks/<epic-id>.lock` flock serializes concurrent `/execute-ticket` runs against the same epic (and with `/epic-swarm` if both run). All paths are resolved from `git rev-parse --git-common-dir` (worktree-safe) so a swarm running inside a worktree and an `/execute-ticket` running from the main checkout land on the same absolute lock file. Parent issues are checked for epic-ness (top-level, multi-child, or labeled `epic`) before being treated as epics; non-epic parents fall back to solo bookkeeping. Format A/B PASSED/FAILED entries are appended with a multi-line-aware idempotency check (`entry_exists`) that scans the full block rather than the heading line alone.
+- **Epic-aware bookkeeping** (v4.7): When the ticket has a Linear parent that is an epic, writes to the same epic-level artifacts as `/epic-swarm` — `.swarm/orchestrator-log-<epic-id>.md` (PASSED/FAILED entries), `.swarm/context/<epic-id>/reports/<ticket-id>/<phase>.md` (phase reports), `.swarm/observability/<epic-id>/<ticket-id>.jsonl` (17-event schema), `.swarm/state/<epic-id>.json` (ticket row). Solo tickets write to `_solo/`/`-tickets/` parallel paths. A shared `.swarm/.locks/<epic-id>.lock` flock serializes concurrent `/execute-ticket` runs against the same epic (and with `/epic-swarm` if both run). All paths are resolved from `git rev-parse --git-common-dir` (worktree-safe) so a swarm running inside a worktree and an `/execute-ticket` running from the main checkout land on the same absolute lock file. Parent issues are checked for epic-ness (top-level, multi-child, or labeled `epic`) before being treated as epics; non-epic parents fall back to solo bookkeeping. Format A/B PASSED/FAILED entries are appended with a multi-line-aware idempotency check (`entry_exists`) that scans the full block rather than the heading line alone.
 - **Resource gathering**: Automatically detects and fetches local file references and external URLs from ticket descriptions, parent epic descriptions, and within referenced documents themselves (two-level chain). Classifies research briefs as prescriptive or contextual based on content structure, extracts conformance checklists from prescriptive documents, and includes a Reference Material Availability summary so agents know what context they have
 - **Post-implementation conformance check**: Verifies that specific items from prescriptive referenced documents (IDs, field names, enumerated requirements) were actually implemented before advancing to the next phase
 - **Status updates**: Sets ticket to "In Progress" at start, "Done" when security passes
@@ -356,6 +356,7 @@ These commands run for each individual ticket through the development lifecycle.
 - Analyzes code quality and pattern adherence
 - Checks for performance issues and anti-patterns
 - Reviews PR comments for addressed concerns
+- **Convention Enforcement dimension (v5.0)**: any convention the change establishes must ship its structural guard (enforcement-ladder rung 1–5) in the same change or carry an explicit `[prose-only]` tag — a missing guard is CHANGES_REQUESTED, same severity as missing tests
 - Adds `code-reviewed` label to PR
 - Verifies documentation completeness
 
@@ -363,10 +364,11 @@ These commands run for each individual ticket through the development lifecycle.
 - Code follows existing patterns
 - No anti-patterns detected
 - Performance concerns addressed
+- Conventions introduced ship with guards or `[prose-only]` tags
 - Documentation complete
 - Tests comprehensive
 
-**Output**: Review comments on PR, `code-reviewed` label added.
+**Output**: Review comments on PR including a 🛡️ Convention Guard Verification section (convention introduced, guard artifact + rung or `[prose-only]` + rationale, status GUARD_SHIPPED / PROSE_ONLY_TAGGED / MISSING), `code-reviewed` label added.
 
 **Time**: 10-15 minutes + 5 minutes PM review
 
@@ -412,7 +414,7 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 
 #### `/close-epic`
 
-**Purpose**: Formally closes completed epics with impact-bar-disciplined follow-up tickets (capped at 3), boundary-fix-or-propagation analysis for cross-cutting concerns, Considered-but-not-pursued closure-log, downstream impact propagation, and CLAUDE.md updates.
+**Purpose**: Formally closes completed epics with a Convention Guard Audit (every pattern the epic established ships a guard or is tagged `[prose-only]`), impact-bar-disciplined follow-up tickets (capped at 3), boundary-fix-or-propagation analysis for cross-cutting concerns, Considered-but-not-pursued closure-log, downstream impact propagation, and CLAUDE.md updates with prose pruning.
 
 **Usage**: `/close-epic <epic-id> [--skip-deferred-review] [--skip-followups] [--skip-downstream]`
 
@@ -434,27 +436,29 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 **Key Features**:
 - **Scalable Context Gathering**: For epics with 7+ tickets, spawns parallel `ticket-context-agent` instances to gather and summarize ticket context, preventing context exhaustion
 - **Completion Verification (BLOCKING)**: Validates ALL sub-tickets are Done or Cancelled
+- **Convention Guard Audit (v5.0, BLOCKING — Phase 2.5)**: Enumerates every convention the epic established; each needs a verified guard artifact (enforcement-ladder rung 1–5) or an explicit `[prose-only]` tag with rationale. Neither present = CRITICAL finding, closure blocked until the guard ships or the user explicitly approves prose-only status. Emits the `convention_guard_check` observability event
 - **Closure-Log Aggregation (v4.7)**: Pulls every `### Considered but not pursued` section (h2/h3/h4 tolerated) from every sub-ticket's phase comments and aggregates them into the epic closure under `## Aggregated Closure-Log Across Sub-Tickets` — verbatim, byte-identical-only dedup, preserving attribution
-- **Follow-Up Discipline (was Retrofit)**: Candidates pass through impact-bar + boundary question; absolute cap of 3 filed tickets; everything else lands in the closure-log. Ticket titles use `[Follow-up]` (not `[Retrofit]`)
+- **Follow-Up Discipline (was Retrofit)**: Candidates pass through impact-bar + boundary question; absolute cap of 3 filed tickets; everything else lands in the closure-log. Ticket titles use `[Follow-up]` (not `[Retrofit]`). Cross-cutting migrations prefer a ratchet (shrink-only allowlist guard) over propagation tickets — field data: per-surface propagation tickets went 14 opened / 0 closed
 - **Downstream Impact**: Propagates guidance to dependent/related epics
 - **Documentation Audit**: Maps implemented features against CLAUDE.md coverage
-- **CLAUDE.md Updates**: Proposes and applies documentation updates
+- **CLAUDE.md Updates with Prose Pruning (v5.0)**: Applies documentation updates AND retires guarded rules to one-line `[enforced: <artifact>]` pointers; surviving convention rules get `[prose-only]` tags; reports the before/after tag counts (the project's "discipline debt" metric)
 - **Closure Summary**: Generates comprehensive closure report with lessons learned
 
 **Context Gathering Strategy**:
 - **Small Epics (≤6 tickets)**: Direct context gathering via Linear MCP
 - **Large Epics (7+ tickets)**: Parallel `ticket-context-agent` instances process batches of 5-6 tickets each, returning summarized context to prevent context overflow
 
-**Seven-Phase Workflow**:
+**Workflow (seven phases plus the Convention Guard gate at 2.5)**:
 1. Late Findings Scan (REQUIRED — check for workarounds, disabled tests, TODOs)
 2. Deferred Work Recovery — surface and triage deferred items across tickets (skippable with `--skip-deferred-review`)
+2.5. Convention Guard Audit (BLOCKING — not skippable) — every convention the epic established has a verified guard (rung 1–5) or an explicit `[prose-only]` tag
 3. Follow-Up Discipline — boundary question, impact bar, ≤3 follow-ups cap (skippable with `--skip-followups`)
 4. Downstream Impact — guidance to dependent epics (skippable with `--skip-downstream`)
 5. Documentation Audit — check CLAUDE.md coverage
-6. CLAUDE.md Updates — apply documentation changes
-7. Closure Summary — final epic closure report including the aggregated closure-log
+6. CLAUDE.md Updates — apply documentation changes, including prose pruning (guarded rules retire to one-line `[enforced:]` pointers) and the prose-only/enforced tag census
+7. Closure Summary — final epic closure report including the aggregated closure-log and the Convention Guards table
 
-**Output**: Epic marked as Done, closure report added as comment, deferred recovery tickets and follow-up tickets (≤3) created in Linear, CLAUDE.md updated, `epic_completed` observability event emitted to `.swarm/observability/<epic-id>/_epic.jsonl`.
+**Output**: Epic marked as Done, closure report added as comment (with Convention Guards table), deferred recovery tickets and follow-up tickets (≤3) created in Linear, CLAUDE.md updated and pruned, `epic_completed` observability event (now carrying `prose_only_count` / `enforced_count`) emitted to `.swarm/observability/<epic-id>/_epic.jsonl`.
 
 **Time**: 10-20 minutes depending on epic size and options selected
 
@@ -509,6 +513,44 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 **Output**: All 7 phase reports posted to each ticket in Linear, tier summaries posted to epic, swarm state file for resume, all tickets closed after post-merge security passes, single epic PR for human review.
 
 **Time**: Varies by epic size. Each ticket takes ~1-2 hours for the full 7-phase pipeline.
+
+---
+
+### Recurring Audit Command
+
+This command runs between epics — every 3–6 months or every ~10 epics — not as part of the ticket pipeline.
+
+#### `/entropy-audit`
+
+**Purpose**: Recurring cross-epic entropy audit — a mechanical census plus a judgment review with a machine-diffable scorecard (prose-only count, guard/ratchet inventory, dead machinery, test ballast) and a doc-truth sweep of project memory. Every other phase optimizes within a ticket or epic; this command is the consolidator role that looks across them.
+
+**Usage**: `/entropy-audit "<north-star>" [--scope path] [--since YYYY-MM-DD]`
+
+**Examples**:
+```bash
+# Standard recurring audit
+/entropy-audit "workflow completion outranks cost strictness; maintainability outranks scale"
+
+# Scoped to the API layer, focused on the last quarter's changes
+/entropy-audit "correctness outranks velocity" --scope src/api --since 2026-03-01
+```
+
+**Key Features**:
+- **North star required**: A severity-calibration sentence in the operator's own words; the judgment layer ranks every finding against it. If missing, the command stops and asks — it never invents a default
+- **Two-layer design**: The orchestrator runs a mechanical census (Layer 1 — facts only: canonical-pattern coverage, prose-rule tag counts, guard/ratchet inventory, runtime-machinery activation data, test-ballast ratios, parallel-vocabulary scan; every number states its method and blind spots), then invokes `entropy-auditor-agent` for the judgment layer (Layer 2)
+- **Five-currency pragmatism filter**: Every recommendation must pay in one of five currencies — a bug class made impossible, a debugging session shortened, a likely change made local, code deleted, or real cost/latency. "Cleaner / more consistent / best practice" findings are cut
+- **Chesterton's fence**: Every keep/remove verdict names the cost of being wrong
+- **Mandatory Leave It Alone list**: Things that look like debt but are correctly sized — prevents the next agent session from "improving" them
+- **Forced stance**: ONE highest-conviction change (or an argued "nothing worth changing") — a hedge-everything report is a failed report
+- **Doc-truth sweep**: Load-bearing claims in project memory (CLAUDE.md, docs) are verified against HEAD; stale claims are corrected as part of the audit
+- **Machine-diffable scorecard**: Written to `.swarm/entropy/scorecard-<date>.json` (schema: `commands/references/entropy-scorecard-schema.md`) AND embedded as JSON in the Linear audit comment — the durable cross-machine trend record. Prior scorecard recovered for run-over-run deltas
+- **Disciplined ticket output**: Approved recommendations go through the impact bar with the ≤3 cap; most findings live in the report and scorecard trend, not the backlog
+
+**Re-audit triggers**: Any scorecard delta in the wrong direction, or any agent reporting it acted on a project-memory claim that proved false.
+
+**Output**: Scorecard JSON file, full audit report posted to Linear with embedded scorecard, `entropy_scorecard_recorded` observability event appended to `.swarm/observability/_audit.jsonl`, stale-memory corrections applied, and an operator-readable summary led by headline deltas and the forced stance.
+
+**Time**: 30-60 minutes depending on repo size and window
 
 ---
 
@@ -725,6 +767,30 @@ These commands run once per epic, after all sub-tickets have completed the ticke
 
 ---
 
+### Entropy Auditor Agent
+
+**Role**: Cross-epic entropy auditor — the consolidator role no per-ticket phase performs
+
+**Expertise**:
+- Principal-engineer-grade judgment on top of census facts
+- Consolidation analysis (parallel vocabularies, duplicate matrices, dead machinery)
+- Enforcement-ladder promotion candidates (prose rules that could become guards)
+- Test-ballast assessment (mock:integration concentration, call-count assertions)
+
+**Key Responsibilities**:
+- Receives the mechanical census, doc-truth results, and prior-scorecard deltas from the `/entropy-audit` orchestrator (no Linear access)
+- Reads real code on top of the census facts — bounded exploration, sampling for judgment
+- Filters every finding through the five-currency pragmatism filter; names the cost of being wrong for every verdict (Chesterton's fence)
+- Produces the mandatory Leave It Alone list (apparent debt that is correctly sized)
+- Commits to a forced stance: ONE highest-conviction change, or an argued "nothing worth changing"
+- Never blends facts with opinions — census sections stay fact, judgment sections stay judgment
+
+**Output**: Structured judgment report with scorecard reaction, pragmatism-filtered findings table, Leave It Alone list, forced stance, and cut findings log — written for a non-engineer operator who will act on the verdicts without reading the code.
+
+**Used By**: `/entropy-audit`
+
+---
+
 ## Workflow Integration
 
 ### Ticketing System Integration
@@ -767,11 +833,12 @@ pm-vibecode-ops/
 │   ├── plugin.json              # Plugin manifest configuration
 │   └── marketplace.json         # Marketplace metadata
 │
-├── agents/                      # Specialized AI agent configurations (10 agents)
+├── agents/                      # Specialized AI agent configurations (11 agents)
 │   ├── architect-agent.md
 │   ├── backend-engineer-agent.md
 │   ├── code-reviewer-agent.md
 │   ├── design-reviewer-agent.md
+│   ├── entropy-auditor-agent.md # v5.0 — cross-epic judgment layer for /entropy-audit
 │   ├── epic-closure-agent.md
 │   ├── frontend-engineer-agent.md
 │   ├── qa-engineer-agent.md
@@ -780,7 +847,7 @@ pm-vibecode-ops/
 │   ├── ticket-context-agent.md
 │   └── references/              # Extracted reference material (OWASP, SaaS patterns, etc.)
 │
-├── commands/                    # Workflow slash commands (15)
+├── commands/                    # Workflow slash commands (17)
 │   ├── README.md                # Commands documentation
 │   ├── adaptation.md
 │   ├── close-epic.md
@@ -788,8 +855,10 @@ pm-vibecode-ops/
 │   ├── codex-review.md
 │   ├── discovery.md
 │   ├── documentation.md
+│   ├── entropy-audit.md         # v5.0 — recurring cross-epic entropy audit
 │   ├── epic-planning.md
 │   ├── epic-swarm.md            # Full-epic orchestrator (sequential 7-phase pipeline)
+│   ├── epic-swarm-workflow.md   # v4.8 — dynamic-workflow port of /epic-swarm
 │   ├── execute-ticket.md        # Single-ticket orchestrator (RECOMMENDED)
 │   ├── generate-service-inventory.md
 │   ├── implementation.md
@@ -797,17 +866,17 @@ pm-vibecode-ops/
 │   ├── security-review.md
 │   ├── swarm-stats.md           # v4.7 — observability dashboard
 │   ├── testing.md
-│   └── references/              # Canonical schemas (observability-schema.md, skill-audit-schema.md)
+│   └── references/              # Canonical schemas (observability-schema.md, skill-audit-schema.md, entropy-scorecard-schema.md)
 │
 ├── skills/                      # Auto-activated quality enforcement (16 skills)
 │   ├── closure-log-aggregation/ # v4.7 — verbatim closure-log roll-up at epic close
 │   ├── codex-finding-resolution/  # P1/P2 fix-now, P3 closure-log, scope-expansion gate
 │   ├── divergent-exploration/   # Explore alternative approaches before converging
 │   ├── epic-closure-validation/ # Validate all tickets complete before epic closure
-│   ├── model-aware-behavior/    # Read all files before proposing changes
+│   ├── model-aware-behavior/    # v5.0 — verification over recall + scope restraint
 │   ├── mvd-documentation/       # Document why, not what
 │   ├── no-silent-deferrals/     # Impact bar + four-catastrophic-condition deferral gate
-│   ├── production-code-standards/  # Block workarounds, temporary code
+│   ├── production-code-standards/  # Block workarounds; enforcement ladder for conventions (v5.0)
 │   ├── security-patterns/       # OWASP patterns during code writing
 │   ├── service-reuse/           # Check inventory before creating services
 │   ├── swarm-observability/     # v4.7 — when to consult /swarm-stats vs reconstruct from Linear
@@ -831,6 +900,7 @@ pm-vibecode-ops/
 ├── docs/                        # Advanced documentation
 │   ├── INSTALLATION.md          # Comprehensive installation guide
 │   ├── MCP_SETUP.md             # MCP server configuration
+│   ├── MODEL_CALIBRATION.md     # v5.0 — evidence ledger for what the toolkit enforces (and stopped enforcing)
 │   ├── SETUP_GUIDE.md           # Terminal basics for beginners
 │   ├── SKILL_AUDIT_PLAYBOOK.md  # v4.7 — operator handoff for SkillOpt-style audits
 │   └── TROUBLESHOOTING.md       # Common issues and solutions

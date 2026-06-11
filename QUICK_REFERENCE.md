@@ -61,7 +61,13 @@ Processes each ticket through ALL 7 phases (adaptation → security scan) before
 |---------|---------|-------------|
 | `/swarm-stats [epic-id-or-ticket-id]` | **Workflow dashboard** — deferral rate, impact-bar hits, follow-up filings, codex auto-fix rate, profile mix, phase outcomes | Read the dashboard before acting on intuition |
 
-Backed by the 15-event JSONL stream at `.swarm/observability/<epic-id>/<ticket-id>.jsonl`. Use this instead of grepping Linear or recalling from memory. Pre-v4.7 epics render with a legacy badge.
+Backed by the 17-event JSONL stream at `.swarm/observability/<epic-id>/<ticket-id>.jsonl`. Use this instead of grepping Linear or recalling from memory. Pre-v4.7 epics render with a legacy badge. v5.0 adds the Discipline Debt section (prose-only vs enforced rules, guard checks, latest entropy scorecard).
+
+### Recurring Maintenance (v5.0)
+
+| Command | Purpose | Your Action |
+|---------|---------|-------------|
+| `/entropy-audit "<north-star>"` | **Cross-epic health audit** — census of conventions/guards/dead machinery/test ballast + a judgment review with one forced highest-conviction change; emits a machine-diffable scorecard | Run every 3–6 months or ~10 epics; watch the prose-only count trend down |
 
 ### Dynamic Workflow (v4.8)
 
@@ -98,8 +104,11 @@ Before merging, verify:
 | **Quality Gates** | Automated checks | Ensures production-ready code |
 | **Epic Swarm** | Parallel ticket execution | Faster epic completion |
 | **Cross-Model Review** | Codex reviews Claude's code | Catches different bugs |
-| **Observability Stream** | 15-event JSONL log of what the workflow did | Answer "is it working" from data, not intuition |
+| **Observability Stream** | 17-event JSONL log of what the workflow did | Answer "is it working" from data, not intuition |
 | **Protected Region** | `<!-- @protected -->` envelope around skill foundational principles | Prevents silent rewrites of the rules the workflow depends on |
+| **Enforcement Ladder** | Conventions ship as guards (lint rule, guard test, drift test, ratchet), not prose | Prose regresses; guards don't — and you can verify "test: green" without reading code |
+| **Discipline Debt** | Count of `[prose-only]` rules not yet backed by a guard | The codebase-health number you can watch go down |
+| **Entropy Audit** | Recurring cross-epic review with a machine-diffable scorecard | Catches drift no per-ticket phase looks for |
 
 ---
 
@@ -186,4 +195,4 @@ Your PRD must include:
 
 ---
 
-**Version 4.8.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 5.0.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

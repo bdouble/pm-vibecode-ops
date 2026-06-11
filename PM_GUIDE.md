@@ -77,9 +77,24 @@ The workflow includes **skills**—quality standards that AI enforces automatica
 
 **Why this matters for PMs**: Issues are prevented during development, not just caught at review. Fewer problems make it to code review and security review phases.
 
-**Maintaining the skill suite over time** (v4.7): the workflow's 15-event observability stream measures whether each skill is doing its job. After shipping a few epics, run `/swarm-stats <epic-id> --per-skill` to surface per-skill activation and compliance rates. When a skill drifts (rising deferral acceptance, dropping codex auto-fix rate, or per-skill compliance under 90%), the [Skill Audit Playbook](docs/SKILL_AUDIT_PLAYBOOK.md#the-operator-loop) walks you through a bounded-edit audit pass to fix the drift. Audits aren't on a calendar — they're triggered by signal.
+**Maintaining the skill suite over time** (v4.7): the workflow's 17-event observability stream measures whether each skill is doing its job. After shipping a few epics, run `/swarm-stats <epic-id> --per-skill` to surface per-skill activation and compliance rates. When a skill drifts (rising deferral acceptance, dropping codex auto-fix rate, or per-skill compliance under 90%), the [Skill Audit Playbook](docs/SKILL_AUDIT_PLAYBOOK.md#the-operator-loop) walks you through a bounded-edit audit pass to fix the drift. Audits aren't on a calendar — they're triggered by signal.
 
 **Learn more**: [SKILLS.md](SKILLS.md) | [Skill Audit Playbook](docs/SKILL_AUDIT_PLAYBOOK.md) | [Official Skills Documentation](https://code.claude.com/docs/en/skills)
+
+### Why the Rules Got Shorter in v5.0
+
+If you compare this toolkit to its earlier versions, you'll notice the AI's instruction files got noticeably shorter. That's deliberate, and it's worth understanding why.
+
+This toolkit was originally built when AI coding models needed babysitting. They left TODO comments instead of finishing the work, wrote half a function and said "rest of the code here," and forgot to read a file before editing it. The early rules existed to police those habits — and they worked.
+
+The 2026 generation of models doesn't have those habits. Better yet, the research is clear that **over-instructing a strong model measurably degrades it**: pile on rules it doesn't need and it starts missing the rules it does need. (Both Anthropic and OpenAI now say this in their official guidance — "less is more.")
+
+So v5.0 sorted every rule by one question: **who does it protect?**
+
+- **Rules that protect YOU** — evidence required for every claim, security review as the final gate, epic closure blocked until work is verifiably done — **stayed, and got stronger**. These exist because you can't personally audit code, and that doesn't change with better models. Notably, the one AI failure mode that has gotten *worse* with stronger models is overconfident "it's done!" claims — so the evidence rules were reinforced, not relaxed.
+- **Rules that babysat the model** — "read the file before editing it," "don't leave TODOs," step-by-step recipes for things models now do well — **were retired or shrunk to one line**.
+
+**Why this matters for PMs**: You get the same protection with a sharper AI. And nothing was deleted on a hunch — every keep/cut decision is dated, sourced, and carries a "bring it back if…" condition in [docs/MODEL_CALIBRATION.md](docs/MODEL_CALIBRATION.md). That document is the receipts; if you ever wonder "why doesn't the AI have a rule about X anymore," the answer is there.
 
 ### Key Terminology (PM Translation)
 
@@ -558,6 +573,22 @@ When reviewing pull requests (the code):
 - Code review agent approved
 - Security review passed (no critical issues)
 - No failing checks in CI/CD
+
+### Trust → Verification: The Dashboard You Can Read Without Reading Code
+
+Here's a problem every PM running AI development hits eventually: the AI establishes a rule — "every API endpoint must validate its input" — writes it into the project's documentation, and you have no way to know whether future work actually follows it. You can't read the code. You're trusting prose.
+
+v5.0 closes that gap. **Every rule the AI establishes now ships as an automatic test in your repo** — called a *guard*. A guard is a small test that scans the codebase and turns red the moment any code breaks the rule, including code written months later by an AI session that never read the rule. The field data behind this is stark: rules enforced by guards had **zero** regressions; the single most-documented prose rule regressed **four separate times**.
+
+What this means for you, concretely:
+
+- **You can verify a rule without reading code.** "Guard test: green" is something you can see in CI with zero technical knowledge. Green = the rule holds, everywhere, right now. You no longer have to take "the agents were told" on faith.
+- **The `[prose-only]` count is your discipline-debt number.** Some rules genuinely can't be turned into tests (judgment calls like "never reset the staging database without asking"). Those get tagged `[prose-only]` and counted. That count is the number of rules you're still taking on faith — **watch it go down** as guards ship. Every epic closure reports it.
+- **Epic closure now enforces this.** `/close-epic` will refuse to close an epic that established a rule without shipping its guard (or getting your explicit OK to leave it as prose). You'll see a "Convention Guards" table in every closure report.
+- **`/swarm-stats` shows a Discipline Debt section.** Prose-only rules vs. enforced rules, missing guards flagged — your enforcement dashboard, one command.
+- **`/entropy-audit` gives you a quarterly scorecard.** Run it every 3–6 months (or every ~10 epics). It produces a machine-comparable scorecard — discipline debt, guard counts, dead machinery, stale documentation — so "is my codebase getting better or worse?" becomes a numbers trend instead of a feeling. It also includes a mandatory "Leave It Alone" list and exactly one highest-conviction recommendation, so it never turns into a refactoring wishlist.
+
+**Why this matters for PMs**: This is the shift from *trusting* the AI followed the rules to *verifying* it — using dashboards built for someone who doesn't read code.
 
 ### Metrics That Matter
 
