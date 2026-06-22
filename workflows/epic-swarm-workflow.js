@@ -50,7 +50,11 @@
  *     "write prose instead of calling StructuredOutput", the v1 crash mode.
  *   • Merge gate uses a TEST-DIFF: it blocks only on tests that NEWLY fail vs.
  *     a baseline captured at setup — pre-existing/flaky red suites (common in
- *     real repos) never block a clean merge.
+ *     real repos) never block a clean merge. A merge blocked by NEW failures gets
+ *     ONE bounded fix-forward pass (re-merge → fix the new failures at the root →
+ *     re-gate) before it blocks, so a cross-file mock/fixture gap can't cascade-kill
+ *     a whole epic; the per-ticket testing phase also runs the FULL suite when a
+ *     ticket changes exports, moving that check LEFT of the merge.
  *   • Empty-diff is tier-aware: where code was EXPECTED (SMALL build, STANDARD
  *     implement/test/docs) an empty diff blocks as BLOCKED_EMPTY_DIFF (claimed-
  *     complete-but-produced-nothing); where it was NOT (NO-CODE, or a STANDARD ticket
@@ -68,19 +72,30 @@
  *     `git worktree add`, so a resume never collides. The end-of-run sweep is DERIVED
  *     (worktrees created minus those the merge agent cleaned up), so no block outcome —
  *     including a merge agent that never reported — can leak a worktree (branches kept).
+ *   • Concurrency-safe by default: the WHOLE epic integrates in a DEDICATED git
+ *     worktree (.swarm/epics/<id>), never the user's main working tree — so two swarms
+ *     for DIFFERENT epics in one clone can't collide, and the main checkout is never
+ *     disturbed. A per-epic lock refuses an accidental second run of the SAME epic
+ *     (released by the finalize step). `--in-place` opts back into legacy main-tree
+ *     integration (single-run only). Each per-ticket worktree installs deps AND runs
+ *     codegen (a fresh worktree's gitignored generated/ is absent — imports fail without it).
+ *   • Operator guidance is threaded, not dropped: free text after the epic ID
+ *     (plus --skills / --context-file) is injected into every code-touching agent, so
+ *     per-epic conventions / skill-loading need no script edit.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * MODEL ROUTING (aggressive Sonnet; Opus where reasoning matters)
- *   Opus:   plan, adapt, implement, test, review, review-fix, codex(driver),
+ *   Opus:   plan, adapt, implement, test, review, review-fix, merge-fix, codex(driver),
  *           SMALL-tier build + review
  *   Sonnet: setup, documentation, security, merge, PR, all NO-CODE work
  *   Effort: per-agent effort is NOT a workflow API knob — it is inherited from
  *           the session. Launch the run at `high` (xhigh/ultracode ~doubles
  *           cost across 70+ agents for marginal gain). See ROUTE below.
  *
- * SAFETY DEFAULTS (test command): local-only by default (creates epic/<id>,
- * merges per-ticket locally, no push/PR). --push pushes the epic branch and
- * opens the PR. NEVER merges to main/master. This file is version-controlled at
+ * SAFETY DEFAULTS: local-only by default (creates epic/<id> in a DEDICATED worktree,
+ * merges per-ticket locally, no push/PR). --push pushes the epic branch and opens the
+ * PR. --in-place integrates in the main working tree instead (legacy; not concurrency-safe).
+ * NEVER merges to main/master. This file is version-controlled at
  * workflows/ in the plugin and ships with it; the command wrapper resolves it
  * via ${CLAUDE_PLUGIN_ROOT}/workflows/epic-swarm-workflow.js.
  *
@@ -121,6 +136,7 @@ const ROUTE = {
   codex: M.opus,
   security: M.sonnet,   // merge gate — bump to M.opus for maximum rigor
   merge: M.sonnet,
+  mergeFix: M.opus,     // fix-forward pass when a merge introduces NEW test failures (reasoning work, not mechanical)
   buildNoCode: M.sonnet,
   reviewNoCode: M.sonnet,
   buildSmall: M.opus,
@@ -207,12 +223,17 @@ function readTicket(t) {
 const SETUP_SCHEMA = {
   type: 'object', required: ['status', 'repo_root', 'epic_branch', 'default_branch'],
   properties: {
-    status: { type: 'string', enum: ['OK', 'FAILED'], description: 'OK | FAILED' },
-    repo_root: { type: 'string' }, default_branch: { type: 'string' }, epic_branch: { type: 'string' },
+    status: { type: 'string', enum: ['OK', 'FAILED', 'LOCKED'], description: 'OK | FAILED | LOCKED (another live run owns this epic — abort)' },
+    repo_root: { type: 'string', description: 'the epic-INTEGRATION tree the run operates in: the dedicated worktree (.swarm/epics/<id>) by default, or the main tree under --in-place' },
+    main_repo: { type: 'string', description: 'the main repository working tree (parent of the dedicated worktree); equals repo_root under --in-place' },
+    default_branch: { type: 'string' }, epic_branch: { type: 'string' },
     test_cmd: { type: 'string', description: 'detected test command, or empty' },
     pkg_mgr: { type: 'string' },
     baseline_failures: { type: 'array', items: { type: 'string' }, description: 'FULL identifiers (file + test name) of tests already FAILING on the epic branch before any merge — the merge test-diff gate matches on the whole identifier, not the file' },
     baseline_note: { type: 'string' },
+    lock_path: { type: 'string', description: 'absolute path of the epic lock directory acquired (released by the finalize step); empty if not acquired' },
+    lock_holder: { type: 'string', description: 'on LOCKED: who/when holds the lock, so the operator can resume that run or clear a stale lock' },
+    context_text: { type: 'string', description: 'contents of --context-file if one was provided (capped); folded into operator guidance for the workers' },
   },
 }
 const PLAN_SCHEMA = {
@@ -307,9 +328,14 @@ async function safeAgent(prompt, opts, fallback = null) {
 }
 
 // ── Args ────────────────────────────────────────────────────────────────────
+// Free text after the epic ID is NOT dropped (it used to be — see RC-4): it becomes
+// operator GUIDANCE threaded into every code-touching agent prompt. So
+// `/epic-swarm-workflow PRO-1667 make every agent load the arize phoenix skills` reaches
+// the agents instead of vanishing. --skills/--guidance/--context-file are the explicit forms.
 function parseArgs(a) {
-  const flags = { dryRun: false, push: false, maxTickets: Infinity }
+  const flags = { dryRun: false, push: false, inPlace: false, maxTickets: Infinity, skills: [], contextFile: null, guidance: '' }
   let epicId = null
+  const guidanceToks = []   // post-epic-ID free text + any unrecognized token — threaded, never silently dropped
   if (typeof a === 'string') {
     const toks = a.trim().split(/\s+/).filter(Boolean)
     for (let i = 0; i < toks.length; i++) {
@@ -317,6 +343,7 @@ function parseArgs(a) {
       if (tk === '--dry-run') flags.dryRun = true
       else if (tk === '--push') flags.push = true
       else if (tk === '--no-push') flags.push = false
+      else if (tk === '--in-place') flags.inPlace = true   // legacy: integrate in the MAIN working tree (cannot run concurrently)
       else if (tk === '--max-tickets') {
         const v = toks[i + 1]
         // Require an explicit non-negative integer. A missing or non-numeric value is a
@@ -330,12 +357,32 @@ function parseArgs(a) {
         if (!/^\d+$/.test(v)) throw new Error(`epic-swarm-workflow: --max-tickets requires a non-negative integer value (got "${v}"). Example: --max-tickets=3.`)
         flags.maxTickets = parseInt(v, 10)
       }
+      else if (tk === '--skills') {
+        const v = toks[i + 1]
+        if (v == null || v.startsWith('--')) throw new Error('epic-swarm-workflow: --skills requires a comma-separated list (e.g. --skills phoenix-tracing,phoenix-evals).')
+        flags.skills.push(...v.split(',').map((s) => s.trim()).filter(Boolean)); i++
+      }
+      else if (tk.startsWith('--skills=')) flags.skills.push(...tk.split('=')[1].split(',').map((s) => s.trim()).filter(Boolean))
+      else if (tk === '--context-file') {
+        const v = toks[i + 1]
+        if (v == null || v.startsWith('--')) throw new Error('epic-swarm-workflow: --context-file requires a path (e.g. --context-file docs/epic-context.md).')
+        flags.contextFile = v; i++
+      }
+      else if (tk.startsWith('--context-file=')) flags.contextFile = tk.split('=')[1]
+      else if (tk.startsWith('--guidance=')) guidanceToks.push(tk.slice('--guidance='.length))
       else if (!tk.startsWith('--') && !epicId) epicId = tk
+      else guidanceToks.push(tk)   // free text after the epic ID, or an unrecognized --flag: keep it (threaded as guidance + warned below), never drop
     }
+    flags.guidance = guidanceToks.join(' ').trim()
   } else if (a && typeof a === 'object') {
     epicId = a.epicId || a.epic || a.id || null
     if (a.dryRun) flags.dryRun = true
     if (a.push) flags.push = true
+    if (a.inPlace) flags.inPlace = true
+    if (a.guidance) flags.guidance = String(a.guidance)
+    if (Array.isArray(a.skills)) flags.skills = a.skills.map(String)
+    else if (typeof a.skills === 'string') flags.skills = a.skills.split(',').map((s) => s.trim()).filter(Boolean)
+    if (a.contextFile) flags.contextFile = String(a.contextFile)
     if (a.maxTickets != null) {
       // Coerce + validate (object callers may pass a string like '0'/'2' or a negative).
       // Without this, '2' bypasses Number.isFinite below (cap silently dropped → whole epic),
@@ -348,7 +395,7 @@ function parseArgs(a) {
   return { epicId, flags }
 }
 const { epicId, flags } = parseArgs(args)
-if (!epicId) throw new Error('epic-swarm-workflow: missing epic ID. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--max-tickets N]')
+if (!epicId) throw new Error('epic-swarm-workflow: missing epic ID. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]')
 if (flags.maxTickets === 0) throw new Error('epic-swarm-workflow: --max-tickets 0 would process no tickets. Omit the flag to run all tickets, or pass a positive count (e.g. --max-tickets 1).')
 
 // Single source of truth for a ticket's worktree path AND feature branch name —
@@ -378,7 +425,8 @@ ${syncStep}- IDEMPOTENT RESET — a prior interrupted run may have left a stale 
     git -C ${root} worktree prune
     git -C ${root} branch -D ${branch}
 - git -C ${root} worktree add ${wt} -b ${branch} ${epicBranch}
-- install dependencies in the worktree with a dir flag (e.g. pnpm -C ${wt} install --frozen-lockfile); run codegen scripts if present.
+- install dependencies in the worktree with a dir flag (e.g. pnpm -C ${wt} install --frozen-lockfile, retrying once without --frozen-lockfile on a lockfile-drift failure).
+- THEN run the repo's CODEGEN — a fresh worktree's gitignored generated output is ABSENT and imports will FAIL without it: any package.json script named generate/codegen, and \`prisma generate\` if a prisma/schema.prisma exists (e.g. pnpm -C ${wt} --filter @repo/database generate). Skip only if the repo has no codegen.
 Operate EXCLUSIVELY inside ${wt} using absolute paths.`
 }
 
@@ -411,24 +459,56 @@ function topoSortTickets(list) {
 
 // ═══════════════════════════════════ Setup + Plan (parallel; independent) ════
 phase('Setup')
-log(`epic-swarm-workflow v2 starting for ${epicId} — mode: ${flags.dryRun ? 'DRY RUN (no changes)' : (flags.push ? 'real + push/PR' : 'real, local-only')}`)
+// ISO = the default: the whole epic integrates in a DEDICATED git worktree (.swarm/epics/<id>) so it
+// never moves the user's main working tree and concurrent swarms for OTHER epics can't collide (RC-1).
+// --in-place opts back into the legacy main-tree integration (single-run only). dry-run touches no tree.
+const ISO = !flags.inPlace && !flags.dryRun
+log(`epic-swarm-workflow v2 starting for ${epicId} — mode: ${flags.dryRun ? 'DRY RUN (no changes)' : (flags.push ? 'real + push/PR' : 'real, local-only')}${ISO ? ' — isolated in a dedicated epic worktree' : (flags.inPlace ? ' — IN-PLACE (main working tree; NOT concurrency-safe)' : '')}`)
 
-const setupPrompt = `You are the swarm setup agent for epic ${epicId}.
+// Operator guidance (RC-4): never silently dropped. Build the block injected into every code-touching
+// agent; warn on the two footguns the old silent-drop hid (a typo'd flag, and "push" intent in prose).
+const strayFlags = flags.guidance.split(/\s+/).filter((w) => w.startsWith('--'))
+if (strayFlags.length) log(`WARN unrecognized flag(s) ${strayFlags.join(' ')} were not parsed as options — threading them into agent guidance as text. Check for a typo if you meant a real flag.`)
+if (flags.guidance) log(`Operator guidance threaded into agents: "${flags.guidance.slice(0, 200)}${flags.guidance.length > 200 ? '…' : ''}"`)
+if (flags.skills.length) log(`Skills every code-touching agent will load first: ${flags.skills.join(', ')}`)
+if (!flags.push && /\bpush\b/i.test(flags.guidance)) log('WARN your guidance mentions "push" but --push was NOT passed — running LOCAL-ONLY (no push/PR). Re-run with --push to push the epic branch and open the PR.')
+const skillsDirective = flags.skills.length
+  ? `LOAD THESE SKILLS FIRST (before any code work): ${flags.skills.join(', ')}. Invoke each via the Skill tool (e.g. Skill ${flags.skills[0]}); if the Skill tool is unavailable to you, locate and read that skill's SKILL.md before proceeding. Conform your work to them — do NOT work from memory or paraphrase their conventions.`
+  : ''
+// GUIDANCE_BASE is available pre-setup (flags only) so the planner gets it. The per-ticket workers use
+// the fuller GUIDANCE (built after setup) which also folds in any --context-file contents setup read.
+const GUIDANCE_BASE = (skillsDirective || flags.guidance)
+  ? `OPERATOR GUIDANCE FOR THIS EPIC (mandatory — applies to your work; follow it, and prefer it over your defaults where they conflict):\n${[flags.guidance, skillsDirective].filter(Boolean).join('\n')}`
+  : ''
+
+const setupPrompt = `You are the swarm setup agent for epic ${epicId}.${ISO ? ' This run integrates the ENTIRE epic inside a DEDICATED git worktree, so it never disturbs the main working tree and can run concurrently with swarms for OTHER epics.' : ''}
 ${SHELL_RULES}
 
-Do exactly this and report:
-1. REPO_ROOT = \`git rev-parse --show-toplevel\`.
-2. default_branch = \`git symbolic-ref refs/remotes/origin/HEAD\` (strip refs/remotes/origin/), else "main".
-3. ${flags.dryRun ? 'DRY RUN: do NOT create branches; report epic_branch = epic/' + epicId + '.' : `Create + checkout the epic branch from the default branch: \`git fetch origin\` (ignore if no remote); if epic/${epicId} exists check it out, else \`git checkout -b epic/${epicId} <origin/default-or-default>\`. NEVER touch main/master. Verify you are not on main/master.`}
-4. Ensure \`.swarm/\` is gitignored (append ".swarm/" to REPO_ROOT/.gitignore via Edit/Write if \`git check-ignore .swarm/\` fails).
-5. Detect the package manager (lockfiles) and the test command, expressed so it runs from ANY working directory WITHOUT a \`cd\` — bake in the tool's own directory flag against the absolute REPO_ROOT: e.g. \`pnpm -C <REPO_ROOT> test\`, \`npm --prefix <REPO_ROOT> test\`, \`yarn --cwd <REPO_ROOT> test\`, \`cargo test --manifest-path <REPO_ROOT>/Cargo.toml\`, \`go -C <REPO_ROOT> test ./...\`, \`python -m pytest <REPO_ROOT>\`. Substitute the real absolute path. The command MUST NOT require cd (downstream agents run it verbatim under a no-cd shell policy). Empty string if no test setup exists.
-6. BASELINE: ${flags.dryRun ? 'skip (dry run).' : 'if a test command exists, run it once on the epic branch and record the set of ALREADY-FAILING tests as baseline_failures using FULL test identifiers (file + test name, e.g. "src/auth.test.ts :: rejects expired token"), NOT bare file paths — the merge gate matches on the whole identifier, so a file-only baseline would mask a NEW failure in a file that already had a different failure. This lets the merge gate ignore pre-existing failures. If the suite is huge or hangs, capture what you can and note it. If no test command, baseline_failures = [].'}
+Do exactly this and report. (<MAIN_REPO>, <REPO_ROOT>, <EPIC_ROOT>, <LOCK> below are values YOU resolve — substitute the real absolute paths; never type the angle brackets into a command.)
+1. MAIN_REPO = the FIRST path printed by \`git worktree list\` (the main working tree is always listed first — robust whether this run was launched from the main tree or a worktree). Confirm it is a git repo.
+2. default_branch = strip "refs/remotes/origin/" from \`git -C <MAIN_REPO> symbolic-ref refs/remotes/origin/HEAD\`; if that fails, "main".
+${flags.dryRun
+  ? `3. DRY RUN — acquire NO lock, create NO branch/worktree, install NOTHING: set REPO_ROOT = MAIN_REPO, detect the test command (step 7 form, but do NOT run it), and report with baseline_failures = [], lock_path = "". Skip steps 4–8.`
+  : `3. ACQUIRE THE EPIC LOCK (stops a SECOND concurrent run of THIS SAME epic from colliding on the branch/worktrees/tickets): LOCK = \`<MAIN_REPO>/.swarm/.locks/${epicId}.lock\`. \`mkdir -p <MAIN_REPO>/.swarm/.locks\`, then attempt an ATOMIC acquire with \`mkdir <LOCK>\` (mkdir fails if it already exists — that IS the lock):
+   - mkdir SUCCEEDS → you hold it. Record \`date -u +%FT%TZ\` plus " ${epicId}" into \`<LOCK>/info\` (Write is fine). Continue.
+   - mkdir FAILS (exists) → check staleness: \`find <LOCK> -maxdepth 0 -mmin +1440\` (older than 24h). If it PRINTS the path (stale): log it, overwrite \`<LOCK>/info\`, continue. If it prints NOTHING (fresh — another run likely owns this epic): STOP — return status=LOCKED, lock_holder = the contents of \`<LOCK>/info\`, and a baseline_note telling the operator to resume the in-flight run (preferred) or, if certain none is active, clear it with \`rm -rf <LOCK>\` and re-run. Create NO branch/worktree.
+4. ${ISO
+    ? `CREATE-OR-REUSE the dedicated epic-integration worktree EPIC_ROOT = \`<MAIN_REPO>/.swarm/epics/${epicId}\` holding branch epic/${epicId} (IDEMPOTENT — a prior/interrupted run may have created it; NEVER destroy prior epic-branch work):
+   a. \`git -C <MAIN_REPO> fetch origin\` — BEST-EFFORT (ignore non-zero / no remote).
+   b. If EPIC_ROOT already appears in \`git -C <MAIN_REPO> worktree list\`: REUSE it — \`git -C <EPIC_ROOT> checkout epic/${epicId}\`, then go to step 5.
+   c. Else \`git -C <MAIN_REPO> worktree prune\`, then: if epic/${epicId} exists locally (\`git -C <MAIN_REPO> branch --list epic/${epicId}\`) or on origin (\`git -C <MAIN_REPO> ls-remote --heads origin epic/${epicId}\`), create the worktree FROM it: \`git -C <MAIN_REPO> worktree add <EPIC_ROOT> epic/${epicId}\`. Otherwise create a fresh epic branch off the default: \`git -C <MAIN_REPO> worktree add <EPIC_ROOT> -b epic/${epicId} origin/<default_branch>\` (fall back to local <default_branch> if origin/<default_branch> is unknown).
+   d. Confirm \`git -C <EPIC_ROOT> rev-parse --abbrev-ref HEAD\` prints epic/${epicId} and is NOT main/master. REPO_ROOT = EPIC_ROOT for the rest of the run. If creation FAILED, release the lock (\`rm -rf <LOCK>\`) and return status=FAILED with the reason.`
+    : `IN-PLACE: REPO_ROOT = MAIN_REPO. Create + checkout the epic branch in the main tree: \`git -C <MAIN_REPO> fetch origin\` (ignore if no remote); if epic/${epicId} exists check it out, else \`git -C <MAIN_REPO> checkout -b epic/${epicId} <origin/default-or-default>\`. NEVER touch main/master. Verify you are not on main/master.`}
+5. Ensure \`.swarm/\` is gitignored: if \`git -C <REPO_ROOT> check-ignore .swarm/\` fails, append a line ".swarm/" to <REPO_ROOT>/.gitignore via Edit/Write.
+6. PREPARE REPO_ROOT so its tests can run${ISO ? " — a FRESH worktree has NO installed deps and NO generated artifacts" : ''}: detect the package manager from lockfiles and install deps with a dir flag (e.g. \`pnpm -C <REPO_ROOT> install --frozen-lockfile\`, retrying once WITHOUT --frozen-lockfile on a lockfile-drift failure; \`npm --prefix <REPO_ROOT> ci\`; \`yarn --cwd <REPO_ROOT> install\`).${ISO ? " THEN run the repo's CODEGEN — a fresh worktree's gitignored generated output is ABSENT and imports will FAIL without it: run any package.json script named generate/codegen, and \`prisma generate\` if a prisma/schema.prisma exists (e.g. \`pnpm -C <REPO_ROOT> --filter @repo/database generate\` in a pnpm monorepo). If the operator guidance / context file names exact codegen commands, run THOSE." : ' (the main tree is normally already installed — skip the install unless imports fail).'}
+${flags.contextFile ? `   CONTEXT FILE: read \`${flags.contextFile}\` (resolve relative to MAIN_REPO if not absolute) and return its contents (capped ~4000 chars) in context_text — it carries operator conventions / codegen steps for this epic; if it names setup/codegen commands, run them in step 6. If the file does not exist, say so in baseline_note and continue.\n` : ''}7. Detect the TEST command, expressed to run from ANY directory WITHOUT a \`cd\`, baked against the absolute REPO_ROOT: e.g. \`pnpm -C <REPO_ROOT> test\`, \`npm --prefix <REPO_ROOT> test\`, \`yarn --cwd <REPO_ROOT> test\`, \`cargo test --manifest-path <REPO_ROOT>/Cargo.toml\`, \`go -C <REPO_ROOT> test ./...\`, \`python -m pytest <REPO_ROOT>\`. Substitute the real absolute path. The command MUST NOT require cd (downstream agents run it verbatim under a no-cd shell policy). Empty string if no test setup exists.
+8. BASELINE: if a test command exists, run it ONCE on REPO_ROOT (the epic branch) and record the set of ALREADY-FAILING tests as baseline_failures using FULL test identifiers (file + test name, e.g. "src/auth.test.ts :: rejects expired token"), NOT bare file paths — the merge gate matches on the whole identifier, so a file-only baseline would mask a NEW failure in a file that already had a different failure. If the suite is huge or hangs, capture what you can and note it. If no test command, baseline_failures = [].`}
 
-Return status, repo_root, default_branch, epic_branch (epic/${epicId}), test_cmd, pkg_mgr, baseline_failures[], baseline_note.`
+${flags.dryRun ? '' : 'SAFETY: if at ANY point after acquiring the lock you must return status=FAILED, release the lock FIRST with `rm -rf <LOCK>` (so a re-run is not blocked by a lock from a setup that never started a run).\n'}Return status, repo_root (= ${ISO ? 'the dedicated EPIC_ROOT' : 'MAIN_REPO'}), main_repo (= MAIN_REPO), default_branch, epic_branch (epic/${epicId}), test_cmd, pkg_mgr, baseline_failures[], baseline_note, lock_path (= <LOCK>${flags.dryRun ? ', empty in dry run' : ''})${flags.contextFile ? ', context_text' : ''}.`
 
 const planPrompt = `You are the swarm planning + classification agent for epic ${epicId}. READ-ONLY: do not modify Linear.
 ${LINEAR_NOTE}
-
+${GUIDANCE_BASE ? GUIDANCE_BASE + '\n' : ''}
 1. Fetch epic ${epicId} and read its full description AND all of its comments. List its sub-tickets (parent filter); for EACH sub-ticket read BOTH its full description AND all of its comments (comments routinely hold requirements and prior-work notes you must factor into classification), and capture: id, title, status, labels, description, acceptance criteria.
 2. INCLUDE sub-tickets in Todo/Backlog/Unstarted AND In-Progress (an In-Progress sub-ticket is normally a prior interrupted run of THIS workflow that must be resumed — do not orphan it). EXCLUDE (report under excluded[] with reason) only Done/Cancelled.
 3. For each included ticket derive:
@@ -450,13 +530,27 @@ const [setup, plan] = await parallel([
   () => safeAgent(planPrompt, { schema: PLAN_SCHEMA, label: `plan ${epicId}`, phase: 'Setup', model: ROUTE.plan }),
 ])
 
+// Same-epic concurrent run: setup refused the lock. Abort cleanly (it created nothing) and tell the
+// operator to resume the in-flight run rather than start a colliding second one.
+if (setup && setup.status === 'LOCKED') throw new Error(`epic-swarm-workflow: epic ${epicId} is already owned by another live run (lock holder: ${setup.lock_holder || 'unknown'}). Resume that run instead of starting a second one; or, if you are certain none is active, clear the stale lock (${setup.lock_path ? `rm -rf ${setup.lock_path}` : `remove <repo>/.swarm/.locks/${epicId}.lock`}) and re-run.`)
 if (!setup || setup.status !== 'OK') throw new Error(`epic-swarm-workflow: setup failed — ${setup ? (setup.baseline_note || `status=${setup.status || 'unknown'} (setup agent returned no detail)`) : 'no result from setup agent'}`)
 if (!plan || !plan.tickets || plan.tickets.length === 0) throw new Error(`epic-swarm-workflow: no eligible sub-tickets for ${epicId}.`)
 
-const REPO_ROOT = setup.repo_root
+const REPO_ROOT = setup.repo_root           // the epic-INTEGRATION tree: the dedicated worktree (default) or the main tree (--in-place)
+const MAIN_REPO = setup.main_repo || REPO_ROOT // the user's main working tree; equals REPO_ROOT under --in-place. Used for the lock path + the end-of-run worktree note.
+const LOCK_PATH = setup.lock_path || ''     // epic lock to release in the finalize step ('' in dry run / --in-place legacy where setup didn't report it)
 const EPIC_BRANCH = setup.epic_branch || `epic/${epicId}`
 const DEFAULT_BRANCH = setup.default_branch || 'main' // PR base; default_branch is now REQUIRED in SETUP_SCHEMA, the 'main' fallback only guards an empty string
 const TEST_CMD = setup.test_cmd || ''
+// Full operator-guidance block for the per-ticket workers (RC-4). The planner already received
+// GUIDANCE_BASE; this also folds in any --context-file contents the setup agent read.
+const GUIDANCE = (() => {
+  const ctx = (setup.context_text && flags.contextFile) ? `PROJECT CONTEXT FILE (${flags.contextFile}):\n${setup.context_text}` : ''
+  if (GUIDANCE_BASE && ctx) return `${GUIDANCE_BASE}\n${ctx}`
+  if (GUIDANCE_BASE) return GUIDANCE_BASE
+  if (ctx) return `OPERATOR GUIDANCE FOR THIS EPIC (mandatory — follow it):\n${ctx}`
+  return ''
+})()
 // Mutable: refreshed to the post-merge failing set after each clean merge so a ticket that FIXES
 // a pre-existing failure shrinks the baseline for subsequent tickets (the merges are sequential).
 let BASELINE = setup.baseline_failures || []
@@ -514,14 +608,14 @@ async function mergeTicket(t, ticketResult, expectsCode) {
   const emptyDiffStep = expectsCode
     ? `If the feature branch changed NOTHING, set STATUS = SKIPPED (notes: "empty diff — nothing to merge, but code WAS expected for this ticket"); do NOT merge or close; go to step 7.`
     : `This ticket may legitimately require NO code change. If the feature branch changed NOTHING, set STATUS = SKIPPED (notes: "empty diff — no change required"), then set ${t.id} to "Done" in Linear and set ticket_closed=true ONLY if that succeeds (on a Linear error leave it false and CONTINUE); do NOT merge; go to step 7.`
-  const merge = await safeAgent(
+  let merge = await safeAgent(
     `You are the integration agent for ${t.id}. Merge its work to the epic branch using a TEST-DIFF gate that ignores pre-existing failures, then close it. Track a STATUS as you go and ALWAYS run the final CLEANUP step before returning — NEVER return early.
 ${SHELL_RULES}
 
 1. Safety: confirm NOT on main/master. \`git -C ${REPO_ROOT} checkout ${EPIC_BRANCH}\`.
 2. Empty-diff pre-check: \`git -C ${REPO_ROOT} diff --stat ${EPIC_BRANCH}...${branch}\`. ${emptyDiffStep}
 3. Dry-merge (no commit yet): \`git -C ${REPO_ROOT} merge --no-ff --no-commit ${branch}\`. If CONFLICT: \`git -C ${REPO_ROOT} merge --abort\`, set STATUS = CONFLICT, go to step 7.
-4. ${TEST_CMD ? `Run integration tests on the merged tree: \`${TEST_CMD}\` (this command already includes its directory flag — run it VERBATIM, do NOT prepend cd). Record current_failures = the FULL set of tests failing now (full identifiers: file + test name). Compare against this BASELINE of pre-existing failures captured before any merge:
+4. ${TEST_CMD ? `Run integration tests on the merged tree: \`${TEST_CMD}\` (this command already includes its directory flag — run it VERBATIM, do NOT prepend cd; tee its output to \`${REPO_ROOT}/.swarm/test-results/${t.id}-merge.txt\` after \`mkdir -p ${REPO_ROOT}/.swarm/test-results\`, so THIS ticket's failure evidence is NOT overwritten by the next ticket's merge — do not rely on any shared/default reporter path). Record current_failures = the FULL set of tests failing now (full identifiers: file + test name). Compare against this BASELINE of pre-existing failures captured before any merge:
 ${BASELINE.length ? BASELINE.map((b) => `   - ${b}`).join('\n') : '   (baseline was clean — any failure is new)'}
    new_failures = tests in current_failures whose FULL identifier is NOT in the baseline (match on the WHOLE identifier, NOT just the file — a new failure in a file that already had a different failure still counts as new).
    - If new_failures is EMPTY: commit the merge (\`git -C ${REPO_ROOT} commit --no-edit\`), STATUS = MERGED, integration_tests = PASS (note any pre-existing failures you ignored), and return current_failures.
@@ -537,6 +631,44 @@ Return status (= STATUS: MERGED | CONFLICT | TEST_FAILED | SKIPPED), integration
   // means the worktree was removed. Only a null report (agent threw/hung) leaves a leak for the
   // end-of-run sweep — which is why the sweep is derived from created − cleaned, not an outcome list.
   if (merge) mergeCleanedIds.add(t.id)
+
+  // FIX-FORWARD (RC-2): a merge blocked ONLY by NEW test failures — most often cross-file mock/fixture
+  // breakage a ticket's own targeted tests can't see — gets ONE bounded Opus repair pass that re-merges,
+  // fixes the new failures at the root, and re-runs the SAME test-diff gate. It merges only on a CLEAN
+  // re-gate; otherwise the ticket stays blocked (fail closed). This is the analog of reviewWithFixPass /
+  // buildWithEmptyRetry and is exactly what would have rescued the PRO-1666 cascade (a mock-coverage gap
+  // that cascade-skipped a whole epic). The original merge agent already aborted+cleaned, so REPO_ROOT is
+  // back on the epic branch and the feature BRANCH still exists — the fix agent just re-merges it.
+  if (merge && merge.status === 'TEST_FAILED' && (merge.new_failures || []).length) {
+    log(`${t.id} merge → ${merge.new_failures.length} NEW test failure(s) — one fix-forward pass, then re-gate (fail closed).`)
+    const fix = await safeAgent(
+      `You are the merge FIX-FORWARD agent for ${t.id}. A prior merge of its feature branch ${branch} into ${EPIC_BRANCH} was blocked because the MERGED tree had NEW test failures (absent from the baseline). Most often this is CROSS-FILE breakage the per-ticket tests can't see — this ticket added or renamed an exported symbol and other files' mock factories (vi.mock/jest.mock) or importers were not updated. Re-merge, FIX the new failures at the ROOT, and re-run the SAME gate. ALWAYS leave ${REPO_ROOT} clean (on ${EPIC_BRANCH}, no half-merged state) before returning.
+${SHELL_RULES}${PROD}
+NEW failures to resolve (full identifiers):
+${(merge.new_failures || []).map((f) => `   - ${f}`).join('\n')}
+
+1. Safety: confirm NOT on main/master. \`git -C ${REPO_ROOT} checkout ${EPIC_BRANCH}\`.
+2. Re-merge WITHOUT committing: \`git -C ${REPO_ROOT} merge --no-ff --no-commit ${branch}\`. If CONFLICT: \`git -C ${REPO_ROOT} merge --abort\`, STATUS = CONFLICT, go to step 6.
+3. FIX the NEW failures in ${REPO_ROOT} at the ROOT cause: update the un-updated mock factories / fixtures / importers so they match this ticket's exported surface. NEVER delete or skip a test, weaken an assertion, or hard-code a value to make it pass. If a failure can only be resolved by changing real SOURCE logic (not test infrastructure), be conservative: make the change ONLY if it is unambiguously correct and small; otherwise STOP — the integration found a real bug that needs human review (STATUS = TEST_FAILED, name it in new_failures).
+4. ${TEST_CMD ? `Re-run integration tests on the merged tree: \`${TEST_CMD}\` (run VERBATIM, no cd; tee to \`${REPO_ROOT}/.swarm/test-results/${t.id}-mergefix.txt\` after \`mkdir -p ${REPO_ROOT}/.swarm/test-results\`). current_failures = ALL tests failing now (full identifiers). new_failures = those whose FULL identifier is NOT in this BASELINE:
+${BASELINE.length ? BASELINE.map((b) => `   - ${b}`).join('\n') : '   (baseline clean — any failure is new)'}
+   - new_failures EMPTY → \`git -C ${REPO_ROOT} add -A\` then \`git -C ${REPO_ROOT} commit --no-edit\` (the merge commit now carries your fixes), STATUS = MERGED, integration_tests = PASS, return current_failures.${flags.push ? ` Then \`git -C ${REPO_ROOT} push origin ${EPIC_BRANCH}\`.` : ''}
+   - new_failures NON-EMPTY (not fixable in one pass) → \`git -C ${REPO_ROOT} merge --abort\`, STATUS = TEST_FAILED, list them in new_failures, go to step 6. Do NOT close the ticket.` : `No test command exists — cannot re-gate. \`git -C ${REPO_ROOT} merge --abort\`, STATUS = TEST_FAILED, go to step 6.`}
+5. If STATUS = MERGED: set ${t.id} to "Done" in Linear, ticket_closed=true ONLY if that succeeds. ${LINEAR_NOTE} On a Linear error leave it false and CONTINUE (the code is merged). Then post ONE brief Linear comment on ${t.id} headed "${H.testing} (merge fix-forward)" listing the files you fixed and why; if Linear is unavailable, log and continue.
+6. Confirm ${REPO_ROOT} is clean and on ${EPIC_BRANCH} (no leftover merge state).
+Return status (MERGED | CONFLICT | TEST_FAILED), integration_tests, new_failures[], current_failures[], ticket_closed, notes.`,
+      { schema: MERGE_SCHEMA, label: `merge-fix ${t.id}`, phase: 'Integrate', model: ROUTE.mergeFix },
+    )
+    if (fix) {
+      mergeCleanedIds.add(t.id)
+      ticketResult.phases.merge_fix = fix.status
+      merge = fix // adopt the fix-pass outcome: MERGED on a clean re-gate, else TEST_FAILED with the remaining failures
+      log(`${t.id} merge fix-forward → ${fix.status}${fix.status === 'MERGED' ? ' (re-gate clean — cascade averted)' : ''}.`)
+    } else {
+      log(`${t.id} merge fix-forward returned nothing — keeping the original TEST_FAILED (fail closed).`)
+    }
+  }
+
   ticketResult.merge = merge ? merge.status : 'NO_REPORT'
   ticketResult.integration_tests = merge ? merge.integration_tests : undefined
   if (merge && merge.status === 'MERGED') {
@@ -642,7 +774,7 @@ function reviewPrompt(t, wt, { intro, scope, includeAc, foldSecurity }) {
   return (rerun) => `${intro}${rerun ? ' This is a POST-FIX RE-REVIEW: re-check the diff after the fix pass; do NOT assume the prior findings were resolved.' : ''}
 Review ONLY the diff: \`git -C ${wt} diff --name-only ${EPIC_BRANCH}...HEAD\`.
 ${readTicket(t)}
-${SHELL_RULES}${includeAc ? `\n${acBlock(t)}` : ''}
+${SHELL_RULES}${includeAc ? `\n${acBlock(t)}` : ''}${GUIDANCE ? `\n${GUIDANCE}\n(Operator guidance above is part of the bar: a change that ignores it — e.g. didn't load a mandated skill, didn't follow a stated convention — is CHANGES_REQUESTED.)` : ''}
 ${scope}
 ${selfPost(t, rerun ? H.codereview + ' (re-review)' : H.codereview, false)}${foldSecurity ? '\nALWAYS return security_status explicitly as exactly PASS or FAIL (PASS = zero CRITICAL/HIGH and no behavior/security surface introduced by this change).' : ''}
 Return status (${foldSecurity ? 'APPROVED | CHANGES_REQUESTED' : 'APPROVED | CHANGES_REQUESTED | BLOCKED'}), blocking_findings[]${foldSecurity ? ', security_status (PASS | FAIL)' : ''}.`
@@ -673,7 +805,7 @@ ${SHELL_RULES}
 
 ${acBlock(t)}
 
-${readTicket(t)}
+${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Make ONLY the documentation/comment/config change the ticket asks for. If you discover it actually requires code/logic changes, STOP, set status NEEDS_CONTEXT, and explain (it was mis-classified). Commit in the worktree: \`git -C ${wt} add -A\` then \`docs(${t.id}): ...\`.
 ${gitVerify(wt)}
 
@@ -720,7 +852,7 @@ ${GUARD}
 
 ${acBlock(t)}
 
-${readTicket(t)}
+${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Reuse existing code; implement every AC; add a focused test for the change; run lint + typecheck on changed files (npx --prefix ${wt} tsc --noEmit, project lint). Commit: \`git -C ${wt} add -A\` then \`feat(${t.id}): ...\`. If the work turns out to be larger than SMALL (schema/auth/API/many files), STOP with status NEEDS_CONTEXT (it was mis-classified for STANDARD).
 ${gitVerify(wt)}
 
@@ -767,7 +899,7 @@ ${NO_DEFER}
 
 ${acBlock(t)}
 
-${readTicket(t)}
+${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Then produce the adaptation plan (NO feature code yet): inventory EXISTING services/utilities to reuse (prevent duplication — highest-value output); map each AC to an approach; list files to create (only if no reuse) and modify; define the test strategy and integration points.
 ${selfPost(t, H.adaptation, true)}
 Return status (COMPLETE | BLOCKED | NEEDS_CONTEXT), summary (one line on the plan + key reuse), files_changed (likely empty), write/edit counts, committed (false — adaptation only plans, it does not commit).`,
@@ -789,7 +921,7 @@ ${PROD}
 ${NO_DEFER}
 ${GUARD}
 ${acBlock(t)}
-${readTicket(t)} In particular read the Adaptation Report and any prior phase comments on ${t.id}.
+${readTicket(t)} In particular read the Adaptation Report and any prior phase comments on ${t.id}.${GUIDANCE ? '\n' + GUIDANCE : ''}
 ADAPTATION SUMMARY: ${adapt.summary || '(read the Adaptation Report you posted)'}
 Reuse what adaptation mandated; implement every AC; NO test code here (separate phase); run lint + typecheck on changed files; commit (\`git -C ${wt} add -A\`; \`feat(${t.id}): ...\`). If this ticket genuinely has no implementation-phase code deliverable (pure verification/test-only), set no_code=true and explain — do NOT invent code.
 ${gitVerify(wt)}
@@ -818,12 +950,13 @@ Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, c
     if (t.run_testing !== false) {
       const test = await safeAgent(
         `ROLE: qa-engineer-agent for ${t.id}. ACCURACY-FIRST testing in ${wt}, gates in order:
-${readTicket(t)}
+${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 ${SHELL_RULES}${PROD}
 - Gate #0: run existing tests in affected modules; FIX broken existing tests (root-cause) FIRST. Never delete/skip a failing test to pass; never hard-code values to make specific test inputs pass — if a test seems wrong, report it.
 - Gate #1 API Accuracy (100%): Read the implementation for ACTUAL method names/enums/params — no invented APIs.
 - Gate #2 Compilation (100%): tests compile, zero type errors. Gate #3 Execution (100%): tests run, mocks work, assertions valid.
 - ANTI-BALLAST: assert behavior and contracts (returns, persisted state, emitted events), not call shapes — no toHaveBeenCalled* on internal collaborators unless the call IS the contract; prefer a few real-infrastructure integration tests over many mocked units for data-layer logic.
+- Gate #4 CROSS-FILE BREAKAGE (the targeted-green / full-red gap that sinks epics at merge): ${TEST_CMD ? `if the diff ADDS, RENAMES, or changes the signature of any EXPORTED symbol (a function/const/type other modules import), other files' mock factories (vi.mock/jest.mock) and importers can break in ways your TARGETED tests never exercise. After your targeted tests pass, run the FULL suite ONCE against YOUR worktree. The project test command is \`${TEST_CMD}\` — do NOT run it verbatim (it targets the integration tree, not your worktree); run the SAME runner with its directory flag pointed at ${wt} (e.g. \`pnpm -C ${wt} test\`, \`npm --prefix ${wt} test\`). Tee output to \`${REPO_ROOT}/.swarm/test-results/${t.id}-test.txt\` (\`mkdir -p\` its dir first). FIX every NEW failure your change introduced at the ROOT — most often an un-updated mock factory or fixture in another file (update it; NEVER delete/skip a test) — and re-run until the full suite shows no failure your change caused. If the suite is too large to finish, capture what you can, say so, and rely on the merge gate. This moves the integration check LEFT (into the cheap-to-fix worktree) instead of discovering it at merge, where it cascade-skips every dependent ticket.` : 'no project test command was detected, so there is no full suite to run — note that the merge has no integration gate either and cross-file breakage cannot be caught automatically.'}
 - Cap Gate #0 fix loops at ~3 cycles; if still red, report ISSUES_FOUND with the specifics rather than looping. Coverage secondary (~70-80%, 90%+ critical), skip trivial code.
 - Commit: \`git -C ${wt} add -A\`; \`test(${t.id}): ...\`. Files changed by implementation: ${(impl.files_changed || []).join(', ') || '(discover via git diff)'}
 ${selfPost(t, H.testing, false)}
@@ -846,7 +979,7 @@ Return status (COMPLETE | ISSUES_FOUND), a gates one-liner, files_changed, write
     if (t.run_docs !== false && (t.run_docs === true || !impl.no_code)) {
       const doc = await safeAgent(
         `ROLE: technical-writer-agent for ${t.id}. MVD — "document WHY, not WHAT" in ${wt}. Document complex/non-obvious logic, decisions, security constraints, public API (auto-generate where possible); SKIP self-documenting types/trivial CRUD. Commit: \`git -C ${wt} add -A\`; \`docs(${t.id}): ...\`.
-${readTicket(t)}
+${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 ${SHELL_RULES}
 ${selfPost(t, H.documentation, false)}
 Return status, summary, files_changed, write/edit counts, committed.`,
@@ -956,17 +1089,20 @@ phase('Report')
 // blocked before creating a worktree. Feature BRANCHES are kept so failed work stays inspectable;
 // a later rerun's idempotent wtSetup clears any stale branch. `.swarm/` is gitignored scratch.
 const leakedWts = [...createdWorktreeIds].filter((id) => !mergeCleanedIds.has(id)).map((id) => ticketRefs(REPO_ROOT, { id }).wt)
-if (leakedWts.length) {
+// Finalize ALWAYS releases the epic lock (so a later run of this epic isn't refused) and sweeps any
+// leaked worktrees in the same pass. It runs whenever there is a lock to release or a worktree to sweep
+// — i.e. every real run; dry-run has neither. The dedicated epic worktree itself is KEPT (for PR /
+// close-epic / inspection); only per-ticket worktrees and the lock are cleaned here.
+if (leakedWts.length || LOCK_PATH) {
   await safeAgent(
-    `Best-effort worktree cleanup for epic ${epicId}. Each path below is a per-ticket git worktree left behind by a ticket that did not reach a clean merge. Remove each one; KEEP all branches (failed work must stay inspectable); NEVER touch main/master or the epic branch.
+    `Finalize epic ${epicId}: release its lock and sweep any leftover per-ticket worktrees. Run each command as its OWN Bash call and ignore "not a working tree"/"not found" errors. NEVER touch main/master, the epic branch, the dedicated epic worktree, or any feature branch (failed work must stay inspectable — do NOT run \`git branch -D\`).
 ${SHELL_RULES}
-For EACH path, run \`git -C ${REPO_ROOT} worktree remove <path> --force\` as its OWN Bash call (ignore "not a working tree"/"not found" errors). Then run \`git -C ${REPO_ROOT} worktree prune\`. Do NOT run \`git branch -D\` on anything.
-Paths:
-${leakedWts.map((p) => `- ${p}`).join('\n')}
-Return status only ("DONE").`,
-    { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string' } } }, label: `cleanup ${epicId}`, phase: 'Report', model: ROUTE.merge },
+${LOCK_PATH ? `- RELEASE THE LOCK (so a later run of this epic isn't blocked): \`rm -rf ${LOCK_PATH}\`.\n` : ''}${leakedWts.length ? `- Sweep these leftover per-ticket worktrees — for EACH path run \`git -C ${REPO_ROOT} worktree remove <path> --force\`, then run \`git -C ${REPO_ROOT} worktree prune\` once:
+${leakedWts.map((p) => `   - ${p}`).join('\n')}\n` : ''}Return status only ("DONE").`,
+    { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string' } } }, label: `finalize ${epicId}`, phase: 'Report', model: ROUTE.merge },
   )
-  log(`Swept ${leakedWts.length} leftover worktree(s) (branches kept for inspection).`)
+  if (leakedWts.length) log(`Swept ${leakedWts.length} leftover worktree(s) (branches kept for inspection).`)
+  if (LOCK_PATH) log(`Released epic lock.`)
 }
 
 let pr = null
@@ -995,10 +1131,28 @@ const noOpIds = results.filter((r) => r.outcome === 'NO_OP' || r.outcome === 'NO
 const noOpPending = results.filter((r) => r.outcome === 'NO_OP_NOT_CLOSED').map((r) => r.id)
 const blockedList = results.filter((r) => !NON_BLOCKING.has(r.outcome)).map((r) => ({ id: r.id, outcome: r.outcome }))
 const manualClose = [...mergedPending, ...noOpPending]
+// next_steps reflects the ACTUAL reconciled state (RC-6) — never a canned "run /close-epic" when
+// tickets are still blocked, nothing merged, or a manual push/close is owed.
+const nothingDone = doneIds.length === 0 && mergedPending.length === 0 && noOpIds.length === 0
+const nextStepsParts = []
+if (nothingDone) {
+  nextStepsParts.push(`The swarm merged NOTHING — ${EPIC_BRANCH} is unchanged from ${DEFAULT_BRANCH}. Investigate the blocked tickets below before retrying; do NOT run /close-epic.`)
+} else {
+  nextStepsParts.push(`Review ${EPIC_BRANCH}${ISO ? ` in the dedicated worktree ${REPO_ROOT}` : ''}.`)
+}
+if (manualClose.length) nextStepsParts.push(`Manually set ${manualClose.join(', ')} to Done in Linear (merged/no-op but auto-close did not confirm).`)
+if (blockedList.length) nextStepsParts.push(`${blockedList.length} ticket(s) BLOCKED (${blockedList.map((b) => `${b.id}:${b.outcome}`).join(', ')}) — resolve or re-run them; do NOT close the epic until they pass.`)
+if (unprocessed.length) nextStepsParts.push(`${unprocessed.length} ticket(s) never processed (${unprocessed.map((u) => u.id).join(', ')}) — re-run to pick them up.`)
+if (!flags.push && (doneIds.length || mergedPending.length)) nextStepsParts.push(`Local-only run — nothing was pushed; re-run with --push to push ${EPIC_BRANCH} and open the PR, or push it yourself.`)
+if (ISO) nextStepsParts.push(`The dedicated epic worktree ${REPO_ROOT} is kept for inspection/PR/close-epic; when fully done, remove it with \`git -C ${MAIN_REPO} worktree remove ${REPO_ROOT}\` (keeps the ${EPIC_BRANCH} branch).`)
+if (!nothingDone && blockedList.length === 0 && unprocessed.length === 0) nextStepsParts.push(`All tracked tickets are resolved — run /close-epic ${epicId} once they're confirmed Done.`)
 const summary = {
   epic: { id: epicId, title: plan.epic.title },
   mode: flags.push ? 'real+push' : 'real(local)',
+  isolation: ISO ? 'dedicated-worktree' : (flags.inPlace ? 'in-place (main tree)' : 'dry-run'),
   epic_branch: EPIC_BRANCH,
+  main_repo: MAIN_REPO,
+  integration_tree: REPO_ROOT,
   tier_counts: tierCounts,
   tickets_total: tickets.length,
   done: doneIds,
@@ -1011,7 +1165,7 @@ const summary = {
   integration_verification: TEST_CMD ? `test-diff gate (cmd: ${TEST_CMD})` : 'NONE — no test command detected; merges not integration-verified',
   pr_url: pr ? pr.pr_url : (flags.push ? '(nothing merged)' : '(local-only; pass --push to open a PR)'),
   results,
-  next_steps: `Review epic branch ${EPIC_BRANCH}.${manualClose.length ? ` Manually set ${manualClose.join(', ')} to Done in Linear (merged/no-op but auto-close failed).` : ''} Run /close-epic ${epicId} once all tickets are Done.`,
+  next_steps: nextStepsParts.join(' '),
 }
 log(`epic-swarm-workflow v2 complete — ${doneIds.length}/${tickets.length} done${mergedPending.length ? `, ${mergedPending.length} merged-pending-close` : ''}${noOpIds.length ? `, ${noOpIds.length} no-op` : ''}, ${blockedList.length} blocked, ${unprocessed.length} unprocessed.`)
 return summary

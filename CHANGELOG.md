@@ -5,6 +5,35 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-06-22
+
+Minor release — **"epic-swarm-workflow hardening."** A focused reliability pass on the `/epic-swarm-workflow` dynamic workflow, driven by a forensic audit of the nine real ProductLobster runs since v5.0.0 (one total-loss epic, two operator-authored in-flight script patches, and several runs that completed only with manual finishing). The audit's headline finding: the v4.8 resilience layer (`safeAgent`, fail-closed gates) held — across all nine runs no transient failure ever caused a wrongful block, lost work, or a false APPROVED — so the failures were in **plumbing, not resilience**. This release fixes the plumbing. All changes are confined to `workflows/epic-swarm-workflow.js` and its command wrapper; existing invocations keep working (the new integration model is the default, with `--in-place` to opt out).
+
+### Added
+
+- **Concurrent epic runs in one repo — dedicated integration worktree, now the default.** The whole epic integrates inside a dedicated git worktree (`.swarm/epics/<id>`) with `REPO_ROOT` forced to it, instead of taking over the main working tree. Two swarms for *different* epics can run in the same clone without colliding, and your main checkout is never disturbed. Generalizes the isolation patch operators were hand-authoring per run (field run PRO-1644). `--in-place` opts back into legacy main-tree integration (single-run only).
+- **Per-epic lock + always-run finalize.** An atomic, 24h-stale-aware lock (`.swarm/.locks/<id>.lock`) refuses an accidental second run of the *same* epic; an always-run finalize step releases it and sweeps any leaked per-ticket worktrees in the same pass.
+- **Merge fix-forward pass.** A merge blocked by *new* test failures now gets one bounded Opus repair pass — re-merge → fix the new failures at the root (mock factories / fixtures; never delete or skip a test) → re-run the same test-diff gate — before the ticket blocks. Fail-closed: it merges only on a clean re-gate. The analog of the existing review / empty-artifact fix passes; directly addresses the field incident where a single mock-coverage gap cascade-skipped an entire epic (0/9 merged).
+- **Cross-file breakage check (testing Gate #4).** When a ticket adds or renames an exported symbol, the testing phase runs the FULL suite in its worktree (not just targeted tests) and fixes dependent mock factories — moving the integration check left of the merge, where it is cheap to fix instead of cascading.
+- **Operator-guidance channel.** `--skills a,b,c`, `--context-file PATH`, and free-text guidance after the epic ID are threaded into every code-touching agent (and the planner), so per-epic conventions / skill-loading no longer require hand-editing the script (retires the field PHOENIX patch).
+
+### Changed
+
+- **Honest run summary.** `next_steps` reflects the actual reconciled state — blocked / unprocessed counts, "merged nothing," and any owed manual push/close — instead of always printing "run /close-epic once all tickets are Done." The summary also reports the isolation mode, main repo, and integration tree.
+- **Per-worktree codegen.** Every fresh worktree (and the dedicated integration tree) now installs dependencies AND runs codegen (e.g. `prisma generate`) — a fresh worktree's gitignored generated output is absent, so imports failed without it.
+- **Namespaced test output.** The testing and merge phases tee output to `.swarm/test-results/<ticket>-{test,merge,mergefix}.txt`, so one ticket's failure evidence is not overwritten by the next ticket's merge.
+
+### Fixed
+
+- **`parseArgs` no longer silently drops operator intent.** Free text after the epic ID (and flags buried in prose) used to vanish entirely; it is now threaded as guidance with a warning, and a "push" in prose without an actual `--push` flag is flagged. This was the root cause of a multi-kill field incident where a skill-loading directive never reached any agent.
+
+### Notes
+
+- The dedicated-worktree default isolates *git*, not shared external state: two epics writing the same local database / test backend still need separate data isolation (out of scope for this release).
+- Per-agent failure isolation, the test-diff merge gate, fail-closed reviews/security, and right-sized effort tiers are unchanged — verified intact by the audit and deliberately left alone.
+
+---
+
 ## [5.0.0] - 2026-06-11
 
 Major release — **"Structural Guards, Bespoke Fit."** Two complementary motions that change the toolkit's enforcement philosophy, which is why this is a major version: **enforce outcomes structurally, stop micromanaging process, give the model the middle.**
@@ -2284,6 +2313,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[5.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.1.0
 [5.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.0.0
 [4.8.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.8.0
 [4.7.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.7.1

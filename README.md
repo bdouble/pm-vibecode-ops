@@ -1,7 +1,7 @@
 # PM Vibe Code Operations
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-![Version](https://img.shields.io/badge/version-5.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-5.1.0-blue.svg)
 
 **A production development workflow for Product Managers who build with AI.**
 
@@ -101,7 +101,7 @@ One command, `/execute-ticket`, orchestrates the full ticket lifecycle: adaptati
 
 For epics with multiple tickets, `/epic-swarm` orchestrates the full workflow across all tickets with dependency-aware sequencing. Each ticket runs the complete 7-phase pipeline (adaptation through security scan) before the next ticket starts — so every ticket's adaptation examines code built by prior tickets. A hard checkpoint verifies all 7 phase reports exist in Linear before any ticket can merge. Dual-layer security review (per-ticket pre-merge + comprehensive post-merge), persistent swarm state for resume, and orchestrator notes for cross-ticket context.
 
-A newer variant, `/epic-swarm-workflow`, runs the same idea as a Claude Code **dynamic workflow** (the JavaScript `Workflow` runtime). It right-sizes each ticket's pipeline to its effort (a planning agent classifies tickets as no-code / small / standard), keeps a hard review floor for any code change, and isolates every subagent failure so a single API hiccup can't abort the run. See [workflows/](workflows/).
+A newer variant, `/epic-swarm-workflow`, runs the same idea as a Claude Code **dynamic workflow** (the JavaScript `Workflow` runtime). It right-sizes each ticket's pipeline to its effort (a planning agent classifies tickets as no-code / small / standard), keeps a hard review floor for any code change, and isolates every subagent failure so a single API hiccup can't abort the run. The whole epic integrates in a dedicated git worktree, so you can run swarms for **different epics concurrently** in one repo without disturbing your checkout, and a merge blocked by new test failures gets a bounded fix-forward pass before it blocks. See [workflows/](workflows/).
 
 ---
 
@@ -231,7 +231,7 @@ For cases requiring phase-by-phase control:
 
 | Command | Purpose |
 |---------|---------|
-| `/epic-swarm-workflow [epic-id] [--dry-run] [--push] [--no-push] [--max-tickets N]` | Run the epic pipeline as a Claude Code **dynamic workflow** (JavaScript `Workflow` runtime). A planning agent classifies each ticket into no-code / small / standard and the script runs a pipeline sized to it; reviews are a hard floor for code changes and fail closed; every subagent failure is isolated so the run always finishes with a reconciled summary; the merge gate uses a test-diff so pre-existing/flaky failures don't block clean merges. `--push` opens the epic PR (default is local-only; `--no-push` forces it explicitly); `--max-tickets N` (N ≥ 1) caps scope. Requires [dynamic workflows](https://code.claude.com/docs/en/workflows) enabled. Source + delivery notes in [workflows/](workflows/). |
+| `/epic-swarm-workflow [epic-id] [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [guidance…]` | Run the epic pipeline as a Claude Code **dynamic workflow** (JavaScript `Workflow` runtime). A planning agent classifies each ticket into no-code / small / standard and the script runs a pipeline sized to it; reviews are a hard floor for code changes and fail closed; every subagent failure is isolated so the run always finishes with a reconciled summary; the merge gate uses a test-diff (with a bounded fix-forward pass) so pre-existing/flaky failures don't block clean merges and a cross-file gap can't cascade-kill the epic. The whole epic integrates in a **dedicated git worktree**, so swarms for different epics run concurrently in one repo without touching your checkout (`--in-place` for legacy main-tree mode). `--push` opens the epic PR (default local-only); `--max-tickets N` (N ≥ 1) caps scope; `--skills`/`--context-file`/free-text-after-the-id thread operator guidance into every agent. Requires [dynamic workflows](https://code.claude.com/docs/en/workflows) enabled. Source + delivery notes in [workflows/](workflows/). |
 
 **Best practice:** Run each command in a fresh Claude Code session to prevent context overflow.
 

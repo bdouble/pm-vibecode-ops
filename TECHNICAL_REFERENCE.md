@@ -858,7 +858,7 @@ pm-vibecode-ops/
 │   ├── entropy-audit.md         # v5.0 — recurring cross-epic entropy audit
 │   ├── epic-planning.md
 │   ├── epic-swarm.md            # Full-epic orchestrator (sequential 7-phase pipeline)
-│   ├── epic-swarm-workflow.md   # v4.8 — dynamic-workflow port of /epic-swarm
+│   ├── epic-swarm-workflow.md   # dynamic-workflow port of /epic-swarm (v5.1: concurrent-safe dedicated worktree, merge fix-forward, guidance channel)
 │   ├── execute-ticket.md        # Single-ticket orchestrator (RECOMMENDED)
 │   ├── generate-service-inventory.md
 │   ├── implementation.md

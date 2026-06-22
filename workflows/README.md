@@ -6,7 +6,7 @@ This directory holds **dynamic workflows** — JavaScript scripts that orchestra
 
 | File | Purpose |
 |------|---------|
-| `epic-swarm-workflow.js` | Resilient, right-sized port of `/epic-swarm`. Each ticket runs a pipeline scaled to its effort tier — STANDARD runs the full adaptation → implementation → testing → documentation → code review → Codex cross-model review → security → merge chain; NO_CODE/SMALL collapse to build → review → merge — with a hard review floor for code changes and full per-agent failure isolation. |
+| `epic-swarm-workflow.js` | Resilient, right-sized port of `/epic-swarm`. Each ticket runs a pipeline scaled to its effort tier — STANDARD runs the full adaptation → implementation → testing → documentation → code review → Codex cross-model review → security → merge chain; NO_CODE/SMALL collapse to build → review → merge — with a hard review floor for code changes and full per-agent failure isolation. The whole epic integrates in a **dedicated git worktree** so runs for different epics are concurrency-safe and your main checkout is never touched (`--in-place` for the legacy main-tree mode). |
 
 ## How this ships in the plugin
 
@@ -20,10 +20,10 @@ So this plugin delivers the workflow through a thin **command wrapper**:
 After installing the plugin, run it as:
 
 ```
-/pm-vibecode-ops:epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--max-tickets N]
+/pm-vibecode-ops:epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]
 ```
 
-Flags: `--dry-run` prints the tier plan and makes no changes; `--push` pushes the epic branch and opens the PR (default is local-only; `--no-push` forces local-only explicitly — the last of `--push`/`--no-push` wins); `--max-tickets N` caps scope to the first N tickets (N must be ≥ 1).
+Flags: `--dry-run` prints the tier plan and makes no changes; `--push` pushes the epic branch and opens the PR (default is local-only; `--no-push` forces local-only explicitly — the last of `--push`/`--no-push` wins); `--in-place` integrates in the main working tree instead of a dedicated worktree (legacy, single-run only); `--max-tickets N` caps scope to the first N tickets (N must be ≥ 1); `--skills a,b,c` makes every code-touching agent load those skills first; `--context-file PATH` threads a conventions/codegen file into every agent. **Any plain text after the epic ID** is threaded into every code-touching agent as operator guidance (never silently dropped).
 
 ### Optional: a bare, un-namespaced command
 
@@ -51,7 +51,9 @@ It then appears as `/epic-swarm-workflow` in `/` autocomplete. (Re-copy after up
 - **Reviews are a hard floor for code changes** and **fail closed**: a failed or empty review blocks the merge; it can never silently pass as approved. A review fix is only trusted after the fixer confirms it *committed* — an uncommitted "fix" keeps the original CHANGES_REQUESTED. Codex auto-fixes land *after* the review floor, so when codex changes code the correctness review is re-run on the new diff (also fail-closed) before merge.
 - **Resilient by construction.** Every agent call is wrapped so a single failure (API 5xx, MCP hang, schema miss) is contained — the ticket is recorded blocked and the run continues, always returning a reconciled summary. Each phase agent posts its own report to Linear as it finishes, so a crash never loses the audit trail.
 - **Empty-diff handling is tier-aware.** Where code was expected (SMALL build, STANDARD implement) an empty diff blocks loudly as `BLOCKED_EMPTY_DIFF` (a "claimed complete but produced nothing" anomaly), and those builds get one git-verified empty-artifact retry first. Where code was *not* expected (a NO-CODE observation ticket, or a `no_code` STANDARD ticket) an empty diff is a benign `NO_OP` — the ticket is closed, reported separately, and never blocks or poisons its dependents.
-- **Merge gate uses a test-diff** — it blocks only on tests that *newly* fail versus a baseline captured at setup, so a pre-existing red or flaky suite (common in real repos) never blocks a clean merge.
+- **Merge gate uses a test-diff** — it blocks only on tests that *newly* fail versus a baseline captured at setup, so a pre-existing red or flaky suite (common in real repos) never blocks a clean merge. A merge blocked by *new* failures gets one bounded **fix-forward** pass (re-merge → fix the new failures at the root → re-gate) before it blocks, so a cross-file mock/fixture gap can't cascade-kill an epic; the testing phase also runs the full suite in-worktree when a ticket changes exports, moving that check left of the merge.
+- **Concurrency-safe by default.** The whole epic integrates in a dedicated git worktree (`.swarm/epics/<id>`) with `REPO_ROOT` forced to it — so swarms for *different* epics in one clone never collide on the working tree, and your main checkout is never disturbed. A per-epic lock refuses an accidental second run of the *same* epic. `--in-place` restores the legacy main-tree integration (single-run only). Note this isolates *git*, not a shared database/test backend — two epics writing the same local data store still need separate data isolation.
+- **Operator guidance is threaded, not dropped.** Free text after the epic ID (plus `--skills` / `--context-file`) is injected into every code-touching agent and the planner, so per-epic conventions or skill-loading need no script edit.
 - **Model routing** is aggressive on Sonnet: Opus for the reasoning phases (plan, adapt, implement, test, review, review-fix, codex) **and both SMALL-tier agents (build + review)**; Sonnet for the mechanical ones (setup, documentation, security, merge, the PR) **and both NO-CODE-tier agents (build + review)**. So a SMALL-heavy epic costs more Opus than the reasoning-phase list alone implies. Tune the `ROUTE` map at the top of the script. Per-agent *effort* is not a workflow API knob — launch the session at `high`.
 
 To edit the workflow, change `epic-swarm-workflow.js` here (the source of truth), then re-deliver it (the command wrapper always runs this file; re-copy it if you used the bare-command install above).
