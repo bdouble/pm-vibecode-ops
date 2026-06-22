@@ -1,7 +1,7 @@
 ---
 description: Launch the epic-swarm-workflow dynamic workflow — a resilient, right-sized multi-agent swarm over a Linear epic (per-ticket pipeline sized to effort; STANDARD tickets run adapt→implement→test→docs→review→codex→security→merge, NO_CODE/SMALL collapse to build→review→merge; reviews fail-closed)
 allowed-tools: Bash(echo:*), Bash(test:*), Glob, Workflow
-argument-hint: <epic-id> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]
+argument-hint: <epic-id> [--epic ID] [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]
 workflow-phase: epic-swarm-workflow
 closes-ticket: false
 ---
@@ -35,12 +35,13 @@ The plugin install directory is exposed to this command's shell as `${CLAUDE_PLU
 
 ## Usage and behavior
 
-- **Argument (required):** a Linear epic ID — e.g. `/pm-vibecode-ops:epic-swarm-workflow PRO-42`.
+- **Argument (required):** a Linear epic ID — e.g. `/pm-vibecode-ops:epic-swarm-workflow PRO-42`. It **must** be a Linear issue ID (e.g. `PRO-42`), supplied as the first argument or via `--epic`. A descriptive phrase is **not** accepted as the epic: a first argument that isn't an ID fails fast with a usage error, and an ID buried later in free-text guidance never becomes the target. The epic is also **resolved against Linear before any branch/worktree is created** — an epic that doesn't resolve fails fast with nothing created, and the workflow will never "recover" to a different epic (e.g. the currently checked-out branch's).
 - **Flags:**
+  - `--epic <ID>` — the epic to run, as an explicit flag (equivalent to passing the ID as the first argument). Useful when the first token would otherwise be ambiguous.
   - `--dry-run` — classify each ticket into NO_CODE / SMALL / STANDARD and print the tier plan; make **no** code changes.
   - `--push` — push the epic branch and open the epic PR. Default is **local-only** (a local `epic/<id>` branch is created and tickets merge into it locally; nothing is pushed).
   - `--no-push` — explicitly force local-only (the inverse of `--push`). This is already the default, so it only matters to override a `--push` elsewhere in the same invocation; the last of `--push` / `--no-push` wins.
-  - `--in-place` — integrate in the **main working tree** instead of a dedicated worktree (legacy behavior). Not concurrency-safe and disturbs your current checkout — use only when you specifically want the old single-run mode.
+  - `--in-place` — integrate in the **main working tree** instead of a dedicated worktree (legacy behavior). Not concurrency-safe and disturbs your current checkout — use only when you specifically want the old single-run mode. As a guard, it now **refuses to start** if the main tree is dirty or on a branch that isn't main/master, the default branch, or the epic branch (it likely belongs to another agent — checking out would hijack it).
   - `--max-tickets N` — cap scope to the first N tickets (use for a cheap first run to gauge cost). `N` must be ≥ 1 (`--max-tickets 0` is rejected, since it would process nothing).
   - `--skills a,b,c` — comma-separated skills every code-touching agent must load (via the `Skill` tool / SKILL.md) before working — for epics that conform code to a skill bundle (e.g. `--skills phoenix-tracing,phoenix-evals`).
   - `--context-file PATH` — a file (conventions, codegen commands, decision context) the setup agent reads and threads into every code-touching agent's guidance.
@@ -48,7 +49,7 @@ The plugin install directory is exposed to this command's shell as `${CLAUDE_PLU
 - **Requires dynamic workflows enabled** — a plan-gated research-preview feature. On Pro, turn on the "Dynamic workflows" row in `/config`. If it's disabled, the `Workflow` tool will not run.
 - **Recommended session effort:** `high`. Per-agent effort is not configurable from a workflow; the script already routes models per phase — **Opus** for reasoning work (plan, adapt, implement, test, review, review-fix, codex, and both SMALL-tier agents — build & review), **Sonnet** for mechanical work (setup, docs, security, merge, the PR, and both NO-CODE-tier agents — build & review). Note that review-fix and the SMALL build/review run on Opus, so Opus spend is higher for SMALL-heavy epics than the short list above implies. Tune the `ROUTE` map at the top of the script.
 - **Safety:** never merges to `main`/`master` — all work lands on the epic branch. Reviews and the security scan **fail closed** (a failed/empty review blocks the merge), and the merge gate uses a test-diff so pre-existing/flaky test failures never block a clean merge. A merge blocked by *new* test failures gets one bounded fix-forward pass (re-merge → fix at the root → re-gate) before it blocks, so a cross-file mock/fixture gap can't cascade-kill an epic.
-- **Concurrency:** by default the whole epic integrates in a **dedicated git worktree** (`.swarm/epics/<id>`), never your main checkout — so you can run swarms for **different epics** in the same repo at once, and your working tree is left untouched. A per-epic lock refuses an accidental second run of the **same** epic. (Note: this isolates *git* only — two epics writing the same local database/test backend still need separate data isolation.)
+- **Concurrency:** by default the whole epic integrates in a **dedicated git worktree** (`.swarm/epics/<id>`), never your main checkout — so you can run swarms for **different epics** in the same repo at once, and your working tree is left untouched. A per-epic lock refuses an accidental second run of the **same** epic. As a deterministic backstop the run captures your main tree's HEAD at setup and **asserts it is unchanged at finish** — if a stray checkout ever disturbed the shared tree (the concurrent-agent hijack class), it is flagged loudly in the summary's `main_tree_safety` field and `next_steps` rather than silently corrupting a colleague's checkout. (Note: this isolates *git* only — two epics writing the same local database/test backend still need separate data isolation.)
 
 ## Cost note
 
