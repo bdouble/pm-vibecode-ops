@@ -44,7 +44,7 @@ All progress is saved in tickets, PRs, and code—starting fresh sessions doesn'
 | `/planning` | Decompose epics into tickets (convention tickets get their guard written into the ACs) |
 | `/execute-ticket` | Orchestrate all ticket phases automatically (recommended) |
 | `/epic-swarm` | Run every ticket in an epic sequentially with checkpoints |
-| `/epic-swarm-workflow` | Run the epic pipeline as a dynamic workflow (right-sized tiers) |
+| `/epic-swarm-workflow` | Run the epic pipeline as a dynamic workflow (right-sized tiers; concurrency-safe dedicated worktree, merge fix-forward) |
 | `/adaptation` | Create implementation guide for a ticket |
 | `/implementation` | Write production code |
 | `/testing` | Build and run test suite |

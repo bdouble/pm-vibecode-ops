@@ -5,6 +5,11 @@ CLAUDE.md
 # Git worktrees (created per-ticket)
 .worktrees/
 
+# Swarm scratch: per-ticket worktrees, epic integration worktrees, locks, run state,
+# and local run forensics. Per-machine, never committed (same rule the workflow ensures
+# in target repos).
+.swarm/
+
 # macOS
 .DS_Store
 # Obsidian (personal note-taking config)
