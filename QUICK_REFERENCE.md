@@ -195,4 +195,4 @@ Your PRD must include:
 
 ---
 
-**Version 5.1.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)
+**Version 5.2.0** | [Full Documentation](README.md) | [PM Guide](PM_GUIDE.md)

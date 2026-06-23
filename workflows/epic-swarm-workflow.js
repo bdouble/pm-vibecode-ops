@@ -79,6 +79,12 @@
  *     (released by the finalize step). `--in-place` opts back into legacy main-tree
  *     integration (single-run only). Each per-ticket worktree installs deps AND runs
  *     codegen (a fresh worktree's gitignored generated/ is absent — imports fail without it).
+ *   • Wrong-target & hijack guards (v5.2): the epic arg MUST be a Linear ID (a descriptive
+ *     phrase can't silently become the target); a read-only resolution gate fails fast BEFORE any
+ *     branch/worktree if the epic doesn't resolve, and the plan agent may NEVER substitute a
+ *     different epic (JS cross-check enforces it). In ISO mode the MAIN tree's HEAD is captured at
+ *     setup and asserted UNCHANGED at finalize — a stray checkout in the shared tree (concurrent-
+ *     agent hijack) is surfaced loudly instead of silently corrupting a colleague's checkout.
  *   • Operator guidance is threaded, not dropped: free text after the epic ID
  *     (plus --skills / --context-file) is injected into every code-touching agent, so
  *     per-epic conventions / skill-loading need no script edit.
@@ -118,6 +124,11 @@ export const meta = {
     { title: 'Report', detail: 'open/refresh the epic PR (with --push) and return a reconciled summary (done / blocked / unprocessed)' },
   ],
 }
+
+// Semver of this workflow file — logged at start (and returned in the summary) so a STALE installed
+// copy is visible at a glance. The 2026-06-22 incident ran the v5.0.0 (pre-isolation) install while the
+// repo already had the fix; a versioned banner would have surfaced "you are not on latest" immediately.
+const VERSION = '5.2.0'
 
 // ── Model routing. Change here to re-tune. ──────────────────────────────────
 // `fable` is also a valid value — operators wanting maximum-capability reasoning
@@ -228,6 +239,8 @@ const SETUP_SCHEMA = {
     repo_root: { type: 'string', description: 'the epic-INTEGRATION tree the run operates in: the dedicated worktree (.swarm/epics/<id>) by default, or the main tree under --in-place' },
     main_repo: { type: 'string', description: 'the main repository working tree (parent of the dedicated worktree); equals repo_root under --in-place' },
     default_branch: { type: 'string' }, epic_branch: { type: 'string' },
+    main_repo_head_sha: { type: 'string', description: 'git rev-parse HEAD of the MAIN working tree at setup — the finalize step asserts this is UNCHANGED so a stray checkout in the shared tree (concurrent-agent hijack) is detected' },
+    main_repo_branch: { type: 'string', description: 'git rev-parse --abbrev-ref HEAD of the MAIN working tree at setup' },
     test_cmd: { type: 'string', description: 'detected test command, or empty' },
     pkg_mgr: { type: 'string' },
     baseline_failures: { type: 'array', items: { type: 'string' }, description: 'FULL identifiers (file + test name) of tests already FAILING on the epic branch before any merge — the merge test-diff gate matches on the whole identifier, not the file' },
@@ -235,6 +248,28 @@ const SETUP_SCHEMA = {
     lock_path: { type: 'string', description: 'absolute path of the epic lock directory acquired (released by the finalize step); empty if not acquired' },
     lock_holder: { type: 'string', description: 'on LOCKED: who/when holds the lock, so the operator can resume that run or clear a stale lock' },
     context_text: { type: 'string', description: 'contents of --context-file if one was provided (capped); folded into operator guidance for the workers' },
+  },
+}
+// Pre-flight resolution gate (Defect 2): the epic target MUST resolve to a real Linear issue before
+// any lock/branch/worktree is created. resolved=false fails fast — the agent must NEVER substitute.
+const RESOLVE_SCHEMA = {
+  type: 'object', required: ['resolved'],
+  properties: {
+    resolved: { type: 'boolean', description: 'true ONLY if get_issue(epic) returned a real issue. NEVER substitute or infer a different epic.' },
+    id: { type: 'string', description: 'the resolved issue identifier exactly as Linear returns it' },
+    title: { type: 'string' },
+    note: { type: 'string', description: 'on resolved=false: what was tried and why it failed (e.g. 404 / not found)' },
+  },
+}
+// Pre-flight main-tree safety read (Defect 1, --in-place path): a READ-ONLY snapshot of the MAIN working
+// tree BEFORE setup checks out the epic branch there, so a JS gate can refuse to clobber a concurrent agent
+// — the deterministic backstop for the setup prompt's prose precondition (the ISO path already has its own).
+const INPLACE_PRECHECK_SCHEMA = {
+  type: 'object', required: ['branch', 'dirty'],
+  properties: {
+    branch: { type: 'string', description: 'current branch of the MAIN working tree (git rev-parse --abbrev-ref HEAD)' },
+    dirty: { type: 'boolean', description: 'true if `git status --porcelain` in the MAIN tree printed ANY line' },
+    default_branch: { type: 'string', description: 'the repo default branch, for the safe-branch allowlist' },
   },
 }
 const PLAN_SCHEMA = {
@@ -340,6 +375,21 @@ async function releaseEpicLock(lockPath) {
 }
 
 // ── Args ────────────────────────────────────────────────────────────────────
+// A Linear issue ID, e.g. PRO-1592 — the epic target MUST match this so a descriptive sentence
+// ("HAND-PICKED CROSS-EPIC SET …") can never be silently treated as the epic ID (incident 2026-06-22).
+// Case-INSENSITIVE: a lowercased id (`pro-1592`) is accepted and upper-cased at capture (normalizeEpicId),
+// so it matches Linear's canonical identifier and every downstream comparison — get_issue is itself
+// case-insensitive, so rejecting `pro-1592` outright would be a needless usability regression.
+const ID_RE = /^[A-Z][A-Z0-9]*-\d+$/i
+// Validate, normalize, and conflict-check an epic-ID candidate. Linear identifiers are canonical
+// upper-case; two DIFFERENT ids (a positional token and a --epic flag) are a usage error rather than a
+// silent last-wins — silently picking one would be exactly the wrong-target footgun these guards exist to kill.
+function normalizeEpicId(current, raw, source) {
+  if (raw == null || !ID_RE.test(raw)) throw new Error(`epic-swarm-workflow: ${source} requires a Linear issue ID like PRO-1592 (got ${raw == null ? 'no value' : `"${raw}"`}).`)
+  const id = raw.toUpperCase()
+  if (current && current !== id) throw new Error(`epic-swarm-workflow: conflicting epic IDs — ${current} and ${id}. Specify the epic exactly once (as the first argument OR via --epic).`)
+  return id
+}
 // Free text after the epic ID is NOT dropped (it used to be — see RC-4): it becomes
 // operator GUIDANCE threaded into every code-touching agent prompt. So
 // `/epic-swarm-workflow PRO-1667 make every agent load the arize phoenix skills` reaches
@@ -347,6 +397,7 @@ async function releaseEpicLock(lockPath) {
 function parseArgs(a) {
   const flags = { dryRun: false, push: false, inPlace: false, maxTickets: Infinity, skills: [], contextFile: null, guidance: '' }
   let epicId = null
+  let firstPositional = null   // the first non-flag token; the epic ID must BE this token and match ID_RE
   const guidanceToks = []   // post-epic-ID free text + any unrecognized token — threaded, never silently dropped
   if (typeof a === 'string') {
     const toks = a.trim().split(/\s+/).filter(Boolean)
@@ -383,12 +434,27 @@ function parseArgs(a) {
       else if (tk.startsWith('--context-file=')) flags.contextFile = tk.split('=')[1]
       else if (tk.startsWith('--guidance=')) guidanceToks.push(tk.slice('--guidance='.length))
       else if (tk === '--guidance') { /* bare marker (space form): the free-text tokens that follow are captured as guidance by the catch-all below — consume the marker itself so it isn't injected as literal text or flagged as a stray flag (parity with --skills/--context-file accepting both = and space forms) */ }
-      else if (!tk.startsWith('--') && !epicId) epicId = tk
+      else if (tk === '--epic') { epicId = normalizeEpicId(epicId, toks[i + 1], '--epic'); i++ }
+      else if (tk.startsWith('--epic=')) { epicId = normalizeEpicId(epicId, tk.split('=')[1], '--epic') }
+      else if (!tk.startsWith('--') && firstPositional === null) {
+        firstPositional = tk
+        // The epic ID is the FIRST positional token AND must look like a Linear ID. A first token that
+        // isn't an ID (e.g. "HAND-PICKED") is NOT silently treated as the epic — it goes to guidance,
+        // epicId stays null, and the usage error below fires. We do NOT scan later tokens for an ID, so a
+        // "PRO-1621" buried in a guidance sentence can never become the target (incident 2026-06-22).
+        // normalizeEpicId surfaces a conflict if --epic already set a DIFFERENT id (no silent last-wins).
+        if (ID_RE.test(tk)) epicId = normalizeEpicId(epicId, tk, 'the epic argument')
+        else guidanceToks.push(tk)
+      }
       else guidanceToks.push(tk)   // free text after the epic ID, or an unrecognized --flag: keep it (threaded as guidance + warned below), never drop
     }
     flags.guidance = guidanceToks.join(' ').trim()
   } else if (a && typeof a === 'object') {
     epicId = a.epicId || a.epic || a.id || null
+    if (epicId != null) {
+      if (!ID_RE.test(String(epicId))) throw new Error(`epic-swarm-workflow: epic ID "${epicId}" is not a Linear issue ID like PRO-1592.`)
+      epicId = String(epicId).toUpperCase()   // normalize to Linear's canonical upper-case (parity with the string path)
+    }
     if (a.dryRun) flags.dryRun = true
     if (a.push) flags.push = true
     if (a.inPlace) flags.inPlace = true
@@ -408,7 +474,7 @@ function parseArgs(a) {
   return { epicId, flags }
 }
 const { epicId, flags } = parseArgs(args)
-if (!epicId) throw new Error('epic-swarm-workflow: missing epic ID. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]')
+if (!epicId) throw new Error('epic-swarm-workflow: missing or invalid epic ID — the epic must be a Linear issue ID like PRO-42, given as the FIRST argument or via --epic <ID>. A descriptive phrase is not accepted as the epic. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]')
 if (flags.maxTickets === 0) throw new Error('epic-swarm-workflow: --max-tickets 0 would process no tickets. Omit the flag to run all tickets, or pass a positive count (e.g. --max-tickets 1).')
 
 // Single source of truth for a ticket's worktree path AND feature branch name —
@@ -476,7 +542,7 @@ phase('Setup')
 // never moves the user's main working tree and concurrent swarms for OTHER epics can't collide (RC-1).
 // --in-place opts back into the legacy main-tree integration (single-run only). dry-run touches no tree.
 const ISO = !flags.inPlace && !flags.dryRun
-log(`epic-swarm-workflow v2 starting for ${epicId} — mode: ${flags.dryRun ? 'DRY RUN (no changes)' : (flags.push ? 'real + push/PR' : 'real, local-only')}${ISO ? ' — isolated in a dedicated epic worktree' : (flags.inPlace ? ' — IN-PLACE (main working tree; NOT concurrency-safe)' : '')}`)
+log(`epic-swarm-workflow v${VERSION} (engine v2) starting for ${epicId} — mode: ${flags.dryRun ? 'DRY RUN (no changes)' : (flags.push ? 'real + push/PR' : 'real, local-only')}${ISO ? ' — isolated in a dedicated epic worktree' : (flags.inPlace ? ' — IN-PLACE (main working tree; NOT concurrency-safe)' : '')}`)
 
 // Operator guidance (RC-4): never silently dropped. Build the block injected into every code-touching
 // agent; warn on the two footguns the old silent-drop hid (a typo'd flag, and "push" intent in prose).
@@ -498,7 +564,7 @@ const setupPrompt = `You are the swarm setup agent for epic ${epicId}.${ISO ? ' 
 ${SHELL_RULES}
 
 Do exactly this and report. (<MAIN_REPO>, <REPO_ROOT>, <EPIC_ROOT>, <LOCK> below are values YOU resolve — substitute the real absolute paths; never type the angle brackets into a command.)
-1. MAIN_REPO = the FIRST path printed by \`git worktree list\` (the main working tree is always listed first — robust whether this run was launched from the main tree or a worktree). Confirm it is a git repo.
+1. MAIN_REPO = the FIRST path printed by \`git worktree list\` (the main working tree is always listed first — robust whether this run was launched from the main tree or a worktree). Confirm it is a git repo. CAPTURE its current state for the end-of-run safety assert: main_repo_head_sha = \`git -C <MAIN_REPO> rev-parse HEAD\` and main_repo_branch = \`git -C <MAIN_REPO> rev-parse --abbrev-ref HEAD\`.${ISO ? ' This run must NEVER change the main tree\'s HEAD or branch — all work happens in the dedicated epic worktree, and the finalize step asserts these are unchanged.' : ''}
 2. default_branch = strip "refs/remotes/origin/" from \`git -C <MAIN_REPO> symbolic-ref refs/remotes/origin/HEAD\`; if that fails, "main".
 ${flags.dryRun
   ? `3. DRY RUN — acquire NO lock, create NO branch/worktree, install NOTHING: set REPO_ROOT = MAIN_REPO, do ONLY the detection part of step 7 (report the test command you WOULD use, but do NOT run it), and report with baseline_failures = [], lock_path = "". Skip steps 4, 5, 6, and 8 entirely (step 7 is detection-only here).`
@@ -511,17 +577,18 @@ ${flags.dryRun
    b. If EPIC_ROOT already appears in \`git -C <MAIN_REPO> worktree list\`: REUSE it — \`git -C <EPIC_ROOT> checkout epic/${epicId}\` (if this checkout FAILS — e.g. a dirty reused tree — release the lock with \`rm -rf <LOCK>\` and return status=FAILED). Then go to step 4d to BIND + VERIFY it — do NOT skip 4d on the reuse path.
    c. Else \`git -C <MAIN_REPO> worktree prune\`, then: if epic/${epicId} exists locally (\`git -C <MAIN_REPO> branch --list epic/${epicId}\`) or on origin (\`git -C <MAIN_REPO> ls-remote --heads origin epic/${epicId}\`), create the worktree FROM it: \`git -C <MAIN_REPO> worktree add <EPIC_ROOT> epic/${epicId}\`. Otherwise create a fresh epic branch off the default: \`git -C <MAIN_REPO> worktree add <EPIC_ROOT> -b epic/${epicId} origin/<default_branch>\` (fall back to local <default_branch> if origin/<default_branch> is unknown).
    d. (Runs for BOTH the reuse path 4b and the create path 4c.) Confirm \`git -C <EPIC_ROOT> rev-parse --abbrev-ref HEAD\` prints epic/${epicId} and is NOT main/master. REPO_ROOT = EPIC_ROOT for the rest of the run. If creation OR this verification FAILED, release the lock (\`rm -rf <LOCK>\`) and return status=FAILED with the reason.`
-    : `IN-PLACE: REPO_ROOT = MAIN_REPO. Create + checkout the epic branch in the main tree: \`git -C <MAIN_REPO> fetch origin\` (ignore if no remote); if epic/${epicId} exists check it out, else \`git -C <MAIN_REPO> checkout -b epic/${epicId} <origin/default-or-default>\`. NEVER touch main/master. Verify you are not on main/master.`}
+    : `IN-PLACE: REPO_ROOT = MAIN_REPO. PRECONDITION (this mode mutates the SHARED working tree, so it must not clobber a concurrent agent): refuse to run if the main tree is unsafe to check out. Inspect \`git -C <MAIN_REPO> status --porcelain\` and main_repo_branch (from step 1). If the main tree is DIRTY (uncommitted changes you did not create) OR is on a branch that is NOT main/master, NOT the default branch, and NOT epic/${epicId} (it likely belongs to another agent — checking out would hijack it), then RELEASE THE LOCK (\`rm -rf <LOCK>\`) and return status=FAILED with a baseline_note explaining the main tree is busy and suggesting the default isolated mode (which never touches the main tree). Otherwise create + checkout the epic branch in the main tree: \`git -C <MAIN_REPO> fetch origin\` (ignore if no remote); if epic/${epicId} exists check it out, else \`git -C <MAIN_REPO> checkout -b epic/${epicId} <origin/default-or-default>\`. NEVER touch main/master. Verify you are not on main/master.`}
 5. Ensure \`.swarm/\` is gitignored: if \`git -C <REPO_ROOT> check-ignore .swarm/\` fails, append a line ".swarm/" to <REPO_ROOT>/.gitignore via Edit/Write, THEN COMMIT it on the epic branch (\`git -C <REPO_ROOT> add .gitignore\` then \`git -C <REPO_ROOT> commit -m "chore: ignore .swarm scratch"\`) so it is NOT left as a dangling uncommitted edit that a later ticket's merge stage would absorb into an unrelated commit.
 6. PREPARE REPO_ROOT so its tests can run${ISO ? " — a FRESH worktree has NO installed deps and NO generated artifacts" : ''}: detect the package manager from lockfiles and install deps with a dir flag (e.g. \`pnpm -C <REPO_ROOT> install --frozen-lockfile\`, retrying once WITHOUT --frozen-lockfile on a lockfile-drift failure; \`npm --prefix <REPO_ROOT> ci\`; \`yarn --cwd <REPO_ROOT> install\`).${ISO ? " THEN run the repo's CODEGEN — a fresh worktree's gitignored generated output is ABSENT and imports will FAIL without it: run any package.json script named generate/codegen, and \`prisma generate\` if a prisma/schema.prisma exists (e.g. \`pnpm -C <REPO_ROOT> --filter @repo/database generate\` in a pnpm monorepo). If the operator guidance / context file names exact codegen commands, run THOSE." : ' (the main tree is normally already installed — skip the install unless imports fail).'}
 ${flags.contextFile ? `   CONTEXT FILE: read \`${flags.contextFile}\` (resolve relative to MAIN_REPO if not absolute) and return its contents (capped ~4000 chars) in context_text — it carries operator conventions / codegen steps for this epic; if it names setup/codegen commands, run them in step 6. If the file does not exist, say so in baseline_note and continue.\n` : ''}7. Detect the TEST command, expressed to run from ANY directory WITHOUT a \`cd\`, baked against the absolute REPO_ROOT: e.g. \`pnpm -C <REPO_ROOT> test\`, \`npm --prefix <REPO_ROOT> test\`, \`yarn --cwd <REPO_ROOT> test\`, \`cargo test --manifest-path <REPO_ROOT>/Cargo.toml\`, \`go -C <REPO_ROOT> test ./...\`, \`python -m pytest <REPO_ROOT>\`. Substitute the real absolute path. The command MUST NOT require cd (downstream agents run it verbatim under a no-cd shell policy). Empty string if no test setup exists.
 8. BASELINE: if a test command exists, run it ONCE on REPO_ROOT (the epic branch) and record the set of ALREADY-FAILING tests as baseline_failures using FULL test identifiers (file + test name, e.g. "src/auth.test.ts :: rejects expired token"), NOT bare file paths — the merge gate matches on the whole identifier, so a file-only baseline would mask a NEW failure in a file that already had a different failure. If the suite is huge or hangs, capture what you can and note it. If no test command, baseline_failures = [].`}
 
-${flags.dryRun ? '' : 'SAFETY: if at ANY point after acquiring the lock you must return status=FAILED, release the lock FIRST with `rm -rf <LOCK>` (so a re-run is not blocked by a lock from a setup that never started a run).\n'}Return status, repo_root (= ${ISO ? 'the dedicated EPIC_ROOT' : 'MAIN_REPO'}), main_repo (= MAIN_REPO), default_branch, epic_branch (epic/${epicId}), test_cmd, pkg_mgr, baseline_failures[], baseline_note, lock_path (= <LOCK>${flags.dryRun ? ', empty in dry run' : ''})${flags.contextFile ? ', context_text' : ''}.`
+${flags.dryRun ? '' : 'SAFETY: if at ANY point after acquiring the lock you must return status=FAILED, release the lock FIRST with `rm -rf <LOCK>` (so a re-run is not blocked by a lock from a setup that never started a run).\n'}Return status, repo_root (= ${ISO ? 'the dedicated EPIC_ROOT' : 'MAIN_REPO'}), main_repo (= MAIN_REPO), main_repo_head_sha, main_repo_branch, default_branch, epic_branch (epic/${epicId}), test_cmd, pkg_mgr, baseline_failures[], baseline_note, lock_path (= <LOCK>${flags.dryRun ? ', empty in dry run' : ''})${flags.contextFile ? ', context_text' : ''}.`
 
 const planPrompt = `You are the swarm planning + classification agent for epic ${epicId}. READ-ONLY: do not modify Linear.
 ${LINEAR_NOTE}
 ${GUIDANCE_BASE ? GUIDANCE_BASE + '\n' : ''}
+RESOLUTION RULE (critical): work ONLY against epic ${epicId}. If it does not resolve to a real Linear issue, return epic={id:'${epicId}',title:'UNRESOLVED'} with tickets=[]. NEVER substitute a different epic, fall back to the currently checked-out git branch's epic, or infer one — returning another epic's tickets silently runs the swarm against the wrong target.
 1. Fetch epic ${epicId} and read its full description AND all of its comments. List its sub-tickets (parent filter); for EACH sub-ticket read BOTH its full description AND all of its comments (comments routinely hold requirements and prior-work notes you must factor into classification), and capture: id, title, status, labels, description, acceptance criteria.
 2. INCLUDE sub-tickets in Todo/Backlog/Unstarted AND In-Progress (an In-Progress sub-ticket is normally a prior interrupted run of THIS workflow that must be resumed — do not orphan it). EXCLUDE (report under excluded[] with reason) only Done/Cancelled.
 3. For each included ticket derive:
@@ -538,6 +605,61 @@ ${GUIDANCE_BASE ? GUIDANCE_BASE + '\n' : ''}
 
 Return epic{id,title}, tickets[], excluded[].`
 
+// RESOLUTION GATE (Defect 2): confirm the epic target is a REAL Linear issue BEFORE any lock/branch/
+// worktree is created. A non-resolving epic FAILS FAST here and is NEVER "recovered" to the current
+// branch's epic — the silent wrong-target failure that wasted ~460k tokens on the wrong tickets.
+const resolvePrompt = `READ-ONLY pre-flight: confirm the epic target ${epicId} is a REAL Linear issue before any branch or worktree is created.
+${LINEAR_NOTE}
+Call get_issue for ${epicId}. Return resolved=true with its id and title ONLY if it returns a real issue.
+If it does NOT resolve (404 / not found / wrong workspace), return resolved=false with a one-line note. CRITICAL: do NOT substitute a different epic, do NOT fall back to the currently checked-out git branch's epic, do NOT infer an epic from anything else — a wrong-but-plausible epic here silently runs the swarm against the wrong tickets.`
+// Resilience: a TRANSIENT agent failure (safeAgent -> null) is NOT a non-resolving epic. Retry up to 3x so
+// a momentary API/MCP blip can't abort a valid epic at second 0 (the very transient-kills-the-run class the
+// v2 resilience layer exists to survive). A REAL answer (resolved true OR false) is definitive — stop at once.
+let resolve = null
+for (let attempt = 1; attempt <= 3; attempt++) {
+  resolve = await safeAgent(resolvePrompt, { schema: RESOLVE_SCHEMA, label: `resolve ${epicId}${attempt > 1 ? ` (retry ${attempt - 1})` : ''}`, phase: 'Setup', model: ROUTE.setup })
+  if (resolve != null) break
+  if (attempt < 3) log(`WARN resolve pre-flight attempt ${attempt} returned no result (transient?) — retrying.`)
+}
+if (resolve == null) {
+  throw new Error(`epic-swarm-workflow: the resolution pre-flight for ${epicId} returned no result after 3 attempts — likely a transient API/MCP problem, NOT a bad epic. Nothing was created; re-run.`)
+}
+if (resolve.resolved !== true) {
+  throw new Error(`epic-swarm-workflow: epic ${epicId} did not resolve to a real Linear issue${resolve.note ? ` (${resolve.note})` : ''}. Nothing was created. Pass a valid epic ID as the first argument or via --epic <ID>; the workflow will NOT guess an epic.`)
+}
+// Deterministic anti-substitution: get_issue is BY id, so a resolved id that differs from the request means
+// the agent substituted (against instruction). Refuse here rather than trust resolve.id downstream — the JS
+// guard must pin to the REQUESTED epic, not to whatever the agent returned.
+if (resolve.id && String(resolve.id).toUpperCase() !== String(epicId).toUpperCase()) {
+  throw new Error(`epic-swarm-workflow: the resolution agent returned a DIFFERENT epic (${resolve.id}) than requested (${epicId}) — refusing (it must never substitute or infer an epic). Nothing was created.`)
+}
+log(`Resolved epic ${epicId}${resolve.title ? ` — ${resolve.title}` : ''}.`)
+
+// In-place mode mutates the SHARED main working tree, so — like the ISO assert but BEFORE any checkout —
+// deterministically refuse if the main tree is unsafe to check out (dirty, or on another agent's branch).
+// This is the JS backstop for the setup prompt's prose precondition (Defect 1, --in-place path); the ISO
+// path never touches the main tree so it needs no pre-flight here (it gets the finalize assert instead).
+if (flags.inPlace && !flags.dryRun) {
+  const pre = await safeAgent(
+    `READ-ONLY pre-flight for --in-place mode (make NO changes): report the MAIN working tree's state so the workflow can refuse to clobber a concurrent agent.
+${SHELL_RULES}
+- MAIN_REPO = the FIRST path printed by \`git worktree list\` (the main tree is always listed first).
+- branch = \`git -C <MAIN_REPO> rev-parse --abbrev-ref HEAD\`.
+- dirty = true if \`git -C <MAIN_REPO> status --porcelain\` prints ANY line, else false.
+- default_branch = strip "refs/remotes/origin/" from \`git -C <MAIN_REPO> symbolic-ref refs/remotes/origin/HEAD\`; if that fails, "main".
+Return branch, dirty, default_branch.`,
+    { schema: INPLACE_PRECHECK_SCHEMA, label: `in-place precheck ${epicId}`, phase: 'Setup', model: ROUTE.setup },
+  )
+  if (pre) {
+    const safeBranches = new Set(['main', 'master', pre.default_branch, `epic/${epicId}`].filter(Boolean))
+    if (pre.dirty === true || (pre.branch && !safeBranches.has(pre.branch))) {
+      throw new Error(`epic-swarm-workflow: --in-place refused — the main working tree is ${pre.dirty === true ? 'DIRTY (uncommitted changes)' : `on branch "${pre.branch}" (not ${[...safeBranches].join(' / ')})`}, so checking out epic/${epicId} there could clobber a concurrent agent. Nothing was created. Use the default isolated mode (drop --in-place), or clean/switch the main tree first.`)
+    }
+  } else {
+    log(`WARN --in-place precheck returned no result — relying on the setup agent's in-place precondition prose.`)
+  }
+}
+
 const [setup, plan] = await parallel([
   () => safeAgent(setupPrompt, { schema: SETUP_SCHEMA, label: `setup ${epicId}`, phase: 'Setup', model: ROUTE.setup }),
   () => safeAgent(planPrompt, { schema: PLAN_SCHEMA, label: `plan ${epicId}`, phase: 'Setup', model: ROUTE.plan }),
@@ -553,6 +675,8 @@ if (!setup || setup.status !== 'OK') throw new Error(`epic-swarm-workflow: setup
 const REPO_ROOT = setup.repo_root           // the epic-INTEGRATION tree: the dedicated worktree (default) or the main tree (--in-place)
 const MAIN_REPO = setup.main_repo || REPO_ROOT // the user's main working tree; equals REPO_ROOT under --in-place. Used for the lock path + the end-of-run worktree note.
 const LOCK_PATH = setup.lock_path || ''     // epic lock to release in the finalize step ('' in dry run / --in-place legacy where setup didn't report it)
+const MAIN_HEAD_SHA = setup.main_repo_head_sha || '' // MAIN_REPO HEAD captured at setup; asserted UNCHANGED at finalize in ISO mode (Defect 1 deterministic guard)
+const MAIN_BRANCH = setup.main_repo_branch || ''     // MAIN_REPO branch captured at setup
 // Setup has acquired the lock (status OK). From here until the finalize step ANY abort must release
 // it first, or re-running this epic is refused until the 24h staleness (RC-1 lock-leak regression).
 // The per-ticket loop is try/caught (so a ticket throw can't escape here); the no-tickets throw is
@@ -560,6 +684,16 @@ const LOCK_PATH = setup.lock_path || ''     // epic lock to release in the final
 if (!plan || !plan.tickets || plan.tickets.length === 0) {
   await releaseEpicLock(LOCK_PATH)
   throw new Error(`epic-swarm-workflow: no eligible sub-tickets for ${epicId} (released the epic lock).`)
+}
+// Defect 2 cross-check: the plan agent must NEVER substitute a different epic (the silent wrong-target
+// failure). We pin to the REQUESTED epic alone — resolve.id was already asserted == epicId above, so it
+// adds nothing and including it would only re-admit an agent-supplied id. We are PAST the empty-ticket
+// guard, so a blank or mismatched plan epic id here (with real tickets) is a refusal, not a pass — the
+// guard must fail CLOSED exactly when the agent is least trustworthy about its target.
+const planEpicId = plan.epic ? String(plan.epic.id) : ''
+if (planEpicId.toUpperCase() !== String(epicId).toUpperCase()) {
+  await releaseEpicLock(LOCK_PATH)
+  throw new Error(`epic-swarm-workflow: the plan agent returned epic "${planEpicId || '(none)'}" but the run targets ${epicId} — refusing to process a different/blank epic's tickets (released the epic lock).`)
 }
 const EPIC_BRANCH = setup.epic_branch || `epic/${epicId}`
 const DEFAULT_BRANCH = setup.default_branch || 'main' // PR base; default_branch is now REQUIRED in SETUP_SCHEMA, the 'main' fallback only guards an empty string
@@ -600,6 +734,7 @@ if (!TEST_CMD) log(`WARN no test command detected — per-ticket review still ru
 if (flags.dryRun) {
   log('DRY RUN — returning classification only, no code changes.')
   return {
+    version: VERSION,
     epic: { id: epicId, title: plan.epic.title }, mode: 'dry-run',
     plan: tickets.map((t) => ({ id: t.id, title: t.title, tier: t.tier, effort_tier: t.effort_tier, impl_type: t.impl_type, run_testing: t.run_testing, run_docs: t.run_docs, scope_note: t.scope_note })),
     excluded: plan.excluded || [], baseline_failures: BASELINE,
@@ -1129,16 +1264,55 @@ const leakedWts = [...createdWorktreeIds].filter((id) => !mergeCleanedIds.has(id
 // leaked worktrees in the same pass. It runs whenever there is a lock to release or a worktree to sweep
 // — i.e. every real run; dry-run has neither. The dedicated epic worktree itself is KEPT (for PR /
 // close-epic / inspection); only per-ticket worktrees and the lock are cleaned here.
-if (leakedWts.length || LOCK_PATH) {
-  await safeAgent(
-    `Finalize epic ${epicId}: release its lock and sweep any leftover per-ticket worktrees. Run each command as its OWN Bash call and ignore "not a working tree"/"not found" errors. NEVER touch main/master, the epic branch, the dedicated epic worktree, or any feature branch (failed work must stay inspectable — do NOT run \`git branch -D\`).
+// Defect 1 deterministic guard: in ISO mode the MAIN working tree's HEAD/branch must be byte-identical
+// to what setup captured — all work happens in the dedicated epic worktree. The finalize agent re-reads
+// it (read-only) and the JS compares; a mismatch means a stray checkout disturbed the shared tree (the
+// concurrent-agent hijack the v5.0.0 incident hit) and is surfaced loudly. Not applicable to --in-place
+// (which legitimately moves the main tree onto the epic branch).
+// Require BOTH the captured sha AND branch — the comparison below checks both, so a missing branch must
+// not silently downgrade the assert to a sha-only check (a branch-only hijack at the same commit would slip).
+const MAIN_TREE_ASSERT = ISO && !!MAIN_HEAD_SHA && !!MAIN_BRANCH
+let finalizeReport = null
+if (leakedWts.length || LOCK_PATH || MAIN_TREE_ASSERT) {
+  finalizeReport = await safeAgent(
+    `Finalize epic ${epicId}: ${MAIN_TREE_ASSERT ? 'verify the main working tree was not disturbed, ' : ''}release its lock and sweep any leftover per-ticket worktrees. Run each command as its OWN Bash call and ignore "not a working tree"/"not found" errors. NEVER touch main/master, the epic branch, the dedicated epic worktree, or any feature branch (failed work must stay inspectable — do NOT run \`git branch -D\`).
 ${SHELL_RULES}
-${LOCK_PATH ? `- RELEASE THE LOCK (so a later run of this epic isn't blocked): \`rm -rf ${LOCK_PATH}\`.\n` : ''}${leakedWts.length ? `- Sweep these leftover per-ticket worktrees — for EACH path run \`git -C ${REPO_ROOT} worktree remove <path> --force\`, then run \`git -C ${REPO_ROOT} worktree prune\` once:
-${leakedWts.map((p) => `   - ${p}`).join('\n')}\n` : ''}Return status only ("DONE").`,
-    { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string' } } }, label: `finalize ${epicId}`, phase: 'Report', model: ROUTE.merge },
+${MAIN_TREE_ASSERT ? `- SAFETY ASSERT (READ-ONLY — do NOT modify the main tree): report main_repo_head_sha = \`git -C ${MAIN_REPO} rev-parse HEAD\` and main_repo_branch = \`git -C ${MAIN_REPO} rev-parse --abbrev-ref HEAD\`.\n` : ''}${LOCK_PATH ? `- RELEASE THE LOCK (so a later run of this epic isn't blocked): \`rm -rf ${LOCK_PATH}\`.\n` : ''}${leakedWts.length ? `- Sweep these leftover per-ticket worktrees — for EACH path run \`git -C ${REPO_ROOT} worktree remove <path> --force\`, then run \`git -C ${REPO_ROOT} worktree prune\` once:
+${leakedWts.map((p) => `   - ${p}`).join('\n')}\n` : ''}Return status ("DONE")${MAIN_TREE_ASSERT ? ', main_repo_head_sha, main_repo_branch (BOTH required — the safety assert needs them)' : ''}.`,
+    { schema: { type: 'object', required: MAIN_TREE_ASSERT ? ['status', 'main_repo_head_sha', 'main_repo_branch'] : ['status'], properties: { status: { type: 'string' }, main_repo_head_sha: { type: 'string' }, main_repo_branch: { type: 'string' } } }, label: `finalize ${epicId}`, phase: 'Report', model: ROUTE.merge },
   )
   if (leakedWts.length) log(`Swept ${leakedWts.length} leftover worktree(s) (branches kept for inspection).`)
   if (LOCK_PATH) log(`Released epic lock.`)
+}
+
+// Compare the captured vs. final MAIN_REPO HEAD/branch (deterministic, in the JS — not LLM judgement).
+// THREE explicit states so the summary can never report a clean bill of health it did not earn:
+//   ok        — re-read and byte-identical            (mainTreeVerified && !mainTreeDisturbed)
+//   CHANGED   — re-read and the tree moved            (mainTreeDisturbed)
+//   UNVERIFIED— could not capture or re-read it       (neither) → reported as UNVERIFIED, never "ok"
+// NOTE the framing is neutral, not an accusation: in ISO mode the swarm never touches the main tree, so a
+// change is normally the OPERATOR's own concurrent work (ISO mode is built to let you keep working) — only
+// occasionally another process. We surface it for the operator to judge; we do not claim a hijack happened.
+let mainTreeDisturbed = false
+let mainTreeVerified = false
+let mainTreeSafety = ISO ? 'UNVERIFIED — main-tree state was not captured at setup (safety assert disabled this run)' : 'n/a (in-place mode)'
+if (ISO) {
+  if (!MAIN_TREE_ASSERT) {
+    log(`WARN setup did not capture the main tree HEAD+branch — the main-tree safety assert is DISABLED for this run (reported as UNVERIFIED, not "ok").`)
+  } else if (finalizeReport && finalizeReport.main_repo_head_sha && finalizeReport.main_repo_branch) {
+    mainTreeVerified = true
+    if (finalizeReport.main_repo_head_sha !== MAIN_HEAD_SHA || finalizeReport.main_repo_branch !== MAIN_BRANCH) {
+      mainTreeDisturbed = true
+      mainTreeSafety = 'CHANGED — main tree moved during the run (your own concurrent work, or another process)'
+      log(`ℹ️ The MAIN working tree (${MAIN_REPO}) changed during this run — was ${MAIN_BRANCH}@${MAIN_HEAD_SHA.slice(0, 8)}, now ${finalizeReport.main_repo_branch}@${finalizeReport.main_repo_head_sha.slice(0, 8)}. In isolated mode the swarm never touches it, so this is expected if YOU worked in it concurrently; investigate ${MAIN_REPO} only if that's a surprise.`)
+    } else {
+      mainTreeSafety = 'ok — main tree untouched'
+      log(`✓ Main working tree untouched (${MAIN_BRANCH}@${MAIN_HEAD_SHA.slice(0, 8)}).`)
+    }
+  } else {
+    mainTreeSafety = 'UNVERIFIED — could not re-read the main tree at finalize'
+    log(`WARN could not verify the main tree at finalize (incomplete report) — safety NOT confirmed (reported as UNVERIFIED, not "ok").`)
+  }
 }
 
 let pr = null
@@ -1171,6 +1345,8 @@ const manualClose = [...mergedPending, ...noOpPending]
 // tickets are still blocked, nothing merged, or a manual push/close is owed.
 const nothingDone = doneIds.length === 0 && mergedPending.length === 0 && noOpIds.length === 0
 const nextStepsParts = []
+if (mainTreeDisturbed) nextStepsParts.push(`Note: the main working tree changed during this run. In isolated mode the swarm never touches it, so this is expected if you worked in ${MAIN_REPO} concurrently; verify it is on the branch/commit you expect only if that's a surprise.`)
+else if (ISO && !mainTreeVerified) nextStepsParts.push(`Note: the main-tree safety assert could not be confirmed this run (${mainTreeSafety}) — the swarm still never touched ${MAIN_REPO} (all work is in the dedicated worktree), but verify it yourself if needed.`)
 if (nothingDone) {
   nextStepsParts.push(`The swarm merged NOTHING — ${EPIC_BRANCH} is unchanged from ${DEFAULT_BRANCH}. Investigate the blocked tickets below before retrying; do NOT run /close-epic.`)
 } else {
@@ -1183,9 +1359,11 @@ if (!flags.push && (doneIds.length || mergedPending.length)) nextStepsParts.push
 if (ISO) nextStepsParts.push(`The dedicated epic worktree ${REPO_ROOT} is kept for inspection/PR/close-epic; when fully done, remove it with ${MAIN_REPO && MAIN_REPO !== REPO_ROOT ? `\`git -C ${MAIN_REPO} worktree remove ${REPO_ROOT}\`` : '`git worktree remove` run FROM the main repo (not from inside the worktree itself)'} (keeps the ${EPIC_BRANCH} branch).`)
 if (!nothingDone && blockedList.length === 0 && unprocessed.length === 0) nextStepsParts.push(`All tracked tickets are resolved — run /close-epic ${epicId} once they're confirmed Done.`)
 const summary = {
+  version: VERSION,
   epic: { id: epicId, title: plan.epic.title },
   mode: flags.push ? 'real+push' : 'real(local)',
   isolation: ISO ? 'dedicated-worktree' : (flags.inPlace ? 'in-place (main tree)' : 'dry-run'),
+  main_tree_safety: mainTreeSafety,
   epic_branch: EPIC_BRANCH,
   main_repo: MAIN_REPO,
   integration_tree: REPO_ROOT,
@@ -1203,5 +1381,5 @@ const summary = {
   results,
   next_steps: nextStepsParts.join(' '),
 }
-log(`epic-swarm-workflow v2 complete — ${doneIds.length}/${tickets.length} done${mergedPending.length ? `, ${mergedPending.length} merged-pending-close` : ''}${noOpIds.length ? `, ${noOpIds.length} no-op` : ''}, ${blockedList.length} blocked, ${unprocessed.length} unprocessed.`)
+log(`epic-swarm-workflow v${VERSION} (engine v2) complete — ${doneIds.length}/${tickets.length} done${mergedPending.length ? `, ${mergedPending.length} merged-pending-close` : ''}${noOpIds.length ? `, ${noOpIds.length} no-op` : ''}, ${blockedList.length} blocked, ${unprocessed.length} unprocessed.`)
 return summary

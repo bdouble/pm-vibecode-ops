@@ -5,6 +5,25 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2026-06-22
+
+Minor release — **"epic-swarm-workflow concurrency & wrong-target guards."** A forensic trace of a catastrophic ProductLobster run surfaced two things. First, the run that hijacked a concurrent agent's branch (`epic/PRO-1666`) and processed the wrong tickets was **executed by the v5.0.0 installed plugin**, not the repo's code — the v5.1.0 dedicated-worktree isolation existed in source but was never installed (the persisted run script was byte-identical to the v5.0.0 marketplace copy). Second, even on the current code two real gaps remained: the epic argument was never validated or resolved (a descriptive phrase like `"HAND-PICKED CROSS-EPIC SET …"` silently became the epic ID `HAND-PICKED`, and the plan agent "recovered" to the current branch's epic), and the worktree isolation was enforced only by LLM prose with no deterministic guard. This release closes both gaps and makes the running version visible. All changes are confined to `workflows/epic-swarm-workflow.js` and its command wrapper; existing invocations keep working.
+
+### Added
+- **Epic-ID validation + explicit `--epic <ID>` flag** (`parseArgs`): the epic target must match a Linear issue ID (`^[A-Z][A-Z0-9]*-\d+$`, **case-insensitive** — a lowercased `pro-42` is accepted and normalized to upper-case), supplied as the first positional token or via `--epic`. A descriptive phrase can no longer become the epic ID, and an ID buried later in free-text guidance can never become the target — the first non-ID positional token leaves `epicId` null and fails fast with an actionable usage error. Two **conflicting** IDs (positional vs `--epic`) are a usage error, not a silent last-wins.
+- **Pre-flight resolution gate**: a read-only `resolve` agent confirms the epic resolves to a real Linear issue (`get_issue`) **before** any lock/branch/worktree is created. A non-resolving epic fails fast with nothing created; the agent is explicitly forbidden from substituting or inferring a different epic, and a deterministic JS check rejects a resolved id that differs from the request. The gate retries up to 3× on a transient agent failure so a momentary API/MCP blip can't abort a valid epic (a definitive resolved/not-resolved answer stops it immediately).
+- **Plan/target cross-check (JS, deterministic)**: the plan agent's returned epic id is pinned to the **requested** epic alone; a blank or mismatched id (with a real ticket set) refuses and releases the lock — no silent wrong-target execution, failing closed even when the agent is least trustworthy about its target.
+- **Deterministic "main tree untouched" guard (ISO mode)**: setup captures the main working tree's HEAD sha **and** branch (`main_repo_head_sha`, `main_repo_branch`); the finalize step re-reads them (read-only) and the JS compares both. The `main_tree_safety` summary field is three-state — `ok` (untouched), `CHANGED` (the tree moved — neutrally framed, usually the operator's own concurrent work since ISO mode is built to let you keep working), or `UNVERIFIED` (the assert couldn't run — **never** silently reported as `ok`).
+- **Version banner**: a `VERSION` constant is logged at start/finish and returned in the summary, so a stale installed copy is visible at a glance (the incident ran v5.0.0 silently).
+
+### Changed
+- **`--in-place` hardened with a deterministic JS pre-flight**: before any checkout the legacy shared-tree mode runs a read-only main-tree snapshot and a JS gate refuses to start (nothing created) if the main tree is dirty or on a branch that is not main/master, the default branch, or the epic branch (likely a concurrent agent's), pointing at the default isolated mode — the prose precondition is now backed by a deterministic guard symmetric to the ISO finalize assert.
+
+### Fixed
+- **Self-review hardening (pre-merge).** A multi-agent review of the v5.2.0 diff surfaced and closed integrity gaps in the new guards before merge: the main-tree assert no longer depends on an optional schema field that could silently disable it (now three-state `ok`/`CHANGED`/`UNVERIFIED`, never a false `ok`); the resolution gate retries transient failures instead of aborting a valid epic; the resolved id is checked against the request and the cross-check pins to the requested epic alone (resolve.id is no longer trusted to widen the allowlist); the in-place precondition gained a deterministic JS backstop; a branch-only hijack at an unchanged commit is now caught; lowercase epic IDs are accepted; conflicting IDs error instead of silently last-wins; and the `resolve` pre-flight is routed to Sonnet (a mechanical `get_issue` lookup).
+
+---
+
 ## [5.1.0] - 2026-06-22
 
 Minor release — **"epic-swarm-workflow hardening."** A focused reliability pass on the `/epic-swarm-workflow` dynamic workflow, driven by a forensic audit of the nine real ProductLobster runs since v5.0.0 (one total-loss epic, two operator-authored in-flight script patches, and several runs that completed only with manual finishing). The audit's headline finding: the v4.8 resilience layer (`safeAgent`, fail-closed gates) held — across all nine runs no transient failure ever caused a wrongful block, lost work, or a false APPROVED — so the failures were in **plumbing, not resilience**. This release fixes the plumbing. All changes are confined to `workflows/epic-swarm-workflow.js` and its command wrapper; existing invocations keep working (the new integration model is the default, with `--in-place` to opt out).
@@ -2313,6 +2332,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[5.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.2.0
 [5.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.1.0
 [5.0.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.0.0
 [4.8.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v4.8.0
