@@ -50,9 +50,21 @@ test('parseArgs — trailing punctuation on the id is tolerated', () => {
   assert.equal(parseArgs('#PRO-1653').epicId, 'PRO-1653')
 })
 
-test('parseArgs — other label words (ticket/story/issue) are unwrapped too', () => {
-  assert.equal(parseArgs('ticket PRO-42').epicId, 'PRO-42')
-  assert.equal(parseArgs('story: PRO-42').epicId, 'PRO-42')
+test('parseArgs — only "epic" is a target label; ticket/story/issue are NOT unwrapped (v5.3.1 wrong-target guard)', () => {
+  // Narrowed in v5.3.1: "epic" unambiguously labels the target, but "ticket"/"story"/"issue" routinely
+  // introduce a REFERENCE id, not the target, so unwrapping them captured the wrong id. They now fail
+  // closed (epicId null → usage error) rather than silently hijack the run.
+  assert.equal(parseArgs('epic PRO-42').epicId, 'PRO-42')   // the one true target label still works
+  assert.equal(parseArgs('ticket PRO-42').epicId, null)
+  assert.equal(parseArgs('story: PRO-42').epicId, null)
+  assert.equal(parseArgs('issue PRO-42').epicId, null)
+})
+
+test('parseArgs — "ticket PRO-42 … run epic PRO-99" does NOT hijack PRO-42 as the epic', () => {
+  // The exact wrong-target footgun the narrowing closes: "ticket" is not a target label, so the mention
+  // PRO-42 is not captured, and the buried PRO-99 is never scanned — so it fails closed (epicId null).
+  // A clear usage error beats a silent swarm against the wrong epic.
+  assert.equal(parseArgs('ticket PRO-42 is blocked, run epic PRO-99').epicId, null)
 })
 
 test('parseArgs — an id BURIED in guidance is NOT captured (2026-06-22 footgun stays closed)', () => {
