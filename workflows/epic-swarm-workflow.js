@@ -51,12 +51,20 @@
  *   • Reviews FAIL CLOSED: a null/failed review blocks the merge — it can
  *     never silently pass as APPROVED (a v1 bug: all review lenses 529'd →
  *     empty result → false APPROVED → unreviewed merge).
- *   • Incremental durability: each phase agent POSTS ITS OWN report to Linear
- *     at the end of its turn. There is no end-of-ticket batch poster, so a
- *     crash leaves every completed phase's report already on Linear.
- *   • Small schemas: the big markdown report is posted to Linear by the agent,
- *     NOT crammed into a structured-output field — this is what makes a model
- *     "write prose instead of calling StructuredOutput", the v1 crash mode.
+ *   • Reliable per-phase Linear reporting (v5.3): phase agents RETURN their full
+ *     report as the structured field `report_md` and do NOT touch Linear; a
+ *     dedicated JS-dispatched poster (postPhase) writes the comment + status
+ *     after each phase — the orchestrator-agent pattern of /execute-ticket (the
+ *     workflow JS can't call MCP, so the poster is its Linear hands). The prior
+ *     self-post (agent creates the comment itself, buried prose, "continue if
+ *     Linear is unavailable", report EXCLUDED from structured output, no
+ *     verification) silently dropped reports — the swarm-phase-reporting skill
+ *     documents the exact loss. Now the report is a schema field (never lost),
+ *     the poster runs unconditionally and retries (v5.3 safeAgent), and the
+ *     summary's `linear_reporting` tally surfaces any posting that degraded.
+ *     Incremental durability is preserved: each phase posts as it finishes
+ *     (posted BEFORE the gate, so even a blocked phase leaves the report that
+ *     explains why), so a crash leaves every completed phase's report on Linear.
  *   • Merge gate uses a TEST-DIFF: it blocks only on tests that NEWLY fail vs.
  *     a baseline captured at setup — pre-existing/flaky red suites (common in
  *     real repos) never block a clean merge. A merge blocked by NEW failures gets
@@ -222,16 +230,47 @@ express them.`
 
 const LINEAR_NOTE = `(Linear is exposed as mcp__linear-server__* or mcp__claude_ai_Linear__*; load whichever is present via ToolSearch.)`
 
-// Each worker posts its OWN report to Linear (incremental durability). Keep the
-// structured return SMALL — the full prose goes in the Linear comment.
-function selfPost(t, header, first) {
-  return `POST YOUR REPORT YOURSELF — at the end of your phase, create exactly ONE Linear comment on ${t.id}. ${LINEAR_NOTE}
-Its body MUST begin with this exact line:
+// Workers RETURN their report (report_md); they do NOT touch Linear. A dedicated JS-dispatched poster
+// (postPhase) writes the comment + status — the orchestrator-agent pattern of /execute-ticket. The old
+// self-post (agent creates the comment itself, as a buried prose instruction with an "if Linear is
+// unavailable, continue" escape hatch and NO verification) silently dropped reports whenever a worker —
+// deep in a big implementation — skipped it; the swarm-phase-reporting skill documents that exact loss.
+// The third arg is retained for call-site compatibility but is unused: status is now set by postPhase.
+function reportBlock(t, header, _firstUnused) {
+  return `DELIVER YOUR REPORT AS DATA — put your FULL report (markdown) in the structured field report_md. Do NOT create a Linear comment yourself and do NOT change the ticket's status; the workflow posts your report and manages status for you (reliably). report_md MUST begin with this EXACT header line:
 ${header}
-then your full structured report (markdown), then a final line: *Automated by /epic-swarm-workflow*.
-${first ? `BEFORE starting work, set ticket ${t.id} state to "In Progress" in Linear.` : `Do NOT change the ticket's status.`}
-If Linear is unavailable, log it and CONTINUE — never fail your phase over a Linear error.
-Return ONLY the small structured result the schema asks for (status + counts + a one-line summary). Your full prose lives in the Linear comment, NOT in the structured fields.`
+then the full report: specifics (files changed/reviewed with paths, findings with file:line, verification evidence — commands / test counts / lint), key decisions and reuse, and a final "### Deferred Items" table (even if empty). It is the durable record future agents read — make it DETAILED, not a summary. Keep the OTHER structured fields small (status + counts + one-line summary); the prose lives in report_md.`
+}
+
+// Reliable Linear delivery. The workflow JS sandbox cannot call MCP, so it dispatches a thin poster
+// agent whose ONLY job is the Linear write: optionally transition status, then create ONE comment with
+// the phase's report_md under its canonical header. Wrapped in safeAgent so a transient failure retries
+// (v5.3); a hard failure is logged + tallied in linearPosts (surfaced in the summary) and NEVER aborts
+// the ticket. This is the structural analogue of commands/execute-ticket.md §3.6 + the
+// swarm-phase-reporting skill, which the prior self-post left to unenforced agent prose.
+const linearPosts = { attempted: 0, posted: 0, failed: 0, skipped: 0 }
+async function postPhase(t, header, body, opts = {}) {
+  const state = opts.state // 'In Progress' | 'Done' | undefined
+  const text = body && String(body).trim() ? String(body).trim() : ''
+  if (!text && !state) { linearPosts.skipped++; log(`WARN ${t.id} ${header}: no report content to post (worker returned none) — skipping Linear post.`); return { posted: false } }
+  // Guarantee the canonical header anchors the comment (/close-epic + resume detection key on it),
+  // even if a worker forgot to lead report_md with it.
+  const commentBody = text ? (text.startsWith(header) ? text : `${header}\n\n${text}`) : ''
+  linearPosts.attempted++
+  const r = await safeAgent(
+    `Linear bookkeeping for ${t.id} — you are a POSTER, not a worker: do EXACTLY the steps below and nothing else. ${LINEAR_NOTE}
+${state ? `- Set ticket ${t.id} state to "${state}" in Linear (skip if it is already "${state}" or a later state).\n` : ''}${commentBody ? `- Create ONE comment on ${t.id} whose body is EXACTLY the text between the markers (verbatim — do NOT summarize, reformat, or add anything except the trailing footer line):
+-----BEGIN COMMENT-----
+${commentBody}
+
+*Automated by /epic-swarm-workflow*
+-----END COMMENT-----
+` : ''}Return posted=true ONLY if the comment was created (or, when there is no comment to post, the state change succeeded); on a genuine Linear error return posted=false with the cause in note. Do not fail loudly.`,
+    { schema: POST_SCHEMA, label: `linear ${header.replace(/^#+\s*/, '').replace(/\s*Report.*/, '')} ${t.id}`, phase: opts.phase || 'Report', model: ROUTE.merge },
+  )
+  if (r && r.posted) linearPosts.posted++
+  else { linearPosts.failed++; log(`WARN ${t.id} ${header}: Linear post FAILED — ${r ? (r.note || 'not posted') : 'no result'} (the report is retained in the run summary's results).`) }
+  return r || { posted: false }
 }
 
 function acBlock(t) {
@@ -312,11 +351,18 @@ const PLAN_SCHEMA = {
     excluded: { type: 'array', items: { type: 'object' } },
   },
 }
+// The FULL markdown report for a phase. Returned as structured data (NOT posted by the agent) so the
+// workflow's poster (postPhase) can write it to Linear reliably — the orchestrator-agent pattern of
+// /execute-ticket (commands/execute-ticket.md §3.6) and the swarm-phase-reporting skill, which require
+// the durable per-phase audit trail future agents read. Making it a schema field means the report can
+// never be silently lost the way a buried self-post instruction was.
+const REPORT_MD = { type: 'string', description: 'FULL markdown report for this phase (the workflow posts it to Linear for you — do NOT post a comment yourself). Begin with the canonical "## … Report" header, then specifics: files changed/reviewed with paths, findings with file:line, verification evidence (commands/test counts/lint), decisions and reuse, and end with a "### Deferred Items" table (even if empty). This is the durable record future agents read — detailed, NOT a summary.' }
 const WORK_SCHEMA = {
-  type: 'object', required: ['status', 'summary', 'committed'],
+  type: 'object', required: ['status', 'summary', 'committed', 'report_md'],
   properties: {
     status: { type: 'string', enum: ['COMPLETE', 'BLOCKED', 'NEEDS_CONTEXT', 'ISSUES_FOUND', 'ENV_BLOCKED'], description: 'COMPLETE | BLOCKED | NEEDS_CONTEXT | ISSUES_FOUND | ENV_BLOCKED (the test/build runner could NOT execute at all — tooling/PATH/codegen/lockfile error, distinct from tests that ran and failed)' },
-    summary: { type: 'string', description: 'ONE-LINE summary (full report is in the Linear comment you posted)' },
+    summary: { type: 'string', description: 'ONE-LINE summary (the full report goes in report_md)' },
+    report_md: REPORT_MD,
     files_changed: { type: 'array', items: { type: 'string' } },
     write_calls: { type: 'integer' }, edit_calls: { type: 'integer' },
     no_code: { type: 'boolean', description: 'true if this ticket legitimately needs no implementation-phase code (pure verification/test-only/doc-only)' },
@@ -325,30 +371,33 @@ const WORK_SCHEMA = {
   },
 }
 const REVIEW_SCHEMA = {
-  type: 'object', required: ['status'],
+  type: 'object', required: ['status', 'report_md'],
   properties: {
     status: { type: 'string', enum: ['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED'], description: 'APPROVED | CHANGES_REQUESTED | BLOCKED' },
     blocking_findings: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string' }, file: { type: 'string' }, issue: { type: 'string' } } } },
     security_status: { type: 'string', enum: ['PASS', 'FAIL'], description: 'SMALL/NO-CODE combined review only: PASS | FAIL for the folded security sanity' },
     convention_guard: { type: 'string', enum: ['NOT_APPLICABLE', 'GUARD_SHIPPED', 'PROSE_ONLY_TAGGED', 'MISSING'], description: 'optional summary of the convention-guard check; MISSING must also appear as a blocking_finding with status CHANGES_REQUESTED (the gate keys on status, not this field)' },
+    report_md: REPORT_MD,
   },
 }
 // Combined code+security review (NO-CODE / SMALL): security_status is REQUIRED so the
 // folded security floor can never pass by omission — the gate demands an explicit PASS.
 const COMBINED_REVIEW_SCHEMA = {
-  type: 'object', required: ['status', 'security_status'],
+  type: 'object', required: ['status', 'security_status', 'report_md'],
   properties: REVIEW_SCHEMA.properties,
 }
 const SECURITY_SCHEMA = {
-  type: 'object', required: ['status'],
+  type: 'object', required: ['status', 'report_md'],
   properties: {
     status: { type: 'string', enum: ['APPROVED', 'CHANGES_REQUIRED', 'BLOCKED'], description: 'APPROVED (PASS, zero CRITICAL/HIGH) | CHANGES_REQUIRED | BLOCKED (FAIL)' },
     critical_high_count: { type: 'integer' },
+    report_md: REPORT_MD,
   },
 }
 const CODEX_SCHEMA = {
   type: 'object', required: ['status'],
-  properties: { status: { type: 'string', enum: ['COMPLETE', 'RATE_LIMITED', 'UNAVAILABLE'], description: 'COMPLETE | RATE_LIMITED | UNAVAILABLE' }, auto_fixed_count: { type: 'integer' } },
+  // report_md is optional here: RATE_LIMITED / UNAVAILABLE codex runs produce no real report to post.
+  properties: { status: { type: 'string', enum: ['COMPLETE', 'RATE_LIMITED', 'UNAVAILABLE'], description: 'COMPLETE | RATE_LIMITED | UNAVAILABLE' }, auto_fixed_count: { type: 'integer' }, report_md: REPORT_MD },
 }
 const MERGE_SCHEMA = {
   type: 'object', required: ['status'],
@@ -358,8 +407,11 @@ const MERGE_SCHEMA = {
     new_failures: { type: 'array', items: { type: 'string' }, description: 'tests failing now whose FULL identifier is NOT in the baseline' },
     current_failures: { type: 'array', items: { type: 'string' }, description: 'ALL tests failing on the merged tree (full identifiers) — used to refresh the baseline after a clean merge' },
     ticket_closed: { type: 'boolean' }, notes: { type: 'string' },
+    report_md: REPORT_MD,
   },
 }
+// Poster result: the dedicated Linear-delivery agent reports only whether the comment landed.
+const POST_SCHEMA = { type: 'object', required: ['posted'], properties: { posted: { type: 'boolean' }, comment_url: { type: 'string' }, note: { type: 'string' } } }
 const PR_SCHEMA = { type: 'object', required: ['status'], properties: { status: { type: 'string' }, pr_url: { type: 'string' } } }
 
 // Single fail-closed gate: a phase advances ONLY if its result exists AND its status is in the
@@ -938,6 +990,20 @@ Return status (MERGED | CONFLICT | TEST_FAILED), integration_tests, new_failures
 
   ticketResult.merge = merge ? merge.status : 'NO_REPORT'
   ticketResult.integration_tests = merge ? merge.integration_tests : undefined
+  // Post an Integration Report for the audit trail. Built in JS from the merge result (deterministic —
+  // no reliance on the merge agent to self-post), so every ticket records its merge OUTCOME on Linear
+  // regardless of MERGED / CONFLICT / TEST_FAILED / SKIPPED. (The merge agent still sets status to Done
+  // on a clean merge; this complements it with a durable outcome comment.) Skipped when merge is null.
+  if (merge) {
+    const integ = [
+      `- Outcome: **${merge.status}**`,
+      `- Integration tests: ${merge.integration_tests || 'n/a'}`,
+      (merge.new_failures || []).length ? `- New failures: ${merge.new_failures.join(', ')}` : null,
+      `- Linear close confirmed: ${merge.ticket_closed ? 'yes' : 'no'}`,
+      merge.notes ? `- Notes: ${merge.notes}` : null,
+    ].filter(Boolean).join('\n')
+    await postPhase(t, H.integration, `${H.integration}\n\n${integ}`, { phase: 'Integrate' })
+  }
   if (merge && merge.status === 'MERGED') {
     // The code is integrated on the epic branch. Whether Linear was closed only
     // affects the outcome LABEL — a failed Linear close must NOT block the ticket
@@ -981,7 +1047,7 @@ Return status (MERGED | CONFLICT | TEST_FAILED), integration_tests, new_failures
 // apply ONE fix pass then RE-REVIEW (never rubber-stamp the fixer's self-report). A null
 // re-review keeps the original CHANGES_REQUESTED so the caller's gate fails closed.
 // `prompt` is a (rerun:boolean) => string builder. Returns { review, reReviewed }.
-async function reviewWithFixPass(t, wt, prompt, schema, model, label) {
+async function reviewWithFixPass(t, wt, prompt, schema, model, label, postHeader = H.codereview) {
   let review = await safeAgent(prompt(false), { schema, label: `${label} ${t.id}`, phase: 'Review', model })
   let reReviewed = false
   if (review && review.status === 'CHANGES_REQUESTED' && (review.blocking_findings || []).length) {
@@ -991,10 +1057,12 @@ async function reviewWithFixPass(t, wt, prompt, schema, model, label) {
 ${SHELL_RULES}${PROD}
 FINDINGS:
 ${review.blocking_findings.map((f, i) => `${i + 1}. [${f.severity || '?'}] ${f.file || ''} — ${f.issue || ''}`).join('\n')}
-${selfPost(t, H.codereview + ' (fixes)', false)}
-Return status, summary, write/edit counts, and committed — set committed=true ONLY if you actually committed the fixes (it gates the re-review; reporting it falsely will block the ticket).`,
+${reportBlock(t, H.codereview + ' (fixes)', false)}
+Return status, summary, write/edit counts, committed, and report_md — set committed=true ONLY if you actually committed the fixes (it gates the re-review; reporting it falsely will block the ticket).`,
       { schema: WORK_SCHEMA, label: `review-fix ${t.id}`, phase: 'Review', model: ROUTE.reviewFix },
     )
+    // Post the fix report so the audit trail records WHAT was changed in response to the review.
+    await postPhase(t, H.codereview + ' (fixes)', fix && fix.report_md, { phase: 'Review' })
     // Only re-review if the fixer actually COMMITTED its changes. A fix that reports
     // COMPLETE but committed nothing would have the re-review run against the UNCHANGED
     // diff, where same-model variance could flip CHANGES_REQUESTED → APPROVED and merge
@@ -1006,6 +1074,8 @@ Return status, summary, write/edit counts, and committed — set committed=true 
       log(`${t.id} ${label} fix reported COMPLETE but committed=false — NOT re-reviewing; keeping CHANGES_REQUESTED (fail closed).`)
     }
   }
+  // Post the FINAL review report (reliable delivery — the worker returned it as data, the workflow posts it).
+  await postPhase(t, postHeader, review && review.report_md, { phase: 'Review' })
   return { review, reReviewed }
 }
 
@@ -1043,7 +1113,7 @@ Review ONLY the diff: \`git -C ${wt} diff --name-only ${EPIC_BRANCH}...HEAD\`.
 ${readTicket(t)}
 ${SHELL_RULES}${includeAc ? `\n${acBlock(t)}` : ''}${GUIDANCE ? `\n${GUIDANCE}\n(Operator guidance above is part of the bar: a change that ignores it — e.g. didn't load a mandated skill, didn't follow a stated convention — is CHANGES_REQUESTED.)` : ''}
 ${scope}
-${selfPost(t, rerun ? H.codereview + ' (re-review)' : H.codereview, false)}${foldSecurity ? '\nALWAYS return security_status explicitly as exactly PASS or FAIL (PASS = zero CRITICAL/HIGH and no behavior/security surface introduced by this change).' : ''}
+${reportBlock(t, rerun ? H.codereview + ' (re-review)' : H.codereview, false)}${foldSecurity ? '\nALWAYS return security_status explicitly as exactly PASS or FAIL (PASS = zero CRITICAL/HIGH and no behavior/security surface introduced by this change).' : ''}
 Return status (${foldSecurity ? 'APPROVED | CHANGES_REQUESTED' : 'APPROVED | CHANGES_REQUESTED | BLOCKED'}), blocking_findings[]${foldSecurity ? ', security_status (PASS | FAIL)' : ''}.`
 }
 
@@ -1076,11 +1146,13 @@ ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Make ONLY the documentation/comment/config change the ticket asks for. If you discover it actually requires code/logic changes, STOP, set status NEEDS_CONTEXT, and explain (it was mis-classified). Commit in the worktree: \`git -C ${wt} add -A\` then \`docs(${t.id}): ...\`.
 ${gitVerify(wt)}
 
-${selfPost(t, H.implementation, true)}
+${reportBlock(t, H.implementation, true)}
 Return status, summary, files_changed, write/edit counts, committed, no_code.`,
         { schema: WORK_SCHEMA, label: `build ${t.id}`, phase: 'Build', model: ROUTE.buildNoCode },
       )
       ticketResult.phases.build = build ? build.status : 'NO_REPORT'
+      // Build is the first phase of a NO-CODE ticket → post its report AND transition to In Progress.
+      await postPhase(t, H.implementation, build && build.report_md, { state: 'In Progress', phase: 'Build' })
       // Fail closed: advance ONLY on explicit COMPLETE (gate() allowlist), matching the SMALL/
       // STANDARD build gates. A denylist would let ISSUES_FOUND or any unexpected/typo status pass.
       if (!gate(build, 'COMPLETE')) {
@@ -1123,7 +1195,7 @@ ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Reuse existing code; implement every AC; add a focused test for the change; run lint + typecheck on changed files (npx --prefix ${wt} tsc --noEmit, project lint). Commit: \`git -C ${wt} add -A\` then \`feat(${t.id}): ...\`. If the work turns out to be larger than SMALL (schema/auth/API/many files), STOP with status NEEDS_CONTEXT (it was mis-classified for STANDARD).
 ${gitVerify(wt)}
 
-${selfPost(t, H.implementation, true)}
+${reportBlock(t, H.implementation, true)}
 Return status, summary, files_changed, ACTUAL write/edit counts, committed, no_code, gates.`
       // Code IS expected for SMALL — use the git-verified empty-artifact retry (parity with STANDARD).
       const build = await buildWithEmptyRetry(smallBuildPrompt, wt, { schema: WORK_SCHEMA, label: `build ${t.id}`, phase: 'Build', model: ROUTE.buildSmall })
@@ -1132,6 +1204,8 @@ Return status, summary, files_changed, ACTUAL write/edit counts, committed, no_c
         blocked.add(t.id); ticketResult.phases.build = 'BLOCKED_NO_ARTIFACTS'; ticketResult.outcome = 'BLOCKED_BUILD'; results.push(ticketResult); continue
       }
       ticketResult.phases.build = build ? build.status : 'NO_REPORT'
+      // Build is the first phase of a SMALL ticket → post its report AND transition to In Progress.
+      await postPhase(t, H.implementation, build && build.report_md, { state: 'In Progress', phase: 'Build' })
       if (!gate(build, 'COMPLETE')) {
         log(`BLOCK ${t.id} at build — ${build ? build.status : 'no report'}`)
         blocked.add(t.id); ticketResult.outcome = 'BLOCKED_BUILD'; results.push(ticketResult); continue
@@ -1168,11 +1242,14 @@ ${acBlock(t)}
 
 ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Then produce the adaptation plan (NO feature code yet): inventory EXISTING services/utilities to reuse (prevent duplication — highest-value output); map each AC to an approach; list files to create (only if no reuse) and modify; define the test strategy and integration points.
-${selfPost(t, H.adaptation, true)}
+${reportBlock(t, H.adaptation, true)}
 Return status (COMPLETE | BLOCKED | NEEDS_CONTEXT), summary (one line on the plan + key reuse), files_changed (likely empty), write/edit counts, committed (false — adaptation only plans, it does not commit).`,
       { schema: WORK_SCHEMA, label: `adapt ${t.id}`, phase: 'Build', model: ROUTE.adapt },
     )
     ticketResult.phases.adaptation = adapt ? adapt.status : 'NO_REPORT'
+    // Post BEFORE the gate so even a blocked adaptation leaves its report (which explains WHY) on Linear.
+    // Adaptation is the first STANDARD phase → also transition the ticket to In Progress here.
+    await postPhase(t, H.adaptation, adapt && adapt.report_md, { state: 'In Progress', phase: 'Build' })
     // Fail closed: advance ONLY on explicit COMPLETE (gate() allowlist). A denylist would let
     // an adapt agent that returned ISSUES_FOUND (or any unexpected status) feed a flagged plan
     // forward into implementation as if it were sound.
@@ -1192,7 +1269,7 @@ ${readTicket(t)} In particular read the Adaptation Report and any prior phase co
 ADAPTATION SUMMARY: ${adapt.summary || '(read the Adaptation Report you posted)'}
 Reuse what adaptation mandated; implement every AC; NO test code here (separate phase); run lint + typecheck on changed files; commit (\`git -C ${wt} add -A\`; \`feat(${t.id}): ...\`). If this ticket genuinely has no implementation-phase code deliverable (pure verification/test-only), set no_code=true and explain — do NOT invent code.
 ${gitVerify(wt)}
-${selfPost(t, H.implementation, false)}
+${reportBlock(t, H.implementation, false)}
 Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, committed.`
 
     // Code IS expected here (unless the agent legitimately reports no_code) — use the
@@ -1205,6 +1282,7 @@ Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, c
       blocked.add(t.id); ticketResult.phases.implementation = 'BLOCKED_NO_ARTIFACTS'; ticketResult.outcome = 'BLOCKED_IMPLEMENTATION'; results.push(ticketResult); continue
     }
     ticketResult.phases.implementation = impl ? impl.status : 'NO_REPORT'
+    await postPhase(t, H.implementation, impl && impl.report_md, { phase: 'Build' })
     if (!gate(impl, 'COMPLETE')) {
       log(`BLOCK ${t.id} at implementation — ${impl ? impl.status : 'no report'}`)
       blocked.add(t.id); ticketResult.outcome = 'BLOCKED_IMPLEMENTATION'; results.push(ticketResult); continue
@@ -1227,11 +1305,12 @@ ${SHELL_RULES}${PROD}
 - ENV vs FAILURE: if the test RUNNER itself cannot execute at all — it errors BEFORE running any test (tooling/PATH/codegen/lockfile/missing-binary), e.g. \`ERR_PNPM_BAD_PATH_DIR\` or "vitest: command not found" — that is an ENVIRONMENT hazard, NOT a pass and NOT a test failure: set status=ENV_BLOCKED and put the exact runner error in the gates one-liner. "Tests ran and some failed" is ISSUES_FOUND; "tests could not run at all" is ENV_BLOCKED. NEVER report COMPLETE when the suite never executed.
 - Cap Gate #0 fix loops at ~3 cycles; if still red, report ISSUES_FOUND with the specifics rather than looping. Coverage secondary (~70-80%, 90%+ critical), skip trivial code.
 - Commit: \`git -C ${wt} add -A\`; \`test(${t.id}): ...\`. Files changed by implementation: ${(impl.files_changed || []).join(', ') || '(discover via git diff)'}
-${selfPost(t, H.testing, false)}
+${reportBlock(t, H.testing, false)}
 Return status (COMPLETE | ISSUES_FOUND | ENV_BLOCKED), a gates one-liner, files_changed, write/edit counts, committed.`,
         { schema: WORK_SCHEMA, label: `test ${t.id}`, phase: 'Build', model: ROUTE.test },
       )
       ticketResult.phases.testing = test ? test.status : 'NO_REPORT'
+      await postPhase(t, H.testing, test && test.report_md, { phase: 'Build' })
       // Fail closed: advance ONLY on explicit COMPLETE (gate() allowlist). The previous denylist
       // (`=== 'ISSUES_FOUND'`) let a test agent that returned BLOCKED / NEEDS_CONTEXT — the likely
       // outcome when the suite can't even run — pass as if tests were green.
@@ -1250,11 +1329,12 @@ Return status (COMPLETE | ISSUES_FOUND | ENV_BLOCKED), a gates one-liner, files_
         `ROLE: technical-writer-agent for ${t.id}. MVD — "document WHY, not WHAT" in ${wt}. Document complex/non-obvious logic, decisions, security constraints, public API (auto-generate where possible); SKIP self-documenting types/trivial CRUD. Commit: \`git -C ${wt} add -A\`; \`docs(${t.id}): ...\`.
 ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 ${SHELL_RULES}
-${selfPost(t, H.documentation, false)}
+${reportBlock(t, H.documentation, false)}
 Return status, summary, files_changed, write/edit counts, committed.`,
         { schema: WORK_SCHEMA, label: `docs ${t.id}`, phase: 'Build', model: ROUTE.docs },
       )
       ticketResult.phases.documentation = doc ? doc.status : 'NO_REPORT'
+      await postPhase(t, H.documentation, doc && doc.report_md, { phase: 'Build' })
       // Docs FAIL CLOSED like every other phase: a null/ISSUES_FOUND/BLOCKED docs result must
       // not be silently ignored and let the ticket merge with a documentation AC unmet. The
       // branch (and its Linear comment) is kept for inspection; a re-run re-attempts docs.
@@ -1286,11 +1366,14 @@ ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE + '\n(Operator guidance above is pa
 ${SHELL_RULES}
 Call \`mcp__codex-review-server__codex_review_and_fix\` (load via ToolSearch if needed) with project_dir=${wt}, base_branch=${EPIC_BRANCH}, and a context string (ticket description + comments + ACs + implementation summary). If the codex MCP is unavailable, return status UNAVAILABLE (do NOT fail the ticket). Be efficient — do not loop; let Codex do the review pass.
 Parse the JSON: only \`"error":"rate_limit"\` at the TOP LEVEL is a real rate-limit → status RATE_LIMITED (skip, not fatal). The phrase "rate limit" inside a \`"status":"complete"\` output is a code FINDING, not an error. On "complete": Codex auto-fixes unambiguous P1-P3; fix remaining P1/P2 in-branch; commit (\`git -C ${wt} add -A\`; \`refactor(${t.id}): apply codex fixes\`).
-${selfPost(t, H.codex, false)}
-Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count.`,
+${reportBlock(t, H.codex, false)}
+Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count, and report_md (only when status=COMPLETE — a RATE_LIMITED/UNAVAILABLE skip has no report to write).`,
       { schema: CODEX_SCHEMA, label: `codex ${t.id}`, phase: 'Review', model: ROUTE.codex },
     )
     ticketResult.phases.codex = codex ? codex.status : 'UNAVAILABLE'
+    // Codex produces a report worth posting only when it actually ran (COMPLETE); a RATE_LIMITED /
+    // UNAVAILABLE skip has nothing to record (postPhase no-ops on an empty body).
+    if (codex && codex.report_md) await postPhase(t, H.codex, codex.report_md, { phase: 'Review' })
 
     // Codex commits its fixes AFTER the code-review hard floor already ran, so those changes
     // would otherwise reach merge unreviewed for correctness/ACs. We do NOT trust the
@@ -1302,7 +1385,7 @@ Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count.`,
     // invariant "codex output never reaches merge unreviewed".
     if (codex && codex.status === 'COMPLETE') {
       log(`${t.id} codex completed${codex.auto_fixed_count ? ` (${codex.auto_fixed_count} fix(es))` : ''} after the review floor — re-reviewing the codex changes (fail closed).`)
-      const { review: postCodex, reReviewed: postFixed } = await reviewWithFixPass(t, wt, stdReviewPrompt, REVIEW_SCHEMA, ROUTE.review, 'post-codex review')
+      const { review: postCodex, reReviewed: postFixed } = await reviewWithFixPass(t, wt, stdReviewPrompt, REVIEW_SCHEMA, ROUTE.review, 'post-codex review', H.codereview + ' (post-codex)')
       ticketResult.phases.codereview = `${ticketResult.phases.codereview} + post-codex ${postCodex ? postCodex.status + (postFixed ? ' (re-reviewed)' : '') : 'NO_REPORT'}`
       if (!gate(postCodex, 'APPROVED')) {
         log(`BLOCK ${t.id} — post-codex re-review ${postCodex ? postCodex.status : 'failed (null)'}; codex changes not approved.`)
@@ -1316,11 +1399,12 @@ Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count.`,
 ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 ${SHELL_RULES}
 Scan against OWASP Top 10 (injection, broken authz, sensitive-data exposure, secrets, input validation, insecure config). Focus on exploitable issues (>80% confidence). PASS RULE: status APPROVED only if ZERO CRITICAL and ZERO HIGH findings; any CRITICAL/HIGH → CHANGES_REQUIRED (blocks merge). Fix MEDIUM/LOW introduced by this diff; pre-existing MEDIUM/LOW may be noted OUT-OF-SCOPE.
-${selfPost(t, H.security, false)}
+${reportBlock(t, H.security, false)}
 Return status (APPROVED | CHANGES_REQUIRED | BLOCKED), critical_high_count.`,
       { schema: SECURITY_SCHEMA, label: `security ${t.id}`, phase: 'Review', model: ROUTE.security },
     )
     ticketResult.phases.security = sec ? sec.status : 'NO_REPORT'
+    await postPhase(t, H.security, sec && sec.report_md, { phase: 'Review' })
     // Security FAILS CLOSED.
     const securityPass = gate(sec, 'APPROVED') && (sec.critical_high_count || 0) === 0
     if (!securityPass) {
@@ -1475,6 +1559,10 @@ const summary = {
   unprocessed,
   baseline_pre_existing_failures: BASELINE.length,
   integration_verification: TEST_CMD ? `test-diff gate (cmd: ${TEST_CMD})${TEST_CMD_TARGETS_ROOT ? '' : ' — WARNING: command does not reference the integration tree; merges may have tested the WRONG directory (treat as UNTRUSTED)'}` : 'NONE — no test command detected; merges not integration-verified',
+  // Per-phase Linear reporting: how many phase-report comments the dedicated poster delivered, and how
+  // many failed (their reports are retained in `results`). A non-zero `failed` means the Linear audit
+  // trail is incomplete for this run — re-post from the run transcript or check Linear connectivity.
+  linear_reporting: `${linearPosts.posted}/${linearPosts.attempted} phase comments posted${linearPosts.failed ? `, ${linearPosts.failed} FAILED` : ''}${linearPosts.skipped ? `, ${linearPosts.skipped} skipped (no content)` : ''}`,
   pr_url: pr ? pr.pr_url : (flags.push ? '(nothing merged)' : '(local-only; pass --push to open a PR)'),
   results,
   next_steps: nextStepsParts.join(' '),

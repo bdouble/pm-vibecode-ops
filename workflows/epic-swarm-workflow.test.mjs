@@ -163,3 +163,32 @@ test('source — planner-supplied ticket ids are ID-validated before becoming a 
 test('source — test_cmd integrity is checked and surfaced', () => {
   assert.ok(/TEST_CMD_TARGETS_ROOT/.test(src), 'TEST_CMD_TARGETS_ROOT integrity flag must exist')
 })
+
+// ── Reliable per-phase Linear reporting (v5.3) ──
+
+test('source — workers return report_md as a schema field, not a self-posted comment', () => {
+  assert.ok(src.includes('const REPORT_MD ='), 'REPORT_MD schema field must exist')
+  assert.ok(src.includes("required: ['status', 'summary', 'committed', 'report_md']"), 'WORK_SCHEMA must require report_md')
+  assert.ok(!src.includes('selfPost'), 'the unreliable selfPost helper must be gone')
+  assert.ok(!src.includes('POST YOUR REPORT YOURSELF'), 'workers must NOT be told to self-post')
+  assert.ok(src.includes('function reportBlock('), 'reportBlock helper must exist')
+  assert.ok(src.includes('DELIVER YOUR REPORT AS DATA'), 'reportBlock must instruct returning report_md, not posting')
+})
+
+test('source — a dedicated JS-dispatched poster delivers comments + status', () => {
+  assert.ok(src.includes('async function postPhase('), 'postPhase poster must exist')
+  assert.ok(src.includes('const POST_SCHEMA ='), 'POST_SCHEMA must exist')
+  assert.ok(src.includes('const linearPosts ='), 'linearPosts tally must exist')
+  // The poster guarantees the canonical header anchors the comment even if a worker omitted it.
+  assert.ok(src.includes('text.startsWith(header) ? text :'), 'postPhase must ensure the canonical header')
+  // Posted under each canonical phase header.
+  for (const h of ['H.adaptation', 'H.implementation', 'H.testing', 'H.documentation', 'H.security', 'H.codex']) {
+    assert.ok(src.includes(`postPhase(t, ${h},`), `a postPhase call must use ${h}`)
+  }
+  assert.ok(src.includes('postPhase(t, postHeader,'), 'reviewWithFixPass must post the review report')
+})
+
+test('source — first phase transitions the ticket to In Progress via the poster', () => {
+  assert.ok(src.includes("{ state: 'In Progress'"), 'the first phase must set In Progress through postPhase')
+  assert.ok(src.includes('linear_reporting:'), 'the summary must surface the Linear-reporting tally')
+})
