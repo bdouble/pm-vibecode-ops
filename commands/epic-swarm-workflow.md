@@ -27,11 +27,16 @@ The plugin install directory is exposed to this command's shell as `${CLAUDE_PLU
    - If **either** probe printed an absolute path ending in `epic-swarm-workflow.js`, use the first such path as `scriptPath`.
    - If both printed `NOT_FOUND`/empty or still contain a literal `${…}` (neither variable was expanded — e.g. running from the source repo rather than an installed plugin), locate the script with Glob: first try `**/workflows/epic-swarm-workflow.js` (searches the current working directory); if that returns nothing, run `echo $HOME` and try Glob again with its `path` scoped to the plugin install roots `$HOME/.claude/plugins` and `$HOME/.claude/marketplaces`. Use the first match.
    - If no probe and no Glob find it, tell the user the bundled workflow script could not be found (the plugin may be installed outside the current working directory) and **stop** — do not pass a guessed path to `Workflow`.
-2. Call the **`Workflow`** tool with:
+2. Build the `args` string. The workflow requires the **epic ID to be the FIRST token** — a bare Linear issue ID like `PRO-1653`. Two cases:
+   - **`$ARGUMENTS` already starts with a Linear ID** (e.g. `PRO-42 --dry-run`, `PRO-42 reuse the Stripe client`) → pass `$ARGUMENTS` **verbatim**.
+   - **`$ARGUMENTS` does NOT start with an ID** because the epic came from the conversation (e.g. the user typed `Do the 3 recommended tickets, only this session` after you'd been discussing `PRO-1653`) → prepend the bare ID and keep the user's words as guidance: `PRO-1653 Do the 3 recommended tickets, only this session`.
+   - **Never** prepend a label such as `Epic:`, `Epic`, `#`, or `Ticket:` as a separate leading token (e.g. ❌ `Epic: PRO-1653 …`). The workflow now tolerates a directly-adjacent label and trailing punctuation, but a free-text header is the failure mode behind the 2026-06-23 incident, where `Epic:` was captured as the epic name and poisoned every path with a colon. Just lead with the bare ID.
+   - If you cannot determine the epic ID, do **not** guess — ask the user for it rather than passing a descriptive phrase (the workflow will reject a first token that is not an ID).
+3. Call the **`Workflow`** tool with:
    - `scriptPath`: the absolute path to `epic-swarm-workflow.js` from step 1
-   - `args`: `$ARGUMENTS` — passed verbatim as a single string (e.g. `PRO-42 --dry-run`). The script parses the epic ID and flags itself.
-3. Do **not** author or inline the script or pass a `script` body — run the bundled file via `scriptPath` so users get the version-controlled, reviewed workflow.
-4. When the workflow finishes, relay its final summary (done / blocked / unprocessed tickets, epic branch, PR URL) to the user.
+   - `args`: the string built in step 2. The script parses the epic ID and flags itself (free text after the ID becomes operator guidance threaded into every code-touching agent).
+4. Do **not** author or inline the script or pass a `script` body — run the bundled file via `scriptPath` so users get the version-controlled, reviewed workflow.
+5. When the workflow finishes, relay its final summary (done / blocked / unprocessed tickets, epic branch, PR URL) to the user.
 
 ## Usage and behavior
 

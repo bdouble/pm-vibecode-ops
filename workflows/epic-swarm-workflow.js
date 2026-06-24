@@ -38,16 +38,33 @@
  *     returns a sentinel, the ticket is recorded blocked, and the loop
  *     continues. A v1 run died at hour 13 because one transient 529 on a bare
  *     `await agent()` threw uncaught and discarded all completed work.
+ *   • Bounded transient RETRY (v5.3): a TRANSIENT miss — agent() throws, or the
+ *     runtime returns null after its own internal retries on a terminal API error
+ *     (e.g. a mid-response "Connection closed") — is RE-DISPATCHED once by default
+ *     before falling back to the sentinel. A fresh dispatch gets clean context and
+ *     usually succeeds. A real (non-null) report returns immediately, so the cost is
+ *     bounded to actual failures. The 2026-06-23 run was halted by exactly this: one
+ *     "Connection closed mid-response" on a testing agent that had NO retry blocked
+ *     the ticket and cascade-skipped both of its dependents. (resolve opts out — it
+ *     owns a dedicated 3x loop.)
  *   • Per-ticket try/catch: any non-agent throw is contained to one ticket.
  *   • Reviews FAIL CLOSED: a null/failed review blocks the merge — it can
  *     never silently pass as APPROVED (a v1 bug: all review lenses 529'd →
  *     empty result → false APPROVED → unreviewed merge).
- *   • Incremental durability: each phase agent POSTS ITS OWN report to Linear
- *     at the end of its turn. There is no end-of-ticket batch poster, so a
- *     crash leaves every completed phase's report already on Linear.
- *   • Small schemas: the big markdown report is posted to Linear by the agent,
- *     NOT crammed into a structured-output field — this is what makes a model
- *     "write prose instead of calling StructuredOutput", the v1 crash mode.
+ *   • Reliable per-phase Linear reporting (v5.3): phase agents RETURN their full
+ *     report as the structured field `report_md` and do NOT touch Linear; a
+ *     dedicated JS-dispatched poster (postPhase) writes the comment + status
+ *     after each phase — the orchestrator-agent pattern of /execute-ticket (the
+ *     workflow JS can't call MCP, so the poster is its Linear hands). The prior
+ *     self-post (agent creates the comment itself, buried prose, "continue if
+ *     Linear is unavailable", report EXCLUDED from structured output, no
+ *     verification) silently dropped reports — the swarm-phase-reporting skill
+ *     documents the exact loss. Now the report is a schema field (never lost),
+ *     the poster runs unconditionally and retries (v5.3 safeAgent), and the
+ *     summary's `linear_reporting` tally surfaces any posting that degraded.
+ *     Incremental durability is preserved: each phase posts as it finishes
+ *     (posted BEFORE the gate, so even a blocked phase leaves the report that
+ *     explains why), so a crash leaves every completed phase's report on Linear.
  *   • Merge gate uses a TEST-DIFF: it blocks only on tests that NEWLY fail vs.
  *     a baseline captured at setup — pre-existing/flaky red suites (common in
  *     real repos) never block a clean merge. A merge blocked by NEW failures gets
@@ -85,6 +102,13 @@
  *     different epic (JS cross-check enforces it). In ISO mode the MAIN tree's HEAD is captured at
  *     setup and asserted UNCHANGED at finalize — a stray checkout in the shared tree (concurrent-
  *     agent hijack) is surfaced loudly instead of silently corrupting a colleague's checkout.
+ *   • Path-safety guard (v5.3): the arg parser tolerates a leading label and edge punctuation
+ *     ("Epic: PRO-1653." → PRO-1653) so a natural phrasing can't capture "Epic:" as the id, and a
+ *     deterministic JS assert refuses to run if the integration tree OR main repo path contains a
+ *     char hostile to build tooling (notably ':', which the package manager rejects in PATH —
+ *     ERR_PNPM_BAD_PATH_DIR). The 2026-06-23 "Epic:" incident poisoned every path with a colon; the
+ *     setup agent ROUTED AROUND it instead of failing, so a broken run limped on. We now fail fast.
+ *     Planner-supplied ticket ids are ID-validated before they reach a worktree path, too.
  *   • Operator guidance is threaded, not dropped: free text after the epic ID
  *     (plus --skills / --context-file) is injected into every code-touching agent, so
  *     per-epic conventions / skill-loading need no script edit.
@@ -128,7 +152,7 @@ export const meta = {
 // Semver of this workflow file — logged at start (and returned in the summary) so a STALE installed
 // copy is visible at a glance. The 2026-06-22 incident ran the v5.0.0 (pre-isolation) install while the
 // repo already had the fix; a versioned banner would have surfaced "you are not on latest" immediately.
-const VERSION = '5.2.0'
+const VERSION = '5.3.0'
 
 // ── Model routing. Change here to re-tune. ──────────────────────────────────
 // `fable` is also a valid value — operators wanting maximum-capability reasoning
@@ -206,16 +230,54 @@ express them.`
 
 const LINEAR_NOTE = `(Linear is exposed as mcp__linear-server__* or mcp__claude_ai_Linear__*; load whichever is present via ToolSearch.)`
 
-// Each worker posts its OWN report to Linear (incremental durability). Keep the
-// structured return SMALL — the full prose goes in the Linear comment.
-function selfPost(t, header, first) {
-  return `POST YOUR REPORT YOURSELF — at the end of your phase, create exactly ONE Linear comment on ${t.id}. ${LINEAR_NOTE}
-Its body MUST begin with this exact line:
+// Workers RETURN their report (report_md); they do NOT touch Linear. A dedicated JS-dispatched poster
+// (postPhase) writes the comment + status — the orchestrator-agent pattern of /execute-ticket. The old
+// self-post (agent creates the comment itself, as a buried prose instruction with an "if Linear is
+// unavailable, continue" escape hatch and NO verification) silently dropped reports whenever a worker —
+// deep in a big implementation — skipped it; the swarm-phase-reporting skill documents that exact loss.
+// The third arg is retained for call-site compatibility but is unused: status is now set by postPhase.
+function reportBlock(t, header, _firstUnused) {
+  return `DELIVER YOUR REPORT AS DATA — put your FULL report (markdown) in the structured field report_md. Do NOT create a Linear comment yourself and do NOT change the ticket's status; the workflow posts your report and manages status for you (reliably). report_md MUST begin with this EXACT header line:
 ${header}
-then your full structured report (markdown), then a final line: *Automated by /epic-swarm-workflow*.
-${first ? `BEFORE starting work, set ticket ${t.id} state to "In Progress" in Linear.` : `Do NOT change the ticket's status.`}
-If Linear is unavailable, log it and CONTINUE — never fail your phase over a Linear error.
-Return ONLY the small structured result the schema asks for (status + counts + a one-line summary). Your full prose lives in the Linear comment, NOT in the structured fields.`
+then the full report: specifics (files changed/reviewed with paths, findings with file:line, verification evidence — commands / test counts / lint), key decisions and reuse, and a final "### Deferred Items" table (even if empty). It is the durable record future agents read — make it DETAILED, not a summary. Keep the OTHER structured fields small (status + counts + one-line summary); the prose lives in report_md.`
+}
+
+// Reliable Linear delivery. The workflow JS sandbox cannot call MCP, so it dispatches a thin poster
+// agent whose ONLY job is the Linear write: optionally transition status, then create ONE comment with
+// the phase's report_md under its canonical header. Wrapped in safeAgent so a transient failure retries
+// (v5.3); a hard failure is logged + tallied in linearPosts (surfaced in the summary) and NEVER aborts
+// the ticket. This is the structural analogue of commands/execute-ticket.md §3.6 + the
+// swarm-phase-reporting skill, which the prior self-post left to unenforced agent prose.
+const linearPosts = { attempted: 0, posted: 0, failed: 0, skipped: 0 }
+async function postPhase(t, header, body, opts = {}) {
+  const state = opts.state // 'In Progress' | 'Done' | undefined
+  const text = body && String(body).trim() ? String(body).trim() : ''
+  if (!text && !state) { linearPosts.skipped++; log(`WARN ${t.id} ${header}: no report content to post (worker returned none) — skipping Linear post.`); return { posted: false } }
+  // Guarantee the canonical header anchors the comment (/close-epic + resume detection key on it),
+  // even if a worker forgot to lead report_md with it. When we are transitioning state but the worker
+  // returned NO report (text empty — only reachable with a state, since the no-text/no-state case
+  // already returned above), post a minimal placeholder rather than flipping the ticket to its new
+  // state with a blank comment: a status change with no explanation (e.g. "In Progress" on a phase
+  // about to be recorded BLOCKED) reads as contradictory to an operator. The placeholder leaves a trail.
+  const commentBody = text
+    ? (text.startsWith(header) ? text : `${header}\n\n${text}`)
+    : `${header}\n\n_(No written report was returned for this phase; the ticket state was updated. See the run summary or later comments for detail.)_`
+  linearPosts.attempted++
+  const r = await safeAgent(
+    `Linear bookkeeping for ${t.id} — you are a POSTER, not a worker: do EXACTLY the steps below and nothing else. ${LINEAR_NOTE}
+${state ? `- Set ticket ${t.id} state to "${state}" in Linear (skip if it is already "${state}" or a later state).\n` : ''}${commentBody ? `- IDEMPOTENCY FIRST: read the existing comments on ${t.id}. If one of them ALREADY contains the exact comment body below (verbatim — this whole post may be a transient RE-DISPATCH of one that already landed but whose response was lost), do NOT create a second copy: return posted=true with note="already present". Otherwise:
+- Create ONE comment on ${t.id} whose body is EXACTLY the text between the markers (verbatim — do NOT summarize, reformat, or add anything except the trailing footer line):
+-----BEGIN COMMENT-----
+${commentBody}
+
+*Automated by /epic-swarm-workflow*
+-----END COMMENT-----
+` : ''}Return posted=true ONLY if the comment was created OR an identical one already existed (or, when there is no comment to post, the state change succeeded); on a genuine Linear error return posted=false with the cause in note. Do not fail loudly.`,
+    { schema: POST_SCHEMA, label: `linear ${header.replace(/^#+\s*/, '').replace(/\s*Report.*/, '')} ${t.id}`, phase: opts.phase || 'Report', model: ROUTE.merge },
+  )
+  if (r && r.posted) linearPosts.posted++
+  else { linearPosts.failed++; log(`WARN ${t.id} ${header}: Linear post FAILED — ${r ? (r.note || 'not posted') : 'no result'} (the report is retained in the run summary's results).`) }
+  return r || { posted: false }
 }
 
 function acBlock(t) {
@@ -296,11 +358,18 @@ const PLAN_SCHEMA = {
     excluded: { type: 'array', items: { type: 'object' } },
   },
 }
+// The FULL markdown report for a phase. Returned as structured data (NOT posted by the agent) so the
+// workflow's poster (postPhase) can write it to Linear reliably — the orchestrator-agent pattern of
+// /execute-ticket (commands/execute-ticket.md §3.6) and the swarm-phase-reporting skill, which require
+// the durable per-phase audit trail future agents read. Making it a schema field means the report can
+// never be silently lost the way a buried self-post instruction was.
+const REPORT_MD = { type: 'string', description: 'FULL markdown report for this phase (the workflow posts it to Linear for you — do NOT post a comment yourself). Begin with the canonical "## … Report" header, then specifics: files changed/reviewed with paths, findings with file:line, verification evidence (commands/test counts/lint), decisions and reuse, and end with a "### Deferred Items" table (even if empty). This is the durable record future agents read — detailed, NOT a summary.' }
 const WORK_SCHEMA = {
-  type: 'object', required: ['status', 'summary', 'committed'],
+  type: 'object', required: ['status', 'summary', 'committed', 'report_md'],
   properties: {
-    status: { type: 'string', enum: ['COMPLETE', 'BLOCKED', 'NEEDS_CONTEXT', 'ISSUES_FOUND'], description: 'COMPLETE | BLOCKED | NEEDS_CONTEXT | ISSUES_FOUND' },
-    summary: { type: 'string', description: 'ONE-LINE summary (full report is in the Linear comment you posted)' },
+    status: { type: 'string', enum: ['COMPLETE', 'BLOCKED', 'NEEDS_CONTEXT', 'ISSUES_FOUND', 'ENV_BLOCKED'], description: 'COMPLETE | BLOCKED | NEEDS_CONTEXT | ISSUES_FOUND | ENV_BLOCKED (the test/build runner could NOT execute at all — tooling/PATH/codegen/lockfile error, distinct from tests that ran and failed)' },
+    summary: { type: 'string', description: 'ONE-LINE summary (the full report goes in report_md)' },
+    report_md: REPORT_MD,
     files_changed: { type: 'array', items: { type: 'string' } },
     write_calls: { type: 'integer' }, edit_calls: { type: 'integer' },
     no_code: { type: 'boolean', description: 'true if this ticket legitimately needs no implementation-phase code (pure verification/test-only/doc-only)' },
@@ -309,41 +378,50 @@ const WORK_SCHEMA = {
   },
 }
 const REVIEW_SCHEMA = {
-  type: 'object', required: ['status'],
+  type: 'object', required: ['status', 'report_md'],
   properties: {
     status: { type: 'string', enum: ['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED'], description: 'APPROVED | CHANGES_REQUESTED | BLOCKED' },
     blocking_findings: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string' }, file: { type: 'string' }, issue: { type: 'string' } } } },
     security_status: { type: 'string', enum: ['PASS', 'FAIL'], description: 'SMALL/NO-CODE combined review only: PASS | FAIL for the folded security sanity' },
     convention_guard: { type: 'string', enum: ['NOT_APPLICABLE', 'GUARD_SHIPPED', 'PROSE_ONLY_TAGGED', 'MISSING'], description: 'optional summary of the convention-guard check; MISSING must also appear as a blocking_finding with status CHANGES_REQUESTED (the gate keys on status, not this field)' },
+    report_md: REPORT_MD,
   },
 }
 // Combined code+security review (NO-CODE / SMALL): security_status is REQUIRED so the
 // folded security floor can never pass by omission — the gate demands an explicit PASS.
 const COMBINED_REVIEW_SCHEMA = {
-  type: 'object', required: ['status', 'security_status'],
+  type: 'object', required: ['status', 'security_status', 'report_md'],
   properties: REVIEW_SCHEMA.properties,
 }
 const SECURITY_SCHEMA = {
-  type: 'object', required: ['status'],
+  type: 'object', required: ['status', 'report_md'],
   properties: {
     status: { type: 'string', enum: ['APPROVED', 'CHANGES_REQUIRED', 'BLOCKED'], description: 'APPROVED (PASS, zero CRITICAL/HIGH) | CHANGES_REQUIRED | BLOCKED (FAIL)' },
     critical_high_count: { type: 'integer' },
+    report_md: REPORT_MD,
   },
 }
 const CODEX_SCHEMA = {
   type: 'object', required: ['status'],
-  properties: { status: { type: 'string', enum: ['COMPLETE', 'RATE_LIMITED', 'UNAVAILABLE'], description: 'COMPLETE | RATE_LIMITED | UNAVAILABLE' }, auto_fixed_count: { type: 'integer' } },
+  // report_md is optional here: RATE_LIMITED / UNAVAILABLE codex runs produce no real report to post.
+  properties: { status: { type: 'string', enum: ['COMPLETE', 'RATE_LIMITED', 'UNAVAILABLE'], description: 'COMPLETE | RATE_LIMITED | UNAVAILABLE' }, auto_fixed_count: { type: 'integer' }, report_md: REPORT_MD },
 }
 const MERGE_SCHEMA = {
   type: 'object', required: ['status'],
   properties: {
     status: { type: 'string', enum: ['MERGED', 'CONFLICT', 'TEST_FAILED', 'SKIPPED'], description: 'MERGED | CONFLICT | TEST_FAILED | SKIPPED' },
-    integration_tests: { type: 'string', description: 'PASS | NEW_FAILURES | NONE' },
+    integration_tests: { type: 'string', description: 'PASS | NEW_FAILURES | NONE | ENV_BLOCKED (the runner could not execute — merge aborted, not verified)' },
     new_failures: { type: 'array', items: { type: 'string' }, description: 'tests failing now whose FULL identifier is NOT in the baseline' },
     current_failures: { type: 'array', items: { type: 'string' }, description: 'ALL tests failing on the merged tree (full identifiers) — used to refresh the baseline after a clean merge' },
     ticket_closed: { type: 'boolean' }, notes: { type: 'string' },
+    // No report_md here: the Integration Report is built in JS from the structured fields above
+    // (status / integration_tests / new_failures / ticket_closed / notes) and delivered via
+    // postPhase — the merge agents never self-post, so a free-text report would be generated at
+    // output-token cost and then silently discarded. Detail that belongs on Linear goes in `notes`.
   },
 }
+// Poster result: the dedicated Linear-delivery agent reports only whether the comment landed.
+const POST_SCHEMA = { type: 'object', required: ['posted'], properties: { posted: { type: 'boolean' }, comment_url: { type: 'string' }, note: { type: 'string' } } }
 const PR_SCHEMA = { type: 'object', required: ['status'], properties: { status: { type: 'string' }, pr_url: { type: 'string' } } }
 
 // Single fail-closed gate: a phase advances ONLY if its result exists AND its status is in the
@@ -352,15 +430,32 @@ const PR_SCHEMA = { type: 'object', required: ['status'], properties: { status: 
 const gate = (result, ...allowed) => !!result && allowed.includes(result.status)
 
 // ── safeAgent: no single agent failure may abort the run. ───────────────────
+// Default bounded RE-DISPATCH on a transient miss. safeAgent returns the null sentinel both when
+// agent() THROWS and when the runtime gives up on a terminal API error after its OWN internal retries
+// (e.g. a mid-response "Connection closed"). A fresh re-dispatch gets clean context and usually
+// succeeds, so by default we try once more before falling back — the 2026-06-23 run was halted when a
+// single "Connection closed mid-response" on a testing agent (no retry) blocked the ticket and
+// cascade-skipped both of its dependents. A real (non-null) report returns IMMEDIATELY, so the extra
+// dispatch only ever happens on an actual failure. Pass opts.retries to override (e.g. retries:0 to
+// disable, as the resolve pre-flight does because it owns a dedicated 3x loop). Fail-closed semantics
+// are unchanged: after the retries are exhausted, the caller still receives the fallback sentinel.
+const DEFAULT_AGENT_RETRIES = 1
 async function safeAgent(prompt, opts, fallback = null) {
-  try {
-    const r = await agent(prompt, opts)
-    return r == null ? fallback : r
-  } catch (e) {
-    const msg = e && e.message ? e.message : String(e)
-    log(`WARN agent [${opts && opts.label}] failed: ${msg.slice(0, 160)} — continuing with sentinel`)
-    return fallback
+  const retries = opts && Number.isInteger(opts.retries) ? Math.max(0, opts.retries) : DEFAULT_AGENT_RETRIES
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const r = await agent(prompt, opts)
+      if (r != null) return r
+      if (attempt < retries) { log(`WARN agent [${opts && opts.label}] returned no result — re-dispatching (attempt ${attempt + 2}/${retries + 1}; transient?).`); continue }
+      return fallback
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e)
+      if (attempt < retries) { log(`WARN agent [${opts && opts.label}] threw: ${msg.slice(0, 140)} — re-dispatching (attempt ${attempt + 2}/${retries + 1}; transient?).`); continue }
+      log(`WARN agent [${opts && opts.label}] failed: ${msg.slice(0, 160)} — continuing with sentinel`)
+      return fallback
+    }
   }
+  return fallback
 }
 
 // Release the epic lock via a tiny agent (the workflow JS sandbox has no shell of its own). Used
@@ -380,20 +475,39 @@ async function releaseEpicLock(lockPath) {
 // Case-INSENSITIVE: a lowercased id (`pro-1592`) is accepted and upper-cased at capture (normalizeEpicId),
 // so it matches Linear's canonical identifier and every downstream comparison — get_issue is itself
 // case-insensitive, so rejecting `pro-1592` outright would be a needless usability regression.
+/* test-export:begin (pure arg/path helpers — unit-tested by epic-swarm-workflow.test.mjs; keep self-contained, no runtime globals) */
 const ID_RE = /^[A-Z][A-Z0-9]*-\d+$/i
+// Strip leading/trailing NON-alphanumeric edges from a token so the natural punctuation an operator or
+// assistant writes around an id ("PRO-1653.", "PRO-1653,", "(PRO-1653)", "#PRO-1653") still resolves to
+// the id. The INTERNAL hyphen of a Linear id is preserved — only the edges are trimmed.
+const stripEdgePunct = (s) => String(s == null ? '' : s).replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '')
+// Leading label word an operator/assistant naturally puts before the id ("Epic: PRO-1653 …"). When it
+// is the FIRST token AND the VERY NEXT token is a real id, the label is unwrapped as noise. This is
+// narrow on purpose: it never scans deeper for a buried id, so the 2026-06-22 wrong-target footgun
+// (an id mentioned somewhere inside a guidance sentence becoming the target) stays closed.
+// ONLY 'epic' is a target-introducing label. 'ticket'/'story'/'issue' were dropped (v5.3.1): they
+// routinely introduce a REFERENCE id, not the target ("ticket PRO-42 is blocked, run epic PRO-99"),
+// so unwrapping them silently captured the WRONG id as the epic. Now such phrasings fail closed
+// (epicId stays null → the usage error fires) rather than hijack the run — a clear error beats a
+// silent wrong-target swarm. "epic" alone is unambiguous: whoever writes "epic PRO-99" means PRO-99.
+const EPIC_LABEL = new Set(['epic'])
 // Validate, normalize, and conflict-check an epic-ID candidate. Linear identifiers are canonical
 // upper-case; two DIFFERENT ids (a positional token and a --epic flag) are a usage error rather than a
 // silent last-wins — silently picking one would be exactly the wrong-target footgun these guards exist to kill.
+// Edge punctuation is tolerated (stripEdgePunct) so "--epic PRO-1653." and a leading "Epic: PRO-1653." both work.
 function normalizeEpicId(current, raw, source) {
-  if (raw == null || !ID_RE.test(raw)) throw new Error(`epic-swarm-workflow: ${source} requires a Linear issue ID like PRO-1592 (got ${raw == null ? 'no value' : `"${raw}"`}).`)
-  const id = raw.toUpperCase()
+  const cand = stripEdgePunct(raw)
+  if (!cand || !ID_RE.test(cand)) throw new Error(`epic-swarm-workflow: ${source} requires a Linear issue ID like PRO-1592 (got ${raw == null ? 'no value' : `"${raw}"`}).`)
+  const id = cand.toUpperCase()
   if (current && current !== id) throw new Error(`epic-swarm-workflow: conflicting epic IDs — ${current} and ${id}. Specify the epic exactly once (as the first argument OR via --epic).`)
   return id
 }
+/* test-export:end */
 // Free text after the epic ID is NOT dropped (it used to be — see RC-4): it becomes
 // operator GUIDANCE threaded into every code-touching agent prompt. So
 // `/epic-swarm-workflow PRO-1667 make every agent load the arize phoenix skills` reaches
 // the agents instead of vanishing. --skills/--guidance/--context-file are the explicit forms.
+/* test-export:begin */
 function parseArgs(a) {
   const flags = { dryRun: false, push: false, inPlace: false, maxTickets: Infinity, skills: [], contextFile: null, guidance: '' }
   let epicId = null
@@ -443,7 +557,16 @@ function parseArgs(a) {
         // epicId stays null, and the usage error below fires. We do NOT scan later tokens for an ID, so a
         // "PRO-1621" buried in a guidance sentence can never become the target (incident 2026-06-22).
         // normalizeEpicId surfaces a conflict if --epic already set a DIFFERENT id (no silent last-wins).
-        if (ID_RE.test(tk)) epicId = normalizeEpicId(epicId, tk, 'the epic argument')
+        const cand = stripEdgePunct(tk)
+        const next = toks[i + 1]
+        if (ID_RE.test(cand)) epicId = normalizeEpicId(epicId, tk, 'the epic argument')
+        // Tolerate a leading label DIRECTLY followed by the id ("Epic: PRO-1653 …" / "ticket PRO-42") —
+        // the exact phrasing that captured "Epic:" as the epic in the 2026-06-23 incident. Consume BOTH
+        // the label (noise, not guidance) and the id. Still narrow: requires the id to be the NEXT token,
+        // so it never reopens the buried-id hole the strict-first-token rule closed.
+        else if (EPIC_LABEL.has(cand.toLowerCase()) && next != null && ID_RE.test(stripEdgePunct(next))) {
+          epicId = normalizeEpicId(epicId, next, 'the epic argument'); i++
+        }
         else guidanceToks.push(tk)
       }
       else guidanceToks.push(tk)   // free text after the epic ID, or an unrecognized --flag: keep it (threaded as guidance + warned below), never drop
@@ -452,8 +575,10 @@ function parseArgs(a) {
   } else if (a && typeof a === 'object') {
     epicId = a.epicId || a.epic || a.id || null
     if (epicId != null) {
-      if (!ID_RE.test(String(epicId))) throw new Error(`epic-swarm-workflow: epic ID "${epicId}" is not a Linear issue ID like PRO-1592.`)
-      epicId = String(epicId).toUpperCase()   // normalize to Linear's canonical upper-case (parity with the string path)
+      firstPositional = String(epicId)
+      const cand = stripEdgePunct(epicId)   // tolerate edge punctuation, parity with the string path
+      if (!cand || !ID_RE.test(cand)) throw new Error(`epic-swarm-workflow: epic ID "${epicId}" is not a Linear issue ID like PRO-1592.`)
+      epicId = cand.toUpperCase()   // normalize to Linear's canonical upper-case (parity with the string path)
     }
     if (a.dryRun) flags.dryRun = true
     if (a.push) flags.push = true
@@ -471,12 +596,25 @@ function parseArgs(a) {
       flags.maxTickets = n
     }
   }
-  return { epicId, flags }
+  return { epicId, flags, firstPositional }
 }
-const { epicId, flags } = parseArgs(args)
-if (!epicId) throw new Error('epic-swarm-workflow: missing or invalid epic ID — the epic must be a Linear issue ID like PRO-42, given as the FIRST argument or via --epic <ID>. A descriptive phrase is not accepted as the epic. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]')
+/* test-export:end */
+const { epicId, flags, firstPositional } = parseArgs(args)
+if (!epicId) throw new Error(`epic-swarm-workflow: missing or invalid epic ID — the epic must be a Linear issue ID like PRO-42, given as the FIRST argument or via --epic <ID>.${firstPositional ? ` The first argument "${firstPositional}" is not a Linear issue ID — pass the bare id FIRST (e.g. "PRO-42 <guidance>"); a label like "Epic:" is only accepted when it DIRECTLY precedes the id ("Epic: PRO-42").` : ''} A descriptive phrase is not accepted as the epic. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]`)
 if (flags.maxTickets === 0) throw new Error('epic-swarm-workflow: --max-tickets 0 would process no tickets. Omit the flag to run all tickets, or pass a positive count (e.g. --max-tickets 1).')
 
+/* test-export:begin */
+// A repo/worktree path is "tooling-safe" iff it has NO ':' (the delimiter the package manager splits
+// PATH on — a ':' in the path makes pnpm refuse to add node_modules/.bin to PATH: ERR_PNPM_BAD_PATH_DIR)
+// and NO ASCII control char. Spaces are fine (every command quotes its paths); ':' is NOT, because it
+// breaks inside the package manager's OWN PATH assembly, which quoting can't fix. The 2026-06-23 "Epic:"
+// incident poisoned the integration tree with a ':' and the run limped on a broken environment.
+function isShellSafePath(p) {
+  if (typeof p !== 'string' || p.length === 0) return false
+  if (p.includes(':')) return false                                          // PATH delimiter → ERR_PNPM_BAD_PATH_DIR
+  for (let i = 0; i < p.length; i++) if (p.charCodeAt(i) < 0x20) return false // ASCII control char
+  return true
+}
 // Single source of truth for a ticket's worktree path AND feature branch name —
 // used by setup, merge, and cleanup so the three can never drift apart.
 function ticketRefs(root, t) {
@@ -485,8 +623,10 @@ function ticketRefs(root, t) {
   // `git worktree add -b feature/<id>-<slug>` fail AND split the surrounding shell args. Lowercase,
   // keep only [a-z0-9], collapse runs to a single '-', trim leading/trailing '-', fall back to 'work'.
   const slug = String(t.slug || 'work').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'work'
+  // t.id is ID-validated before it reaches here (the dedup loop drops a non-ID id), so it is path-safe.
   return { wt: `${root}/.swarm/worktrees/${t.id}`, branch: `feature/${t.id}-${slug}` }
 }
+/* test-export:end */
 
 function wtSetup(root, epicBranch, t) {
   const { wt, branch } = ticketRefs(root, t)
@@ -617,7 +757,7 @@ If it does NOT resolve (404 / not found / wrong workspace), return resolved=fals
 // v2 resilience layer exists to survive). A REAL answer (resolved true OR false) is definitive — stop at once.
 let resolve = null
 for (let attempt = 1; attempt <= 3; attempt++) {
-  resolve = await safeAgent(resolvePrompt, { schema: RESOLVE_SCHEMA, label: `resolve ${epicId}${attempt > 1 ? ` (retry ${attempt - 1})` : ''}`, phase: 'Setup', model: ROUTE.setup })
+  resolve = await safeAgent(resolvePrompt, { schema: RESOLVE_SCHEMA, label: `resolve ${epicId}${attempt > 1 ? ` (retry ${attempt - 1})` : ''}`, phase: 'Setup', model: ROUTE.setup, retries: 0 })
   if (resolve != null) break
   if (attempt < 3) log(`WARN resolve pre-flight attempt ${attempt} returned no result (transient?) — retrying.`)
 }
@@ -661,7 +801,12 @@ Return branch, dirty, default_branch.`,
 }
 
 const [setup, plan] = await parallel([
-  () => safeAgent(setupPrompt, { schema: SETUP_SCHEMA, label: `setup ${epicId}`, phase: 'Setup', model: ROUTE.setup }),
+  // setup is NON-idempotent: it acquires the epic lock via atomic `mkdir <lock>` and creates the
+  // worktree. retries:0 — a transient re-dispatch would self-collide on the lock its OWN first attempt
+  // just created, return LOCKED, and abort the valid run with a false "already owned by another live
+  // run" error AND orphan the lock for 24h. A genuine miss aborts cleanly (operator re-runs). plan is
+  // read-only/idempotent, so it keeps safeAgent's default transient retry.
+  () => safeAgent(setupPrompt, { schema: SETUP_SCHEMA, label: `setup ${epicId}`, phase: 'Setup', model: ROUTE.setup, retries: 0 }),
   () => safeAgent(planPrompt, { schema: PLAN_SCHEMA, label: `plan ${epicId}`, phase: 'Setup', model: ROUTE.plan }),
 ])
 
@@ -677,6 +822,17 @@ const MAIN_REPO = setup.main_repo || REPO_ROOT // the user's main working tree; 
 const LOCK_PATH = setup.lock_path || ''     // epic lock to release in the finalize step ('' in dry run / --in-place legacy where setup didn't report it)
 const MAIN_HEAD_SHA = setup.main_repo_head_sha || '' // MAIN_REPO HEAD captured at setup; asserted UNCHANGED at finalize in ISO mode (Defect 1 deterministic guard)
 const MAIN_BRANCH = setup.main_repo_branch || ''     // MAIN_REPO branch captured at setup
+// PATH-SAFETY (defense in depth behind the ID_RE arg guard). The arg parser already stops a colon from
+// entering epicId, but REPO_ROOT also embeds MAIN_REPO (the FIRST path from `git worktree list`), so a
+// user whose CLONE lives under a ':'-bearing path would hit the identical ERR_PNPM_BAD_PATH_DIR wall for
+// a perfectly VALID epic. Fail fast here — before any per-ticket worktree/install — with the lock
+// released, rather than letting a setup agent route around a broken environment (the 2026-06-23 mode).
+for (const [name, p] of [['integration tree (repo_root)', REPO_ROOT], ['main repo', MAIN_REPO]]) {
+  if (!isShellSafePath(p)) {
+    await releaseEpicLock(LOCK_PATH)
+    throw new Error(`epic-swarm-workflow: ${name} path ${JSON.stringify(p)} contains a character hostile to build tooling — most often ':', which the package manager refuses in PATH (ERR_PNPM_BAD_PATH_DIR). Move the repository to a path without ':' (or control chars) and re-run. Nothing was created beyond setup, and the epic lock was released.`)
+  }
+}
 // Setup has acquired the lock (status OK). From here until the finalize step ANY abort must release
 // it first, or re-running this epic is refused until the 24h staleness (RC-1 lock-leak regression).
 // The per-ticket loop is try/caught (so a ticket throw can't escape here); the no-tickets throw is
@@ -698,6 +854,23 @@ if (planEpicId.toUpperCase() !== String(epicId).toUpperCase()) {
 const EPIC_BRANCH = setup.epic_branch || `epic/${epicId}`
 const DEFAULT_BRANCH = setup.default_branch || 'main' // PR base; default_branch is now REQUIRED in SETUP_SCHEMA, the 'main' fallback only guards an empty string
 const TEST_CMD = setup.test_cmd || ''
+// Integrity check: the setup agent is told to bake the ABSOLUTE REPO_ROOT into the test command's
+// DIRECTORY flag (so the merge gate and the per-ticket full-suite run target the INTEGRATION tree, not
+// whatever cwd they run from). If a detected command does not POINT its directory at REPO_ROOT, the merge
+// gate may silently test the WRONG tree — exactly 2026-06-23, where the colon broke `pnpm -C` so the
+// agent emitted a dir-flag-less command that baselined the MAIN repo. A plain substring check is too
+// weak: REPO_ROOT appearing only in a `--outputFile <REPO_ROOT>/.swarm/...` tee/reporter path would
+// satisfy it while the actual directory flag still aimed elsewhere. So require REPO_ROOT in a real
+// directory-targeting position — right after a known dir flag (pnpm/go -C, npm --prefix, yarn --cwd,
+// cargo --manifest-path, pytest --rootdir, …) OR as a standalone path ARGUMENT (pytest's bare path),
+// i.e. a whole token, NOT a value that continues into a subpath like the .swarm output dir. The check
+// errs toward UNTRUSTED (it never reports a wrong-tree gate as trusted): a pytest subpath arg may warn
+// spuriously, which is the safe direction for an integrity guard.
+const escRoot = REPO_ROOT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const ROOT_IN_DIR_FLAG = new RegExp(`(^|\\s)(-C|--prefix|--cwd|--dir|--directory|--root|--rootdir|--manifest-path|--project-directory|--config-dir)[ =]${escRoot}(\\b|/|$)`)
+const ROOT_AS_BARE_ARG = new RegExp(`(^|\\s)${escRoot}(\\s|$)`)
+const TEST_CMD_TARGETS_ROOT = !TEST_CMD || ROOT_IN_DIR_FLAG.test(TEST_CMD) || ROOT_AS_BARE_ARG.test(TEST_CMD)
+if (TEST_CMD && !TEST_CMD_TARGETS_ROOT) log(`WARN detected test command does not reference the integration tree (${REPO_ROOT}): "${TEST_CMD}". The merge gate and per-ticket full-suite run may execute against the WRONG directory — treat integration verification as UNTRUSTED for this run.`)
 // Full operator-guidance block for the per-ticket workers (RC-4). The planner already received
 // GUIDANCE_BASE; this also folds in any --context-file contents the setup agent read.
 const GUIDANCE = (() => {
@@ -717,6 +890,11 @@ const dedupTickets = []
 const seenPlanIds = new Set()
 for (const t of plan.tickets) {
   const id = String(t.id)
+  // Drop a non-Linear-ID ticket id BEFORE it reaches a worktree path (`.swarm/worktrees/<id>`): it
+  // cannot be a real ticket (so Linear ops on it would fail anyway) and a metachar-bearing id would
+  // poison the path the same way the epic "Epic:" did. Validate; never sanitize-and-keep (that would
+  // desync the path from the Linear id used to close the ticket).
+  if (!ID_RE.test(id)) { log(`WARN planner emitted ticket id "${id}" that is not a Linear issue ID — excluding it (cannot be a real ticket; would poison its worktree path).`); continue }
   if (seenPlanIds.has(id)) { log(`WARN planner emitted duplicate ticket id ${id} — keeping the first, ignoring the duplicate.`); continue }
   seenPlanIds.add(id); dedupTickets.push(t)
 }
@@ -779,9 +957,11 @@ async function mergeTicket(t, ticketResult, expectsCode) {
 ${SHELL_RULES}
 
 1. Safety: FIRST clear any leftover in-progress merge from a prior interrupted run — \`git -C ${REPO_ROOT} merge --abort\` (ignore the error if there is no merge in progress); then confirm NOT on main/master and \`git -C ${REPO_ROOT} checkout ${EPIC_BRANCH}\`.
-2. Empty-diff pre-check: \`git -C ${REPO_ROOT} diff --stat ${EPIC_BRANCH}...${branch}\`. ${emptyDiffStep}
+2. Idempotency + empty-diff pre-check.
+   a. ALREADY-INTEGRATED check (a prior dispatch of THIS merge may have committed+closed but lost its response — re-merging would then read the now-empty diff as a block and DISCARD merged work): if BOTH \`git -C ${REPO_ROOT} merge-base --is-ancestor ${branch} ${EPIC_BRANCH}\` exits 0 (the branch tip is reachable from ${EPIC_BRANCH}) AND \`git -C ${REPO_ROOT} log ${EPIC_BRANCH} --oneline --grep "${t.id}"\` lists a commit (this ticket's own commits or its merge commit are already on ${EPIC_BRANCH}), the work is ALREADY integrated. Do NOT re-merge: set STATUS = MERGED, integration_tests = NONE, notes "already integrated by a prior dispatch — idempotent re-merge skipped"; set ${t.id} to "Done" in Linear if not already (ticket_closed=true ONLY if that succeeds; on a Linear error leave it false and CONTINUE); go to step 7. (Both conditions are required: the ancestor check alone also matches an empty never-merged branch, and the grep alone could match a coincidental mention — together they mean THIS ticket's work landed.)
+   b. Otherwise, empty-diff pre-check: \`git -C ${REPO_ROOT} diff --stat ${EPIC_BRANCH}...${branch}\`. ${emptyDiffStep}
 3. Dry-merge (no commit yet): \`git -C ${REPO_ROOT} merge --no-ff --no-commit ${branch}\`. If CONFLICT: \`git -C ${REPO_ROOT} merge --abort\`, set STATUS = CONFLICT, go to step 7.
-4. ${TEST_CMD ? `Run integration tests on the merged tree: \`${TEST_CMD}\` (this command already includes its directory flag — run it VERBATIM, do NOT prepend cd; tee its output to \`${REPO_ROOT}/.swarm/test-results/${t.id}-merge.txt\` after \`mkdir -p ${REPO_ROOT}/.swarm/test-results\`, so THIS ticket's failure evidence is NOT overwritten by the next ticket's merge — do not rely on any shared/default reporter path). Record current_failures = the FULL set of tests failing now (full identifiers: file + test name). Compare against this BASELINE of pre-existing failures captured before any merge:
+4. ${TEST_CMD ? `Run integration tests on the merged tree: \`${TEST_CMD}\` (this command already includes its directory flag — run it VERBATIM, do NOT prepend cd; tee its output to \`${REPO_ROOT}/.swarm/test-results/${t.id}-merge.txt\` after \`mkdir -p ${REPO_ROOT}/.swarm/test-results\`, so THIS ticket's failure evidence is NOT overwritten by the next ticket's merge — do not rely on any shared/default reporter path). ENV vs FAILURE FIRST: if the runner cannot execute at all — it errors BEFORE running any test (tooling/PATH/codegen/lockfile/missing-binary), e.g. \`ERR_PNPM_BAD_PATH_DIR\` or "vitest: command not found" — that is an ENVIRONMENT hazard, NOT a clean merge and NOT a test failure: \`git -C ${REPO_ROOT} merge --abort\`, set STATUS = TEST_FAILED, integration_tests = ENV_BLOCKED, leave new_failures EMPTY, put the exact runner error in notes, do NOT commit and do NOT close the ticket, go to step 7. "Tests ran and some failed" is the new_failures path below; "tests could not run at all" is ENV_BLOCKED — NEVER commit a merge whose suite never executed. Record current_failures = the FULL set of tests failing now (full identifiers: file + test name). Compare against this BASELINE of pre-existing failures captured before any merge:
 ${baselineList}
    ${NEW_FAILURES_RULE}
    - If new_failures is EMPTY: commit the merge (\`git -C ${REPO_ROOT} commit --no-edit\`), STATUS = MERGED, integration_tests = PASS (note any pre-existing failures you ignored), and return current_failures.
@@ -817,7 +997,7 @@ ${SHELL_RULES}${PROD}
 NEW failures to resolve (full identifiers):
 ${(merge.new_failures || []).map((f) => `   - ${f}`).join('\n')}
 
-1. Safety: FIRST clear any leftover in-progress merge — \`git -C ${REPO_ROOT} merge --abort\` (ignore the error if none); then confirm NOT on main/master and \`git -C ${REPO_ROOT} checkout ${EPIC_BRANCH}\`.
+1. Safety: FIRST clear any leftover in-progress merge — \`git -C ${REPO_ROOT} merge --abort\` (ignore the error if none); then confirm NOT on main/master and \`git -C ${REPO_ROOT} checkout ${EPIC_BRANCH}\`. Then ALREADY-INTEGRATED check (a prior fix-forward dispatch may have committed the re-merged fixes but lost its response): if BOTH \`git -C ${REPO_ROOT} merge-base --is-ancestor ${branch} ${EPIC_BRANCH}\` exits 0 AND \`git -C ${REPO_ROOT} log ${EPIC_BRANCH} --oneline --grep "${t.id}"\` lists a commit, this ticket is ALREADY integrated: set STATUS = MERGED, integration_tests = PASS, notes "already integrated by a prior fix-forward dispatch — idempotent skip", set ${t.id} to "Done" if not already (ticket_closed accordingly; Linear error → false + CONTINUE), and go to step 6. Do NOT re-merge.
 2. Re-merge WITHOUT committing: \`git -C ${REPO_ROOT} merge --no-ff --no-commit ${branch}\`. If CONFLICT: \`git -C ${REPO_ROOT} merge --abort\`, STATUS = CONFLICT, go to step 6.
 3. FIX the NEW failures in ${REPO_ROOT} at the ROOT cause: update the un-updated mock factories / fixtures / importers so they match this ticket's exported surface. NEVER delete or skip a test, weaken an assertion, or hard-code a value to make it pass. If a failure can only be resolved by changing real SOURCE logic (not test infrastructure), be conservative: make the change ONLY if it is unambiguously correct and small; otherwise this is a real bug needing human review (NOT a fix-forward case) — \`git -C ${REPO_ROOT} merge --abort\` so NO half-merged tree is left (REPO_ROOT is the SHARED integration tree the next ticket merges into), set STATUS = TEST_FAILED, name the failure(s) in new_failures, and go to step 6.
 4. Re-run integration tests on the merged tree: \`${TEST_CMD}\` (run VERBATIM, no cd; tee to \`${REPO_ROOT}/.swarm/test-results/${t.id}-mergefix.txt\` after \`mkdir -p ${REPO_ROOT}/.swarm/test-results\`). current_failures = ALL tests failing now (full identifiers), compared to this BASELINE:
@@ -825,7 +1005,7 @@ ${baselineList}
    ${NEW_FAILURES_RULE}
    - new_failures EMPTY → stage your fixes WITHOUT sweeping untracked scratch: \`git -C ${REPO_ROOT} add -u\` (tracked-file edits) plus \`git -C ${REPO_ROOT} add <path>\` for any NEW test file you created — do NOT \`git add -A\` (it would absorb the gitignored .swarm/ tree or other untracked scratch into the merge commit). Then \`git -C ${REPO_ROOT} commit --no-edit\` (the merge commit now carries your fixes), STATUS = MERGED, integration_tests = PASS, return current_failures.${flags.push ? ` Then \`git -C ${REPO_ROOT} push origin ${EPIC_BRANCH}\`.` : ''}
    - new_failures NON-EMPTY (not fixable in one pass) → \`git -C ${REPO_ROOT} merge --abort\`, STATUS = TEST_FAILED, list them in new_failures, go to step 6. Do NOT close the ticket.
-5. If STATUS = MERGED: set ${t.id} to "Done" in Linear, ticket_closed=true ONLY if that succeeds. ${LINEAR_NOTE} On a Linear error leave it false and CONTINUE (the code is merged). Then post ONE brief Linear comment on ${t.id} headed "${H.integration} (merge fix-forward)" listing the files you fixed and why; if Linear is unavailable, log and continue.
+5. If STATUS = MERGED: set ${t.id} to "Done" in Linear, ticket_closed=true ONLY if that succeeds. ${LINEAR_NOTE} On a Linear error leave it false and CONTINUE (the code is merged). Do NOT create a Linear comment yourself — put a brief list of the files you fixed and why into the \`notes\` field; the workflow delivers the Integration Report (which includes your notes) reliably via its dedicated poster, so a self-posted comment here would be both a duplicate and the silently-droppable self-post this workflow replaced.
 6. Confirm ${REPO_ROOT} is clean and on ${EPIC_BRANCH} (no leftover merge state).
 Return status (MERGED | CONFLICT | TEST_FAILED), integration_tests, new_failures[], current_failures[], ticket_closed, notes.`,
       { schema: MERGE_SCHEMA, label: `merge-fix ${t.id}`, phase: 'Integrate', model: ROUTE.mergeFix },
@@ -842,6 +1022,20 @@ Return status (MERGED | CONFLICT | TEST_FAILED), integration_tests, new_failures
 
   ticketResult.merge = merge ? merge.status : 'NO_REPORT'
   ticketResult.integration_tests = merge ? merge.integration_tests : undefined
+  // Post an Integration Report for the audit trail. Built in JS from the merge result (deterministic —
+  // no reliance on the merge agent to self-post), so every ticket records its merge OUTCOME on Linear
+  // regardless of MERGED / CONFLICT / TEST_FAILED / SKIPPED. (The merge agent still sets status to Done
+  // on a clean merge; this complements it with a durable outcome comment.) Skipped when merge is null.
+  if (merge) {
+    const integ = [
+      `- Outcome: **${merge.status}**`,
+      `- Integration tests: ${merge.integration_tests || 'n/a'}`,
+      (merge.new_failures || []).length ? `- New failures: ${merge.new_failures.join(', ')}` : null,
+      `- Linear close confirmed: ${merge.ticket_closed ? 'yes' : 'no'}`,
+      merge.notes ? `- Notes: ${merge.notes}` : null,
+    ].filter(Boolean).join('\n')
+    await postPhase(t, H.integration, `${H.integration}\n\n${integ}`, { phase: 'Integrate' })
+  }
   if (merge && merge.status === 'MERGED') {
     // The code is integrated on the epic branch. Whether Linear was closed only
     // affects the outcome LABEL — a failed Linear close must NOT block the ticket
@@ -885,7 +1079,7 @@ Return status (MERGED | CONFLICT | TEST_FAILED), integration_tests, new_failures
 // apply ONE fix pass then RE-REVIEW (never rubber-stamp the fixer's self-report). A null
 // re-review keeps the original CHANGES_REQUESTED so the caller's gate fails closed.
 // `prompt` is a (rerun:boolean) => string builder. Returns { review, reReviewed }.
-async function reviewWithFixPass(t, wt, prompt, schema, model, label) {
+async function reviewWithFixPass(t, wt, prompt, schema, model, label, postHeader = H.codereview) {
   let review = await safeAgent(prompt(false), { schema, label: `${label} ${t.id}`, phase: 'Review', model })
   let reReviewed = false
   if (review && review.status === 'CHANGES_REQUESTED' && (review.blocking_findings || []).length) {
@@ -895,10 +1089,12 @@ async function reviewWithFixPass(t, wt, prompt, schema, model, label) {
 ${SHELL_RULES}${PROD}
 FINDINGS:
 ${review.blocking_findings.map((f, i) => `${i + 1}. [${f.severity || '?'}] ${f.file || ''} — ${f.issue || ''}`).join('\n')}
-${selfPost(t, H.codereview + ' (fixes)', false)}
-Return status, summary, write/edit counts, and committed — set committed=true ONLY if you actually committed the fixes (it gates the re-review; reporting it falsely will block the ticket).`,
+${reportBlock(t, H.codereview + ' (fixes)', false)}
+Return status, summary, write/edit counts, committed, and report_md — set committed=true ONLY if you actually committed the fixes (it gates the re-review; reporting it falsely will block the ticket).`,
       { schema: WORK_SCHEMA, label: `review-fix ${t.id}`, phase: 'Review', model: ROUTE.reviewFix },
     )
+    // Post the fix report so the audit trail records WHAT was changed in response to the review.
+    await postPhase(t, H.codereview + ' (fixes)', fix && fix.report_md, { phase: 'Review' })
     // Only re-review if the fixer actually COMMITTED its changes. A fix that reports
     // COMPLETE but committed nothing would have the re-review run against the UNCHANGED
     // diff, where same-model variance could flip CHANGES_REQUESTED → APPROVED and merge
@@ -910,6 +1106,8 @@ Return status, summary, write/edit counts, and committed — set committed=true 
       log(`${t.id} ${label} fix reported COMPLETE but committed=false — NOT re-reviewing; keeping CHANGES_REQUESTED (fail closed).`)
     }
   }
+  // Post the FINAL review report (reliable delivery — the worker returned it as data, the workflow posts it).
+  await postPhase(t, postHeader, review && review.report_md, { phase: 'Review' })
   return { review, reReviewed }
 }
 
@@ -923,11 +1121,16 @@ const looksEmpty = (r) => r && r.status === 'COMPLETE' && !r.no_code && !r.commi
 // implement). NOT used for NO-CODE, where an empty result is a legitimate outcome. The
 // caller re-tests looksEmpty() on the return to block a still-empty result.
 async function buildWithEmptyRetry(prompt, wt, opts) {
-  let r = await safeAgent(prompt, opts)
+  // This wrapper OWNS the re-dispatch for the build/impl tiers: exactly ONE git-verified retry on an
+  // empty-artifact result. Both safeAgent calls opt OUT of safeAgent's own default transient retry
+  // (retries:0) so the two retry layers can't compose — without this, a transient-failing build could
+  // dispatch the expensive Opus implementation agent up to FOUR times for a ticket the operator (and
+  // the --max-tickets budget math) believes gets at most two.
+  let r = await safeAgent(prompt, { ...opts, retries: 0 })
   if (looksEmpty(r)) {
     log(`${opts.label} reported COMPLETE with no committed artifacts — re-dispatching once (will verify against git).`)
     r = await safeAgent(`${prompt}\n\n---\nPRIOR DISPATCH REPORTED NO ARTIFACTS. FIRST verify against git: \`git -C ${wt} diff --stat ${EPIC_BRANCH}...HEAD\` and \`git -C ${wt} status\`. If the work is ALREADY present/committed, do NOT redo it — just report status=COMPLETE with the actual files_changed (from git diff) and committed=true. If it truly needs code, do it now (Write/Edit) and commit. If it genuinely has no code deliverable, set no_code=true and explain.`,
-      { ...opts, label: `${opts.label} (retry)` })
+      { ...opts, label: `${opts.label} (retry)`, retries: 0 })
   }
   return r
 }
@@ -935,7 +1138,7 @@ async function buildWithEmptyRetry(prompt, wt, opts) {
 // Force the build/impl self-report to be git-anchored so a false "committed=true" can't sail
 // through review on an empty diff (caught only at merge today, after a wasted review/security/codex
 // pass). The agent must reconcile its claim against the actual diff during its OWN turn.
-const gitVerify = (wt) => `SELF-VERIFY BEFORE REPORTING (required): run \`git -C ${wt} diff --stat ${EPIC_BRANCH}...HEAD\`. Report committed=true and the real files_changed (from that diff) ONLY if it is NON-EMPTY. If the diff is empty your work did NOT land — do not report COMPLETE+committed=true; either redo the commit or report committed=false with a status that reflects reality.`
+const gitVerify = (wt) => `RE-DISPATCH SAFETY (check FIRST, before writing any code): you may be a fresh retry of an attempt whose response was lost AFTER it already committed. Run \`git -C ${wt} log --oneline -3\` and \`git -C ${wt} diff --stat ${EPIC_BRANCH}...HEAD\`: if THIS ticket's change is ALREADY committed there, do NOT redo or duplicate it — report status=COMPLETE with the real files_changed (from the diff) and committed=true, and stop. SELF-VERIFY BEFORE REPORTING (required): run \`git -C ${wt} diff --stat ${EPIC_BRANCH}...HEAD\`. Report committed=true and the real files_changed (from that diff) ONLY if it is NON-EMPTY. If the diff is empty your work did NOT land — do not report COMPLETE+committed=true; either redo the commit or report committed=false with a status that reflects reality.`
 
 // One review-prompt builder for every tier. Tiers differ only in the intro/role line, the review
 // scope, whether ACs are inlined, and whether the folded security floor (security_status) applies.
@@ -947,7 +1150,7 @@ Review ONLY the diff: \`git -C ${wt} diff --name-only ${EPIC_BRANCH}...HEAD\`.
 ${readTicket(t)}
 ${SHELL_RULES}${includeAc ? `\n${acBlock(t)}` : ''}${GUIDANCE ? `\n${GUIDANCE}\n(Operator guidance above is part of the bar: a change that ignores it — e.g. didn't load a mandated skill, didn't follow a stated convention — is CHANGES_REQUESTED.)` : ''}
 ${scope}
-${selfPost(t, rerun ? H.codereview + ' (re-review)' : H.codereview, false)}${foldSecurity ? '\nALWAYS return security_status explicitly as exactly PASS or FAIL (PASS = zero CRITICAL/HIGH and no behavior/security surface introduced by this change).' : ''}
+${reportBlock(t, rerun ? H.codereview + ' (re-review)' : H.codereview, false)}${foldSecurity ? '\nALWAYS return security_status explicitly as exactly PASS or FAIL (PASS = zero CRITICAL/HIGH and no behavior/security surface introduced by this change).' : ''}
 Return status (${foldSecurity ? 'APPROVED | CHANGES_REQUESTED' : 'APPROVED | CHANGES_REQUESTED | BLOCKED'}), blocking_findings[]${foldSecurity ? ', security_status (PASS | FAIL)' : ''}.`
 }
 
@@ -980,11 +1183,13 @@ ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Make ONLY the documentation/comment/config change the ticket asks for. If you discover it actually requires code/logic changes, STOP, set status NEEDS_CONTEXT, and explain (it was mis-classified). Commit in the worktree: \`git -C ${wt} add -A\` then \`docs(${t.id}): ...\`.
 ${gitVerify(wt)}
 
-${selfPost(t, H.implementation, true)}
+${reportBlock(t, H.implementation, true)}
 Return status, summary, files_changed, write/edit counts, committed, no_code.`,
         { schema: WORK_SCHEMA, label: `build ${t.id}`, phase: 'Build', model: ROUTE.buildNoCode },
       )
       ticketResult.phases.build = build ? build.status : 'NO_REPORT'
+      // Build is the first phase of a NO-CODE ticket → post its report AND transition to In Progress.
+      await postPhase(t, H.implementation, build && build.report_md, { state: 'In Progress', phase: 'Build' })
       // Fail closed: advance ONLY on explicit COMPLETE (gate() allowlist), matching the SMALL/
       // STANDARD build gates. A denylist would let ISSUES_FOUND or any unexpected/typo status pass.
       if (!gate(build, 'COMPLETE')) {
@@ -1027,15 +1232,21 @@ ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Reuse existing code; implement every AC; add a focused test for the change; run lint + typecheck on changed files (npx --prefix ${wt} tsc --noEmit, project lint). Commit: \`git -C ${wt} add -A\` then \`feat(${t.id}): ...\`. If the work turns out to be larger than SMALL (schema/auth/API/many files), STOP with status NEEDS_CONTEXT (it was mis-classified for STANDARD).
 ${gitVerify(wt)}
 
-${selfPost(t, H.implementation, true)}
+${reportBlock(t, H.implementation, true)}
 Return status, summary, files_changed, ACTUAL write/edit counts, committed, no_code, gates.`
       // Code IS expected for SMALL — use the git-verified empty-artifact retry (parity with STANDARD).
       const build = await buildWithEmptyRetry(smallBuildPrompt, wt, { schema: WORK_SCHEMA, label: `build ${t.id}`, phase: 'Build', model: ROUTE.buildSmall })
       if (looksEmpty(build)) {
         log(`BLOCK ${t.id} — SMALL build produced no artifacts twice (git-verified empty).`)
+        // Leave an audit trail BEFORE the early continue (this path skips the post below): set the ticket
+        // In Progress and record WHY it was abandoned, so a crash/blocked ticket still has its state on
+        // Linear (the durability guarantee this workflow foregrounds), not an untouched ticket with no note.
+        await postPhase(t, H.implementation, `Blocked at build: the agent reported COMPLETE but produced **no committed artifacts** across two git-verified dispatches (empty \`${EPIC_BRANCH}...HEAD\` diff). Recorded BLOCKED_NO_ARTIFACTS — the feature branch is kept for inspection and a re-run re-attempts the build.`, { state: 'In Progress', phase: 'Build' })
         blocked.add(t.id); ticketResult.phases.build = 'BLOCKED_NO_ARTIFACTS'; ticketResult.outcome = 'BLOCKED_BUILD'; results.push(ticketResult); continue
       }
       ticketResult.phases.build = build ? build.status : 'NO_REPORT'
+      // Build is the first phase of a SMALL ticket → post its report AND transition to In Progress.
+      await postPhase(t, H.implementation, build && build.report_md, { state: 'In Progress', phase: 'Build' })
       if (!gate(build, 'COMPLETE')) {
         log(`BLOCK ${t.id} at build — ${build ? build.status : 'no report'}`)
         blocked.add(t.id); ticketResult.outcome = 'BLOCKED_BUILD'; results.push(ticketResult); continue
@@ -1072,11 +1283,14 @@ ${acBlock(t)}
 
 ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 Then produce the adaptation plan (NO feature code yet): inventory EXISTING services/utilities to reuse (prevent duplication — highest-value output); map each AC to an approach; list files to create (only if no reuse) and modify; define the test strategy and integration points.
-${selfPost(t, H.adaptation, true)}
+${reportBlock(t, H.adaptation, true)}
 Return status (COMPLETE | BLOCKED | NEEDS_CONTEXT), summary (one line on the plan + key reuse), files_changed (likely empty), write/edit counts, committed (false — adaptation only plans, it does not commit).`,
       { schema: WORK_SCHEMA, label: `adapt ${t.id}`, phase: 'Build', model: ROUTE.adapt },
     )
     ticketResult.phases.adaptation = adapt ? adapt.status : 'NO_REPORT'
+    // Post BEFORE the gate so even a blocked adaptation leaves its report (which explains WHY) on Linear.
+    // Adaptation is the first STANDARD phase → also transition the ticket to In Progress here.
+    await postPhase(t, H.adaptation, adapt && adapt.report_md, { state: 'In Progress', phase: 'Build' })
     // Fail closed: advance ONLY on explicit COMPLETE (gate() allowlist). A denylist would let
     // an adapt agent that returned ISSUES_FOUND (or any unexpected status) feed a flagged plan
     // forward into implementation as if it were sound.
@@ -1096,7 +1310,7 @@ ${readTicket(t)} In particular read the Adaptation Report and any prior phase co
 ADAPTATION SUMMARY: ${adapt.summary || '(read the Adaptation Report you posted)'}
 Reuse what adaptation mandated; implement every AC; NO test code here (separate phase); run lint + typecheck on changed files; commit (\`git -C ${wt} add -A\`; \`feat(${t.id}): ...\`). If this ticket genuinely has no implementation-phase code deliverable (pure verification/test-only), set no_code=true and explain — do NOT invent code.
 ${gitVerify(wt)}
-${selfPost(t, H.implementation, false)}
+${reportBlock(t, H.implementation, false)}
 Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, committed.`
 
     // Code IS expected here (unless the agent legitimately reports no_code) — use the
@@ -1106,9 +1320,13 @@ Return status, summary, files_changed, ACTUAL write_calls/edit_calls, no_code, c
     let impl = await buildWithEmptyRetry(implPrompt, wt, { schema: WORK_SCHEMA, label: `implement ${t.id}`, phase: 'Build', model: ROUTE.implement })
     if (looksEmpty(impl)) {
       log(`BLOCK ${t.id} — implementation produced no artifacts twice (git-verified empty).`)
+      // Audit trail BEFORE the early continue (this path skips the post below). The ticket is already
+      // In Progress (adaptation set it), so record only WHY implementation was abandoned.
+      await postPhase(t, H.implementation, `Blocked at implementation: the agent reported COMPLETE but produced **no committed artifacts** across two git-verified dispatches (empty \`${EPIC_BRANCH}...HEAD\` diff). Recorded BLOCKED_NO_ARTIFACTS — the feature branch is kept for inspection and a re-run re-attempts implementation.`, { phase: 'Build' })
       blocked.add(t.id); ticketResult.phases.implementation = 'BLOCKED_NO_ARTIFACTS'; ticketResult.outcome = 'BLOCKED_IMPLEMENTATION'; results.push(ticketResult); continue
     }
     ticketResult.phases.implementation = impl ? impl.status : 'NO_REPORT'
+    await postPhase(t, H.implementation, impl && impl.report_md, { phase: 'Build' })
     if (!gate(impl, 'COMPLETE')) {
       log(`BLOCK ${t.id} at implementation — ${impl ? impl.status : 'no report'}`)
       blocked.add(t.id); ticketResult.outcome = 'BLOCKED_IMPLEMENTATION'; results.push(ticketResult); continue
@@ -1128,35 +1346,41 @@ ${SHELL_RULES}${PROD}
 - Gate #2 Compilation (100%): tests compile, zero type errors. Gate #3 Execution (100%): tests run, mocks work, assertions valid.
 - ANTI-BALLAST: assert behavior and contracts (returns, persisted state, emitted events), not call shapes — no toHaveBeenCalled* on internal collaborators unless the call IS the contract; prefer a few real-infrastructure integration tests over many mocked units for data-layer logic.
 - Gate #4 CROSS-FILE BREAKAGE (the targeted-green / full-red gap that sinks epics at merge): ${TEST_CMD ? `if the diff ADDS, RENAMES, or changes the signature of any EXPORTED symbol (a function/const/type other modules import), other files' mock factories (vi.mock/jest.mock) and importers can break in ways your TARGETED tests never exercise. After your targeted tests pass, run the FULL suite ONCE against YOUR worktree. The project test command is \`${TEST_CMD}\` — do NOT run it verbatim (it targets the integration tree, not your worktree). Run the SAME runner but RE-POINT its directory flag from the integration tree to YOUR worktree ${wt}: pnpm \`-C ${wt}\`, npm \`--prefix ${wt}\`, yarn \`--cwd ${wt}\`, cargo \`--manifest-path ${wt}/Cargo.toml\`, go \`-C ${wt}\`, pytest the path arg \`${wt}\`. Running the integration-tree command unchanged would test the WRONG tree and can disturb the shared integration worktree mid-ticket. Tee output to \`${REPO_ROOT}/.swarm/test-results/${t.id}-test.txt\` (\`mkdir -p\` its dir first). FIX every NEW failure your change introduced at the ROOT — most often an un-updated mock factory or fixture in another file (update it; NEVER delete/skip a test) — and re-run until the full suite shows no failure your change caused. If the suite is too large to finish, capture what you can, say so, and rely on the merge gate. This moves the integration check LEFT (into the cheap-to-fix worktree) instead of discovering it at merge, where it cascade-skips every dependent ticket.` : 'no project test command was detected, so there is no full suite to run — note that the merge has no integration gate either and cross-file breakage cannot be caught automatically.'}
+- ENV vs FAILURE: if the test RUNNER itself cannot execute at all — it errors BEFORE running any test (tooling/PATH/codegen/lockfile/missing-binary), e.g. \`ERR_PNPM_BAD_PATH_DIR\` or "vitest: command not found" — that is an ENVIRONMENT hazard, NOT a pass and NOT a test failure: set status=ENV_BLOCKED and put the exact runner error in the gates one-liner. "Tests ran and some failed" is ISSUES_FOUND; "tests could not run at all" is ENV_BLOCKED. NEVER report COMPLETE when the suite never executed.
 - Cap Gate #0 fix loops at ~3 cycles; if still red, report ISSUES_FOUND with the specifics rather than looping. Coverage secondary (~70-80%, 90%+ critical), skip trivial code.
+- RE-DISPATCH SAFETY: you may be a retry of an attempt whose response was lost after it committed — FIRST run \`git -C ${wt} log --oneline -3\`; if your tests are ALREADY committed there, report that existing commit (status COMPLETE, committed=true) instead of re-running and double-committing.
 - Commit: \`git -C ${wt} add -A\`; \`test(${t.id}): ...\`. Files changed by implementation: ${(impl.files_changed || []).join(', ') || '(discover via git diff)'}
-${selfPost(t, H.testing, false)}
-Return status (COMPLETE | ISSUES_FOUND), a gates one-liner, files_changed, write/edit counts, committed.`,
+${reportBlock(t, H.testing, false)}
+Return status (COMPLETE | ISSUES_FOUND | ENV_BLOCKED), a gates one-liner, files_changed, write/edit counts, committed.`,
         { schema: WORK_SCHEMA, label: `test ${t.id}`, phase: 'Build', model: ROUTE.test },
       )
       ticketResult.phases.testing = test ? test.status : 'NO_REPORT'
+      await postPhase(t, H.testing, test && test.report_md, { phase: 'Build' })
       // Fail closed: advance ONLY on explicit COMPLETE (gate() allowlist). The previous denylist
       // (`=== 'ISSUES_FOUND'`) let a test agent that returned BLOCKED / NEEDS_CONTEXT — the likely
       // outcome when the suite can't even run — pass as if tests were green.
       if (!gate(test, 'COMPLETE')) {
-        log(`BLOCK ${t.id} at testing — ${test ? test.status : 'no report'} (gate not COMPLETE).`)
-        blocked.add(t.id); ticketResult.outcome = 'BLOCKED_TESTING'; results.push(ticketResult); continue
+        const envBlocked = test && test.status === 'ENV_BLOCKED'
+        log(`BLOCK ${t.id} at testing — ${test ? test.status : 'no report'}${envBlocked ? ' — the test RUNNER could not execute (environment hazard); NO integration verification happened for this ticket' : ' (gate not COMPLETE)'}.`)
+        blocked.add(t.id); ticketResult.outcome = envBlocked ? 'BLOCKED_TEST_ENV' : 'BLOCKED_TESTING'; results.push(ticketResult); continue
       }
     } else { ticketResult.phases.testing = 'skipped' }
 
     // Docs run when planning requested them. An explicit run_docs===true wins even for a
     // no_code ticket (e.g. a config/test deliverable that still has a user-facing surface);
     // only the DEFAULT (run_docs unset) skips docs for no_code tickets.
+    let docsCommitted = false // whether the docs phase produced a COMMITTED artifact (not merely ran)
     if (t.run_docs !== false && (t.run_docs === true || !impl.no_code)) {
       const doc = await safeAgent(
-        `ROLE: technical-writer-agent for ${t.id}. MVD — "document WHY, not WHAT" in ${wt}. Document complex/non-obvious logic, decisions, security constraints, public API (auto-generate where possible); SKIP self-documenting types/trivial CRUD. Commit: \`git -C ${wt} add -A\`; \`docs(${t.id}): ...\`.
+        `ROLE: technical-writer-agent for ${t.id}. MVD — "document WHY, not WHAT" in ${wt}. Document complex/non-obvious logic, decisions, security constraints, public API (auto-generate where possible); SKIP self-documenting types/trivial CRUD. RE-DISPATCH SAFETY: you may be a retry of an attempt whose response was lost after it committed — FIRST run \`git -C ${wt} log --oneline -3\`; if your docs are ALREADY committed there, report that existing commit instead of duplicating. Commit: \`git -C ${wt} add -A\`; \`docs(${t.id}): ...\`.
 ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 ${SHELL_RULES}
-${selfPost(t, H.documentation, false)}
+${reportBlock(t, H.documentation, false)}
 Return status, summary, files_changed, write/edit counts, committed.`,
         { schema: WORK_SCHEMA, label: `docs ${t.id}`, phase: 'Build', model: ROUTE.docs },
       )
       ticketResult.phases.documentation = doc ? doc.status : 'NO_REPORT'
+      await postPhase(t, H.documentation, doc && doc.report_md, { phase: 'Build' })
       // Docs FAIL CLOSED like every other phase: a null/ISSUES_FOUND/BLOCKED docs result must
       // not be silently ignored and let the ticket merge with a documentation AC unmet. The
       // branch (and its Linear comment) is kept for inspection; a re-run re-attempts docs.
@@ -1164,6 +1388,7 @@ Return status, summary, files_changed, write/edit counts, committed.`,
         log(`BLOCK ${t.id} at documentation — ${doc ? doc.status : 'no report'} (gate not COMPLETE).`)
         blocked.add(t.id); ticketResult.outcome = 'BLOCKED_DOCUMENTATION'; results.push(ticketResult); continue
       }
+      docsCommitted = !!(doc && doc.committed) // a COMPLETE docs phase that found nothing non-obvious to write commits nothing
     } else { ticketResult.phases.documentation = 'skipped' }
 
     // ── Review HARD FLOOR (single combined reviewer) ────────────────────────
@@ -1188,11 +1413,18 @@ ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE + '\n(Operator guidance above is pa
 ${SHELL_RULES}
 Call \`mcp__codex-review-server__codex_review_and_fix\` (load via ToolSearch if needed) with project_dir=${wt}, base_branch=${EPIC_BRANCH}, and a context string (ticket description + comments + ACs + implementation summary). If the codex MCP is unavailable, return status UNAVAILABLE (do NOT fail the ticket). Be efficient — do not loop; let Codex do the review pass.
 Parse the JSON: only \`"error":"rate_limit"\` at the TOP LEVEL is a real rate-limit → status RATE_LIMITED (skip, not fatal). The phrase "rate limit" inside a \`"status":"complete"\` output is a code FINDING, not an error. On "complete": Codex auto-fixes unambiguous P1-P3; fix remaining P1/P2 in-branch; commit (\`git -C ${wt} add -A\`; \`refactor(${t.id}): apply codex fixes\`).
-${selfPost(t, H.codex, false)}
-Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count.`,
-      { schema: CODEX_SCHEMA, label: `codex ${t.id}`, phase: 'Review', model: ROUTE.codex },
+${reportBlock(t, H.codex, false)}
+Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count, and report_md (only when status=COMPLETE — a RATE_LIMITED/UNAVAILABLE skip has no report to write).`,
+      // retries:0 — codex is non-idempotent (it auto-fixes and COMMITS) AND the slowest/most rate-limited
+      // phase. A dropped response after a successful pass must NOT re-run the whole review against the
+      // already-fixed tree (wasted budget + a second churn of the diff). A genuine miss is already
+      // non-fatal: codex==null leaves phases.codex='UNAVAILABLE' and the ticket proceeds.
+      { schema: CODEX_SCHEMA, label: `codex ${t.id}`, phase: 'Review', model: ROUTE.codex, retries: 0 },
     )
     ticketResult.phases.codex = codex ? codex.status : 'UNAVAILABLE'
+    // Codex produces a report worth posting only when it actually ran (COMPLETE); a RATE_LIMITED /
+    // UNAVAILABLE skip has nothing to record (postPhase no-ops on an empty body).
+    if (codex && codex.report_md) await postPhase(t, H.codex, codex.report_md, { phase: 'Review' })
 
     // Codex commits its fixes AFTER the code-review hard floor already ran, so those changes
     // would otherwise reach merge unreviewed for correctness/ACs. We do NOT trust the
@@ -1204,7 +1436,7 @@ Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count.`,
     // invariant "codex output never reaches merge unreviewed".
     if (codex && codex.status === 'COMPLETE') {
       log(`${t.id} codex completed${codex.auto_fixed_count ? ` (${codex.auto_fixed_count} fix(es))` : ''} after the review floor — re-reviewing the codex changes (fail closed).`)
-      const { review: postCodex, reReviewed: postFixed } = await reviewWithFixPass(t, wt, stdReviewPrompt, REVIEW_SCHEMA, ROUTE.review, 'post-codex review')
+      const { review: postCodex, reReviewed: postFixed } = await reviewWithFixPass(t, wt, stdReviewPrompt, REVIEW_SCHEMA, ROUTE.review, 'post-codex review', H.codereview + ' (post-codex)')
       ticketResult.phases.codereview = `${ticketResult.phases.codereview} + post-codex ${postCodex ? postCodex.status + (postFixed ? ' (re-reviewed)' : '') : 'NO_REPORT'}`
       if (!gate(postCodex, 'APPROVED')) {
         log(`BLOCK ${t.id} — post-codex re-review ${postCodex ? postCodex.status : 'failed (null)'}; codex changes not approved.`)
@@ -1218,11 +1450,12 @@ Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count.`,
 ${readTicket(t)}${GUIDANCE ? '\n' + GUIDANCE : ''}
 ${SHELL_RULES}
 Scan against OWASP Top 10 (injection, broken authz, sensitive-data exposure, secrets, input validation, insecure config). Focus on exploitable issues (>80% confidence). PASS RULE: status APPROVED only if ZERO CRITICAL and ZERO HIGH findings; any CRITICAL/HIGH → CHANGES_REQUIRED (blocks merge). Fix MEDIUM/LOW introduced by this diff; pre-existing MEDIUM/LOW may be noted OUT-OF-SCOPE.
-${selfPost(t, H.security, false)}
+${reportBlock(t, H.security, false)}
 Return status (APPROVED | CHANGES_REQUIRED | BLOCKED), critical_high_count.`,
       { schema: SECURITY_SCHEMA, label: `security ${t.id}`, phase: 'Review', model: ROUTE.security },
     )
     ticketResult.phases.security = sec ? sec.status : 'NO_REPORT'
+    await postPhase(t, H.security, sec && sec.report_md, { phase: 'Review' })
     // Security FAILS CLOSED.
     const securityPass = gate(sec, 'APPROVED') && (sec.critical_high_count || 0) === 0
     if (!securityPass) {
@@ -1234,11 +1467,14 @@ Return status (APPROVED | CHANGES_REQUIRED | BLOCKED), critical_high_count.`,
     // no-op. Keying only on impl.no_code would let a test-only ticket (no implementation code,
     // its TESTS are the deliverable) whose testing phase committed nothing close as a benign
     // NO_OP. So an empty diff is an anomaly if implementation produced code, OR a dedicated
-    // testing phase ran, OR a docs phase ran. Only when impl reported no_code AND neither testing
-    // nor docs ran is an empty diff legitimately a no-op.
+    // testing phase ran (its tests ARE the deliverable — running it asserts code was expected),
+    // OR docs actually COMMITTED something. docs keys on COMMITTED (not merely ran): a docs phase
+    // that legitimately finds nothing non-obvious to document returns COMPLETE with committed=false,
+    // and forcing expectsCode on that would falsely BLOCK_EMPTY_DIFF a no-op ticket (and poison its
+    // dependents). Only when impl reported no_code AND testing did not run AND docs committed nothing
+    // is an empty diff legitimately a no-op.
     const testingRan = t.run_testing !== false
-    const docsRan = ticketResult.phases.documentation !== 'skipped'
-    await mergeTicket(t, ticketResult, !impl.no_code || testingRan || docsRan)
+    await mergeTicket(t, ticketResult, !impl.no_code || testingRan || docsCommitted)
   } catch (err) {
     // Belt-and-suspenders: no single ticket may abort the run.
     const msg = err && err.message ? err.message : String(err)
@@ -1376,7 +1612,11 @@ const summary = {
   skipped_upstream: results.filter((r) => r.outcome === 'SKIPPED_UPSTREAM').map((r) => r.id),
   unprocessed,
   baseline_pre_existing_failures: BASELINE.length,
-  integration_verification: TEST_CMD ? `test-diff gate (cmd: ${TEST_CMD})` : 'NONE — no test command detected; merges not integration-verified',
+  integration_verification: TEST_CMD ? `test-diff gate (cmd: ${TEST_CMD})${TEST_CMD_TARGETS_ROOT ? '' : ' — WARNING: command does not reference the integration tree; merges may have tested the WRONG directory (treat as UNTRUSTED)'}` : 'NONE — no test command detected; merges not integration-verified',
+  // Per-phase Linear reporting: how many phase-report comments the dedicated poster delivered, and how
+  // many failed (their reports are retained in `results`). A non-zero `failed` means the Linear audit
+  // trail is incomplete for this run — re-post from the run transcript or check Linear connectivity.
+  linear_reporting: `${linearPosts.posted}/${linearPosts.attempted} phase comments posted${linearPosts.failed ? `, ${linearPosts.failed} FAILED` : ''}${linearPosts.skipped ? `, ${linearPosts.skipped} skipped (no content)` : ''}`,
   pr_url: pr ? pr.pr_url : (flags.push ? '(nothing merged)' : '(local-only; pass --push to open a PR)'),
   results,
   next_steps: nextStepsParts.join(' '),

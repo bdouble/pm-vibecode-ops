@@ -1,0 +1,39 @@
+name: Test dynamic workflows
+
+# Guard the regression-prone PURE logic of the bundled dynamic workflows (arg parsing, id
+# normalization, path-safety) and the source invariants of their orchestration changes. The 2026-06-23
+# "Epic:" incident — a leading label captured as the epic name, a colon poisoning every path, and a
+# single transient drop cascade-skipping dependents — is exactly the class this test pins down.
+
+on:
+  pull_request:
+    paths:
+      - 'workflows/**'
+      - '.github/workflows/test-workflows.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'workflows/**'
+      - '.github/workflows/test-workflows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax-check the workflow scripts
+        run: |
+          for f in workflows/*.js; do node --check "$f"; done
+
+      - name: Run workflow guard tests
+        run: node --test workflows/*.test.mjs
