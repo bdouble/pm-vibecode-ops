@@ -38,6 +38,15 @@
  *     returns a sentinel, the ticket is recorded blocked, and the loop
  *     continues. A v1 run died at hour 13 because one transient 529 on a bare
  *     `await agent()` threw uncaught and discarded all completed work.
+ *   • Bounded transient RETRY (v5.3): a TRANSIENT miss — agent() throws, or the
+ *     runtime returns null after its own internal retries on a terminal API error
+ *     (e.g. a mid-response "Connection closed") — is RE-DISPATCHED once by default
+ *     before falling back to the sentinel. A fresh dispatch gets clean context and
+ *     usually succeeds. A real (non-null) report returns immediately, so the cost is
+ *     bounded to actual failures. The 2026-06-23 run was halted by exactly this: one
+ *     "Connection closed mid-response" on a testing agent that had NO retry blocked
+ *     the ticket and cascade-skipped both of its dependents. (resolve opts out — it
+ *     owns a dedicated 3x loop.)
  *   • Per-ticket try/catch: any non-agent throw is contained to one ticket.
  *   • Reviews FAIL CLOSED: a null/failed review blocks the merge — it can
  *     never silently pass as APPROVED (a v1 bug: all review lenses 529'd →
@@ -85,6 +94,13 @@
  *     different epic (JS cross-check enforces it). In ISO mode the MAIN tree's HEAD is captured at
  *     setup and asserted UNCHANGED at finalize — a stray checkout in the shared tree (concurrent-
  *     agent hijack) is surfaced loudly instead of silently corrupting a colleague's checkout.
+ *   • Path-safety guard (v5.3): the arg parser tolerates a leading label and edge punctuation
+ *     ("Epic: PRO-1653." → PRO-1653) so a natural phrasing can't capture "Epic:" as the id, and a
+ *     deterministic JS assert refuses to run if the integration tree OR main repo path contains a
+ *     char hostile to build tooling (notably ':', which the package manager rejects in PATH —
+ *     ERR_PNPM_BAD_PATH_DIR). The 2026-06-23 "Epic:" incident poisoned every path with a colon; the
+ *     setup agent ROUTED AROUND it instead of failing, so a broken run limped on. We now fail fast.
+ *     Planner-supplied ticket ids are ID-validated before they reach a worktree path, too.
  *   • Operator guidance is threaded, not dropped: free text after the epic ID
  *     (plus --skills / --context-file) is injected into every code-touching agent, so
  *     per-epic conventions / skill-loading need no script edit.
@@ -128,7 +144,7 @@ export const meta = {
 // Semver of this workflow file — logged at start (and returned in the summary) so a STALE installed
 // copy is visible at a glance. The 2026-06-22 incident ran the v5.0.0 (pre-isolation) install while the
 // repo already had the fix; a versioned banner would have surfaced "you are not on latest" immediately.
-const VERSION = '5.2.0'
+const VERSION = '5.3.0'
 
 // ── Model routing. Change here to re-tune. ──────────────────────────────────
 // `fable` is also a valid value — operators wanting maximum-capability reasoning
@@ -299,7 +315,7 @@ const PLAN_SCHEMA = {
 const WORK_SCHEMA = {
   type: 'object', required: ['status', 'summary', 'committed'],
   properties: {
-    status: { type: 'string', enum: ['COMPLETE', 'BLOCKED', 'NEEDS_CONTEXT', 'ISSUES_FOUND'], description: 'COMPLETE | BLOCKED | NEEDS_CONTEXT | ISSUES_FOUND' },
+    status: { type: 'string', enum: ['COMPLETE', 'BLOCKED', 'NEEDS_CONTEXT', 'ISSUES_FOUND', 'ENV_BLOCKED'], description: 'COMPLETE | BLOCKED | NEEDS_CONTEXT | ISSUES_FOUND | ENV_BLOCKED (the test/build runner could NOT execute at all — tooling/PATH/codegen/lockfile error, distinct from tests that ran and failed)' },
     summary: { type: 'string', description: 'ONE-LINE summary (full report is in the Linear comment you posted)' },
     files_changed: { type: 'array', items: { type: 'string' } },
     write_calls: { type: 'integer' }, edit_calls: { type: 'integer' },
@@ -352,15 +368,32 @@ const PR_SCHEMA = { type: 'object', required: ['status'], properties: { status: 
 const gate = (result, ...allowed) => !!result && allowed.includes(result.status)
 
 // ── safeAgent: no single agent failure may abort the run. ───────────────────
+// Default bounded RE-DISPATCH on a transient miss. safeAgent returns the null sentinel both when
+// agent() THROWS and when the runtime gives up on a terminal API error after its OWN internal retries
+// (e.g. a mid-response "Connection closed"). A fresh re-dispatch gets clean context and usually
+// succeeds, so by default we try once more before falling back — the 2026-06-23 run was halted when a
+// single "Connection closed mid-response" on a testing agent (no retry) blocked the ticket and
+// cascade-skipped both of its dependents. A real (non-null) report returns IMMEDIATELY, so the extra
+// dispatch only ever happens on an actual failure. Pass opts.retries to override (e.g. retries:0 to
+// disable, as the resolve pre-flight does because it owns a dedicated 3x loop). Fail-closed semantics
+// are unchanged: after the retries are exhausted, the caller still receives the fallback sentinel.
+const DEFAULT_AGENT_RETRIES = 1
 async function safeAgent(prompt, opts, fallback = null) {
-  try {
-    const r = await agent(prompt, opts)
-    return r == null ? fallback : r
-  } catch (e) {
-    const msg = e && e.message ? e.message : String(e)
-    log(`WARN agent [${opts && opts.label}] failed: ${msg.slice(0, 160)} — continuing with sentinel`)
-    return fallback
+  const retries = opts && Number.isInteger(opts.retries) ? Math.max(0, opts.retries) : DEFAULT_AGENT_RETRIES
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const r = await agent(prompt, opts)
+      if (r != null) return r
+      if (attempt < retries) { log(`WARN agent [${opts && opts.label}] returned no result — re-dispatching (attempt ${attempt + 2}/${retries + 1}; transient?).`); continue }
+      return fallback
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e)
+      if (attempt < retries) { log(`WARN agent [${opts && opts.label}] threw: ${msg.slice(0, 140)} — re-dispatching (attempt ${attempt + 2}/${retries + 1}; transient?).`); continue }
+      log(`WARN agent [${opts && opts.label}] failed: ${msg.slice(0, 160)} — continuing with sentinel`)
+      return fallback
+    }
   }
+  return fallback
 }
 
 // Release the epic lock via a tiny agent (the workflow JS sandbox has no shell of its own). Used
@@ -380,20 +413,34 @@ async function releaseEpicLock(lockPath) {
 // Case-INSENSITIVE: a lowercased id (`pro-1592`) is accepted and upper-cased at capture (normalizeEpicId),
 // so it matches Linear's canonical identifier and every downstream comparison — get_issue is itself
 // case-insensitive, so rejecting `pro-1592` outright would be a needless usability regression.
+/* test-export:begin (pure arg/path helpers — unit-tested by epic-swarm-workflow.test.mjs; keep self-contained, no runtime globals) */
 const ID_RE = /^[A-Z][A-Z0-9]*-\d+$/i
+// Strip leading/trailing NON-alphanumeric edges from a token so the natural punctuation an operator or
+// assistant writes around an id ("PRO-1653.", "PRO-1653,", "(PRO-1653)", "#PRO-1653") still resolves to
+// the id. The INTERNAL hyphen of a Linear id is preserved — only the edges are trimmed.
+const stripEdgePunct = (s) => String(s == null ? '' : s).replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '')
+// Leading label words an operator/assistant naturally puts before the id ("Epic: PRO-1653 …"). When such
+// a label is the FIRST token AND the VERY NEXT token is a real id, the label is unwrapped as noise. This
+// is narrow on purpose: it never scans deeper for a buried id, so the 2026-06-22 wrong-target footgun
+// (an id mentioned somewhere inside a guidance sentence becoming the target) stays closed.
+const EPIC_LABEL = new Set(['epic', 'story', 'issue', 'ticket'])
 // Validate, normalize, and conflict-check an epic-ID candidate. Linear identifiers are canonical
 // upper-case; two DIFFERENT ids (a positional token and a --epic flag) are a usage error rather than a
 // silent last-wins — silently picking one would be exactly the wrong-target footgun these guards exist to kill.
+// Edge punctuation is tolerated (stripEdgePunct) so "--epic PRO-1653." and a leading "Epic: PRO-1653." both work.
 function normalizeEpicId(current, raw, source) {
-  if (raw == null || !ID_RE.test(raw)) throw new Error(`epic-swarm-workflow: ${source} requires a Linear issue ID like PRO-1592 (got ${raw == null ? 'no value' : `"${raw}"`}).`)
-  const id = raw.toUpperCase()
+  const cand = stripEdgePunct(raw)
+  if (!cand || !ID_RE.test(cand)) throw new Error(`epic-swarm-workflow: ${source} requires a Linear issue ID like PRO-1592 (got ${raw == null ? 'no value' : `"${raw}"`}).`)
+  const id = cand.toUpperCase()
   if (current && current !== id) throw new Error(`epic-swarm-workflow: conflicting epic IDs — ${current} and ${id}. Specify the epic exactly once (as the first argument OR via --epic).`)
   return id
 }
+/* test-export:end */
 // Free text after the epic ID is NOT dropped (it used to be — see RC-4): it becomes
 // operator GUIDANCE threaded into every code-touching agent prompt. So
 // `/epic-swarm-workflow PRO-1667 make every agent load the arize phoenix skills` reaches
 // the agents instead of vanishing. --skills/--guidance/--context-file are the explicit forms.
+/* test-export:begin */
 function parseArgs(a) {
   const flags = { dryRun: false, push: false, inPlace: false, maxTickets: Infinity, skills: [], contextFile: null, guidance: '' }
   let epicId = null
@@ -443,7 +490,16 @@ function parseArgs(a) {
         // epicId stays null, and the usage error below fires. We do NOT scan later tokens for an ID, so a
         // "PRO-1621" buried in a guidance sentence can never become the target (incident 2026-06-22).
         // normalizeEpicId surfaces a conflict if --epic already set a DIFFERENT id (no silent last-wins).
-        if (ID_RE.test(tk)) epicId = normalizeEpicId(epicId, tk, 'the epic argument')
+        const cand = stripEdgePunct(tk)
+        const next = toks[i + 1]
+        if (ID_RE.test(cand)) epicId = normalizeEpicId(epicId, tk, 'the epic argument')
+        // Tolerate a leading label DIRECTLY followed by the id ("Epic: PRO-1653 …" / "ticket PRO-42") —
+        // the exact phrasing that captured "Epic:" as the epic in the 2026-06-23 incident. Consume BOTH
+        // the label (noise, not guidance) and the id. Still narrow: requires the id to be the NEXT token,
+        // so it never reopens the buried-id hole the strict-first-token rule closed.
+        else if (EPIC_LABEL.has(cand.toLowerCase()) && next != null && ID_RE.test(stripEdgePunct(next))) {
+          epicId = normalizeEpicId(epicId, next, 'the epic argument'); i++
+        }
         else guidanceToks.push(tk)
       }
       else guidanceToks.push(tk)   // free text after the epic ID, or an unrecognized --flag: keep it (threaded as guidance + warned below), never drop
@@ -452,8 +508,10 @@ function parseArgs(a) {
   } else if (a && typeof a === 'object') {
     epicId = a.epicId || a.epic || a.id || null
     if (epicId != null) {
-      if (!ID_RE.test(String(epicId))) throw new Error(`epic-swarm-workflow: epic ID "${epicId}" is not a Linear issue ID like PRO-1592.`)
-      epicId = String(epicId).toUpperCase()   // normalize to Linear's canonical upper-case (parity with the string path)
+      firstPositional = String(epicId)
+      const cand = stripEdgePunct(epicId)   // tolerate edge punctuation, parity with the string path
+      if (!cand || !ID_RE.test(cand)) throw new Error(`epic-swarm-workflow: epic ID "${epicId}" is not a Linear issue ID like PRO-1592.`)
+      epicId = cand.toUpperCase()   // normalize to Linear's canonical upper-case (parity with the string path)
     }
     if (a.dryRun) flags.dryRun = true
     if (a.push) flags.push = true
@@ -471,12 +529,25 @@ function parseArgs(a) {
       flags.maxTickets = n
     }
   }
-  return { epicId, flags }
+  return { epicId, flags, firstPositional }
 }
-const { epicId, flags } = parseArgs(args)
-if (!epicId) throw new Error('epic-swarm-workflow: missing or invalid epic ID — the epic must be a Linear issue ID like PRO-42, given as the FIRST argument or via --epic <ID>. A descriptive phrase is not accepted as the epic. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]')
+/* test-export:end */
+const { epicId, flags, firstPositional } = parseArgs(args)
+if (!epicId) throw new Error(`epic-swarm-workflow: missing or invalid epic ID — the epic must be a Linear issue ID like PRO-42, given as the FIRST argument or via --epic <ID>.${firstPositional ? ` The first argument "${firstPositional}" is not a Linear issue ID — pass the bare id FIRST (e.g. "PRO-42 <guidance>"); a label like "Epic:" is only accepted when it DIRECTLY precedes the id ("Epic: PRO-42").` : ''} A descriptive phrase is not accepted as the epic. Usage: /epic-swarm-workflow <EPIC-ID> [--dry-run] [--push] [--no-push] [--in-place] [--max-tickets N] [--skills a,b,c] [--context-file PATH] [free-text guidance…]`)
 if (flags.maxTickets === 0) throw new Error('epic-swarm-workflow: --max-tickets 0 would process no tickets. Omit the flag to run all tickets, or pass a positive count (e.g. --max-tickets 1).')
 
+/* test-export:begin */
+// A repo/worktree path is "tooling-safe" iff it has NO ':' (the delimiter the package manager splits
+// PATH on — a ':' in the path makes pnpm refuse to add node_modules/.bin to PATH: ERR_PNPM_BAD_PATH_DIR)
+// and NO ASCII control char. Spaces are fine (every command quotes its paths); ':' is NOT, because it
+// breaks inside the package manager's OWN PATH assembly, which quoting can't fix. The 2026-06-23 "Epic:"
+// incident poisoned the integration tree with a ':' and the run limped on a broken environment.
+function isShellSafePath(p) {
+  if (typeof p !== 'string' || p.length === 0) return false
+  if (p.includes(':')) return false                                          // PATH delimiter → ERR_PNPM_BAD_PATH_DIR
+  for (let i = 0; i < p.length; i++) if (p.charCodeAt(i) < 0x20) return false // ASCII control char
+  return true
+}
 // Single source of truth for a ticket's worktree path AND feature branch name —
 // used by setup, merge, and cleanup so the three can never drift apart.
 function ticketRefs(root, t) {
@@ -485,8 +556,10 @@ function ticketRefs(root, t) {
   // `git worktree add -b feature/<id>-<slug>` fail AND split the surrounding shell args. Lowercase,
   // keep only [a-z0-9], collapse runs to a single '-', trim leading/trailing '-', fall back to 'work'.
   const slug = String(t.slug || 'work').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'work'
+  // t.id is ID-validated before it reaches here (the dedup loop drops a non-ID id), so it is path-safe.
   return { wt: `${root}/.swarm/worktrees/${t.id}`, branch: `feature/${t.id}-${slug}` }
 }
+/* test-export:end */
 
 function wtSetup(root, epicBranch, t) {
   const { wt, branch } = ticketRefs(root, t)
@@ -617,7 +690,7 @@ If it does NOT resolve (404 / not found / wrong workspace), return resolved=fals
 // v2 resilience layer exists to survive). A REAL answer (resolved true OR false) is definitive — stop at once.
 let resolve = null
 for (let attempt = 1; attempt <= 3; attempt++) {
-  resolve = await safeAgent(resolvePrompt, { schema: RESOLVE_SCHEMA, label: `resolve ${epicId}${attempt > 1 ? ` (retry ${attempt - 1})` : ''}`, phase: 'Setup', model: ROUTE.setup })
+  resolve = await safeAgent(resolvePrompt, { schema: RESOLVE_SCHEMA, label: `resolve ${epicId}${attempt > 1 ? ` (retry ${attempt - 1})` : ''}`, phase: 'Setup', model: ROUTE.setup, retries: 0 })
   if (resolve != null) break
   if (attempt < 3) log(`WARN resolve pre-flight attempt ${attempt} returned no result (transient?) — retrying.`)
 }
@@ -677,6 +750,17 @@ const MAIN_REPO = setup.main_repo || REPO_ROOT // the user's main working tree; 
 const LOCK_PATH = setup.lock_path || ''     // epic lock to release in the finalize step ('' in dry run / --in-place legacy where setup didn't report it)
 const MAIN_HEAD_SHA = setup.main_repo_head_sha || '' // MAIN_REPO HEAD captured at setup; asserted UNCHANGED at finalize in ISO mode (Defect 1 deterministic guard)
 const MAIN_BRANCH = setup.main_repo_branch || ''     // MAIN_REPO branch captured at setup
+// PATH-SAFETY (defense in depth behind the ID_RE arg guard). The arg parser already stops a colon from
+// entering epicId, but REPO_ROOT also embeds MAIN_REPO (the FIRST path from `git worktree list`), so a
+// user whose CLONE lives under a ':'-bearing path would hit the identical ERR_PNPM_BAD_PATH_DIR wall for
+// a perfectly VALID epic. Fail fast here — before any per-ticket worktree/install — with the lock
+// released, rather than letting a setup agent route around a broken environment (the 2026-06-23 mode).
+for (const [name, p] of [['integration tree (repo_root)', REPO_ROOT], ['main repo', MAIN_REPO]]) {
+  if (!isShellSafePath(p)) {
+    await releaseEpicLock(LOCK_PATH)
+    throw new Error(`epic-swarm-workflow: ${name} path ${JSON.stringify(p)} contains a character hostile to build tooling — most often ':', which the package manager refuses in PATH (ERR_PNPM_BAD_PATH_DIR). Move the repository to a path without ':' (or control chars) and re-run. Nothing was created beyond setup, and the epic lock was released.`)
+  }
+}
 // Setup has acquired the lock (status OK). From here until the finalize step ANY abort must release
 // it first, or re-running this epic is refused until the 24h staleness (RC-1 lock-leak regression).
 // The per-ticket loop is try/caught (so a ticket throw can't escape here); the no-tickets throw is
@@ -698,6 +782,13 @@ if (planEpicId.toUpperCase() !== String(epicId).toUpperCase()) {
 const EPIC_BRANCH = setup.epic_branch || `epic/${epicId}`
 const DEFAULT_BRANCH = setup.default_branch || 'main' // PR base; default_branch is now REQUIRED in SETUP_SCHEMA, the 'main' fallback only guards an empty string
 const TEST_CMD = setup.test_cmd || ''
+// Integrity check: the setup agent is told to bake the ABSOLUTE REPO_ROOT into the test command (so the
+// merge gate and the per-ticket full-suite run target the INTEGRATION tree, not whatever cwd they run
+// from). If a detected command does not reference REPO_ROOT, the merge gate may silently test the WRONG
+// tree — exactly what happened on 2026-06-23, where the colon broke `pnpm -C` so the agent emitted a
+// dir-flag-less command that baselined the MAIN repo. Warn loudly and surface it in the summary.
+const TEST_CMD_TARGETS_ROOT = !TEST_CMD || TEST_CMD.includes(REPO_ROOT)
+if (TEST_CMD && !TEST_CMD_TARGETS_ROOT) log(`WARN detected test command does not reference the integration tree (${REPO_ROOT}): "${TEST_CMD}". The merge gate and per-ticket full-suite run may execute against the WRONG directory — treat integration verification as UNTRUSTED for this run.`)
 // Full operator-guidance block for the per-ticket workers (RC-4). The planner already received
 // GUIDANCE_BASE; this also folds in any --context-file contents the setup agent read.
 const GUIDANCE = (() => {
@@ -717,6 +808,11 @@ const dedupTickets = []
 const seenPlanIds = new Set()
 for (const t of plan.tickets) {
   const id = String(t.id)
+  // Drop a non-Linear-ID ticket id BEFORE it reaches a worktree path (`.swarm/worktrees/<id>`): it
+  // cannot be a real ticket (so Linear ops on it would fail anyway) and a metachar-bearing id would
+  // poison the path the same way the epic "Epic:" did. Validate; never sanitize-and-keep (that would
+  // desync the path from the Linear id used to close the ticket).
+  if (!ID_RE.test(id)) { log(`WARN planner emitted ticket id "${id}" that is not a Linear issue ID — excluding it (cannot be a real ticket; would poison its worktree path).`); continue }
   if (seenPlanIds.has(id)) { log(`WARN planner emitted duplicate ticket id ${id} — keeping the first, ignoring the duplicate.`); continue }
   seenPlanIds.add(id); dedupTickets.push(t)
 }
@@ -1128,10 +1224,11 @@ ${SHELL_RULES}${PROD}
 - Gate #2 Compilation (100%): tests compile, zero type errors. Gate #3 Execution (100%): tests run, mocks work, assertions valid.
 - ANTI-BALLAST: assert behavior and contracts (returns, persisted state, emitted events), not call shapes — no toHaveBeenCalled* on internal collaborators unless the call IS the contract; prefer a few real-infrastructure integration tests over many mocked units for data-layer logic.
 - Gate #4 CROSS-FILE BREAKAGE (the targeted-green / full-red gap that sinks epics at merge): ${TEST_CMD ? `if the diff ADDS, RENAMES, or changes the signature of any EXPORTED symbol (a function/const/type other modules import), other files' mock factories (vi.mock/jest.mock) and importers can break in ways your TARGETED tests never exercise. After your targeted tests pass, run the FULL suite ONCE against YOUR worktree. The project test command is \`${TEST_CMD}\` — do NOT run it verbatim (it targets the integration tree, not your worktree). Run the SAME runner but RE-POINT its directory flag from the integration tree to YOUR worktree ${wt}: pnpm \`-C ${wt}\`, npm \`--prefix ${wt}\`, yarn \`--cwd ${wt}\`, cargo \`--manifest-path ${wt}/Cargo.toml\`, go \`-C ${wt}\`, pytest the path arg \`${wt}\`. Running the integration-tree command unchanged would test the WRONG tree and can disturb the shared integration worktree mid-ticket. Tee output to \`${REPO_ROOT}/.swarm/test-results/${t.id}-test.txt\` (\`mkdir -p\` its dir first). FIX every NEW failure your change introduced at the ROOT — most often an un-updated mock factory or fixture in another file (update it; NEVER delete/skip a test) — and re-run until the full suite shows no failure your change caused. If the suite is too large to finish, capture what you can, say so, and rely on the merge gate. This moves the integration check LEFT (into the cheap-to-fix worktree) instead of discovering it at merge, where it cascade-skips every dependent ticket.` : 'no project test command was detected, so there is no full suite to run — note that the merge has no integration gate either and cross-file breakage cannot be caught automatically.'}
+- ENV vs FAILURE: if the test RUNNER itself cannot execute at all — it errors BEFORE running any test (tooling/PATH/codegen/lockfile/missing-binary), e.g. \`ERR_PNPM_BAD_PATH_DIR\` or "vitest: command not found" — that is an ENVIRONMENT hazard, NOT a pass and NOT a test failure: set status=ENV_BLOCKED and put the exact runner error in the gates one-liner. "Tests ran and some failed" is ISSUES_FOUND; "tests could not run at all" is ENV_BLOCKED. NEVER report COMPLETE when the suite never executed.
 - Cap Gate #0 fix loops at ~3 cycles; if still red, report ISSUES_FOUND with the specifics rather than looping. Coverage secondary (~70-80%, 90%+ critical), skip trivial code.
 - Commit: \`git -C ${wt} add -A\`; \`test(${t.id}): ...\`. Files changed by implementation: ${(impl.files_changed || []).join(', ') || '(discover via git diff)'}
 ${selfPost(t, H.testing, false)}
-Return status (COMPLETE | ISSUES_FOUND), a gates one-liner, files_changed, write/edit counts, committed.`,
+Return status (COMPLETE | ISSUES_FOUND | ENV_BLOCKED), a gates one-liner, files_changed, write/edit counts, committed.`,
         { schema: WORK_SCHEMA, label: `test ${t.id}`, phase: 'Build', model: ROUTE.test },
       )
       ticketResult.phases.testing = test ? test.status : 'NO_REPORT'
@@ -1139,8 +1236,9 @@ Return status (COMPLETE | ISSUES_FOUND), a gates one-liner, files_changed, write
       // (`=== 'ISSUES_FOUND'`) let a test agent that returned BLOCKED / NEEDS_CONTEXT — the likely
       // outcome when the suite can't even run — pass as if tests were green.
       if (!gate(test, 'COMPLETE')) {
-        log(`BLOCK ${t.id} at testing — ${test ? test.status : 'no report'} (gate not COMPLETE).`)
-        blocked.add(t.id); ticketResult.outcome = 'BLOCKED_TESTING'; results.push(ticketResult); continue
+        const envBlocked = test && test.status === 'ENV_BLOCKED'
+        log(`BLOCK ${t.id} at testing — ${test ? test.status : 'no report'}${envBlocked ? ' — the test RUNNER could not execute (environment hazard); NO integration verification happened for this ticket' : ' (gate not COMPLETE)'}.`)
+        blocked.add(t.id); ticketResult.outcome = envBlocked ? 'BLOCKED_TEST_ENV' : 'BLOCKED_TESTING'; results.push(ticketResult); continue
       }
     } else { ticketResult.phases.testing = 'skipped' }
 
@@ -1376,7 +1474,7 @@ const summary = {
   skipped_upstream: results.filter((r) => r.outcome === 'SKIPPED_UPSTREAM').map((r) => r.id),
   unprocessed,
   baseline_pre_existing_failures: BASELINE.length,
-  integration_verification: TEST_CMD ? `test-diff gate (cmd: ${TEST_CMD})` : 'NONE — no test command detected; merges not integration-verified',
+  integration_verification: TEST_CMD ? `test-diff gate (cmd: ${TEST_CMD})${TEST_CMD_TARGETS_ROOT ? '' : ' — WARNING: command does not reference the integration tree; merges may have tested the WRONG directory (treat as UNTRUSTED)'}` : 'NONE — no test command detected; merges not integration-verified',
   pr_url: pr ? pr.pr_url : (flags.push ? '(nothing merged)' : '(local-only; pass --push to open a PR)'),
   results,
   next_steps: nextStepsParts.join(' '),
