@@ -204,3 +204,74 @@ test('source — first phase transitions the ticket to In Progress via the poste
   assert.ok(src.includes("{ state: 'In Progress'"), 'the first phase must set In Progress through postPhase')
   assert.ok(src.includes('linear_reporting:'), 'the summary must surface the Linear-reporting tally')
 })
+
+// ── No permission-halt: the epic lock is a Write-tool state cell, never `rm`/`mkdir` (2026-06-25) ──
+// Motivation: in the ProductLobster run wf_7f92f89c-cd6 the ONLY destructive shell command the whole
+// run issued was `rm -rf <…>/.swarm/.locks/<id>.lock` to release the lock; `rm` is not auto-approvable,
+// so in acceptEdits ("auto") mode it raised a permission prompt and the run HALTED at finalize.
+test('source — epic lock acquire/release uses the Write tool, never rm/mkdir (no permission-halt)', () => {
+  assert.ok(!src.includes('rm -rf <LOCK>'), 'no `rm -rf <LOCK>` may remain — it raises a permission prompt that stalls the run')
+  assert.ok(!src.includes('mkdir <LOCK>'), 'no `mkdir <LOCK>` may remain — acquire must use the Write tool')
+  assert.ok(!/rm -rf \$\{LOCK_PATH\}/.test(src), 'finalize must not `rm` the lock')
+  assert.ok(!/rm -rf \$\{lockPath\}/.test(src), 'releaseEpicLock must not `rm` the lock')
+  assert.ok(src.includes('const RELEASE_LOCK_INSTR ='), 'a shared Write-based release instruction must exist')
+  assert.ok(src.includes('OVERWRITING the lock file'), 'release must overwrite the lock via the Write tool, not delete it')
+  assert.ok(src.includes('used as a STATE CELL'), 'the lock must be documented as a single-file state cell')
+  // Freshness is still an allowlisted, read-only `find -mmin` check (24h staleness), not a dir mtime.
+  assert.ok(src.includes('find <LOCK> -maxdepth 0 -mmin +1440'), 'acquire must keep the read-only 24h staleness check')
+  assert.ok(src.includes('first line is'), 'acquire must key on the RELEASED/ACTIVE first line of the state cell')
+  // The ACTIVE cell carries an acquisition timestamp so the LOCKED-refusal lock_holder reports WHEN.
+  assert.ok(src.includes('acquired: <UTC_NOW>'), 'the ACTIVE lock cell must record an acquisition timestamp (lock_holder reports who/WHEN)')
+  // DRY: the release contract has ONE source per form — a brief inline helper for the setup abort
+  // clauses, used at all 4 sites, so no site can restate "overwrite to RELEASED, never rm" freehand.
+  assert.ok(src.includes('const RELEASE_LOCK_BRIEF ='), 'a brief inline release helper must exist for the setup abort clauses')
+  assert.equal((src.match(/RELEASE_LOCK_BRIEF\('<LOCK>'\)/g) || []).length, 4, 'all 4 setup-prompt abort paths must release via RELEASE_LOCK_BRIEF, not freehand prose')
+  assert.ok(!/release the lock by overwriting <LOCK>/.test(src) && !/overwrite <LOCK> to a `RELEASED` first line with the Write tool/.test(src), 'no freehand "overwrite <LOCK> to RELEASED" restatement may remain outside the helper')
+})
+
+// ── Cross-ticket (epic-level) codex review + fix (point-2, 2026-06-25) ──
+test('source — a cross-ticket codex pass reviews the whole epic diff after merge', () => {
+  assert.ok(src.includes('const EPIC_CODEX_SCHEMA ='), 'EPIC_CODEX_SCHEMA must exist')
+  assert.ok(src.includes('CROSS-TICKET Codex review driver'), 'the cross-ticket codex driver prompt must exist')
+  assert.ok(src.includes("phase('Cross-ticket review')"), 'a Cross-ticket review phase must exist')
+  // Gated on >1 merged ticket: a single-ticket epic has no cross-ticket seam (the whole-epic diff IS
+  // that one ticket's diff, already reviewed by its per-ticket codex), so the slow/rate-limited pass
+  // must NOT run for it. (v5.4.0 PR-9 review fix — was `> 0`, which burned the codex budget for nothing.)
+  assert.ok(src.includes('if (mergedIds.size > 1) {'), 'cross-ticket codex must be gated on MORE THAN ONE ticket having merged (a single ticket has no cross-ticket seam)')
+  assert.ok(!src.includes('if (mergedIds.size > 0) {'), 'the cross-ticket gate must NOT fire on a single-ticket epic')
+  assert.ok(src.includes('base_branch=${DEFAULT_BRANCH} (the FULL epic diff'), 'it must review the full epic diff vs the default branch, not one ticket')
+  // Same non-fatal skip contract as the per-ticket codex (rate-limit / unavailable → skip, report out).
+  assert.ok(src.includes('"error":"rate_limit"'), 'rate-limit detection must mirror the per-ticket codex')
+  assert.ok(/RATE_LIMITED.*UNAVAILABLE/.test(src), 'the cross-ticket codex must be able to skip non-fatally')
+  // No later merge gate, so a regressing fix is re-verified and reverted — to the CAPTURED pre-codex sha,
+  // NOT `HEAD~1` (codex may make >1 commit; HEAD~1 would leave earlier regressing commits in place).
+  assert.ok(src.includes('precodex_sha'), 'the cross-ticket codex must capture/return the pre-codex sha so the revert is commit-count-agnostic')
+  assert.ok(src.includes('reset --hard <PRECODEX_SHA>'), 'the integration-regression revert must reset to the captured pre-codex sha, not HEAD~1')
+  assert.ok(!src.includes('reset --hard HEAD~1'), 'the brittle single-commit `reset --hard HEAD~1` revert must be gone entirely')
+  // Staging must mirror the per-ticket fix-forward: `add -u` (+ explicit new files), never `add -A`
+  // (which would absorb the gitignored .swarm/ tree or other untracked scratch into the commit).
+  assert.ok(/then stage WITHOUT sweeping untracked scratch.*add -u/s.test(src), 'the cross-ticket commit must stage with add -u, not add -A')
+  assert.ok(src.includes('cross_ticket_codex:'), 'the summary must report the cross-ticket codex outcome')
+})
+
+// The cross-ticket codex commits straight onto the epic branch with NO later merge gate, so its kept
+// fix must (a) get an INDEPENDENT correctness re-gate (the per-ticket "never reaches merge unreviewed"
+// invariant) that reverts on a non-APPROVED review, and (b) be PUSHED under --push so it reaches the PR.
+test('source — kept cross-ticket fix is correctness re-gated and pushed under --push', () => {
+  // (a) independent re-gate that fails closed by reverting to the captured sha.
+  assert.ok(src.includes('re-gating the CROSS-TICKET codex fixes'), 'a cross-ticket correctness re-gate prompt must exist')
+  assert.ok(src.includes('const keptCrossFix ='), 'the re-gate must only run on a KEPT cross-ticket fix')
+  assert.ok(src.includes("gate(regate, 'APPROVED')"), 'the re-gate must fail closed on a non-APPROVED review')
+  assert.ok(src.includes('crossRegateReverted = true'), 'a re-gate failure must revert the kept fix and flag it')
+  assert.ok(src.includes('reset --hard ${sha}'), 'the re-gate revert must reset to the captured pre-codex sha')
+  // (b) the kept fix is pushed (per-ticket merges push, the PR step does not — without this the kept
+  // fix would be local-only and silently dropped on a --push run).
+  assert.ok(/flags\.push && crossTicketCodex[\s\S]*?push origin \$\{EPIC_BRANCH\}/.test(src), 'a kept cross-ticket fix must be pushed to origin under --push')
+})
+
+// A KEPT cross-ticket fix that could not be integration-verified (ENV_BLOCKED / no test command / no
+// re-gate) must surface a next_steps warning — it must never ship silently as if it were verified.
+test('source — a kept-but-unverified cross-ticket fix warns the operator', () => {
+  assert.ok(src.includes('const crossKeptUnverified ='), 'an unverified-kept-fix condition must exist')
+  assert.ok(/crossKeptUnverified\)\s*nextStepsParts\.push/.test(src), 'a kept-but-unverified cross-ticket fix must push a next_steps warning')
+})

@@ -8,7 +8,7 @@ closes-ticket: false
 
 # Epic Swarm Workflow
 
-Launch the **epic-swarm-workflow** dynamic workflow bundled with this plugin. It runs the core `/epic-swarm` pipeline over a Linear epic as a Claude Code **dynamic workflow** (the JavaScript `Workflow` runtime, which orchestrates many subagents from a script). Each ticket runs a pipeline **sized to its effort tier**: a STANDARD ticket flows through adaptation → implementation → testing → documentation → code review → Codex cross-model review → security → merge, while NO_CODE and SMALL tickets collapse to a shorter build → review → merge (no Codex/docs/separate-security phase). Every tier keeps a hard review floor for any code change, with full per-agent failure isolation (no single agent failure can abort the run).
+Launch the **epic-swarm-workflow** dynamic workflow bundled with this plugin. It runs the core `/epic-swarm` pipeline over a Linear epic as a Claude Code **dynamic workflow** (the JavaScript `Workflow` runtime, which orchestrates many subagents from a script). Each ticket runs a pipeline **sized to its effort tier**: a STANDARD ticket flows through adaptation → implementation → testing → documentation → code review → Codex cross-model review → security → merge, while NO_CODE and SMALL tickets collapse to a shorter build → review → merge (no Codex/docs/separate-security phase). Every tier keeps a hard review floor for any code change, with full per-agent failure isolation (no single agent failure can abort the run). After every ticket has merged, one **epic-level cross-ticket Codex pass** reviews the whole epic diff (epic branch vs the default branch) to catch integration issues no per-ticket review can see; it skips non-fatally if Codex is rate-limited/unavailable, and any fix it commits is re-verified against the integration suite and reverted on a new failure.
 
 This command is a thin launcher: it does not re-implement the workflow — it runs the bundled `workflows/epic-swarm-workflow.js` via the `Workflow` tool.
 
@@ -54,7 +54,34 @@ The plugin install directory is exposed to this command's shell as `${CLAUDE_PLU
 - **Requires dynamic workflows enabled** — a plan-gated research-preview feature. On Pro, turn on the "Dynamic workflows" row in `/config`. If it's disabled, the `Workflow` tool will not run.
 - **Recommended session effort:** `high`. Per-agent effort is not configurable from a workflow; the script already routes models per phase — **Opus** for reasoning work (plan, adapt, implement, test, review, review-fix, codex, and both SMALL-tier agents — build & review), **Sonnet** for mechanical work (setup, docs, security, merge, the PR, and both NO-CODE-tier agents — build & review). Note that review-fix and the SMALL build/review run on Opus, so Opus spend is higher for SMALL-heavy epics than the short list above implies. Tune the `ROUTE` map at the top of the script.
 - **Safety:** never merges to `main`/`master` — all work lands on the epic branch. Reviews and the security scan **fail closed** (a failed/empty review blocks the merge), and the merge gate uses a test-diff so pre-existing/flaky test failures never block a clean merge. A merge blocked by *new* test failures gets one bounded fix-forward pass (re-merge → fix at the root → re-gate) before it blocks, so a cross-file mock/fixture gap can't cascade-kill an epic.
-- **Concurrency:** by default the whole epic integrates in a **dedicated git worktree** (`.swarm/epics/<id>`), never your main checkout — so you can run swarms for **different epics** in the same repo at once, and your working tree is left untouched. A per-epic lock refuses an accidental second run of the **same** epic. As a deterministic backstop the run captures your main tree's HEAD **and branch** at setup and re-reads them at finish — the summary's `main_tree_safety` field reports one of `ok` (untouched), `CHANGED` (the tree moved during the run — usually your own concurrent work, since ISO mode is built to let you keep using the main checkout; only occasionally another process), or `UNVERIFIED` (the assert couldn't run — never silently reported as `ok`). The framing is a neutral notice for you to judge, not a hijack accusation. (Note: this isolates *git* only — two epics writing the same local database/test backend still need separate data isolation.)
+- **Cross-ticket review:** once all tickets have merged, an epic-level Codex pass reviews the combined epic diff for cross-ticket integration breakage. It is non-fatal — on a Codex rate-limit/outage the run completes anyway and the summary's `cross_ticket_codex` field plus `next_steps` say exactly what happened (so you can run a manual cross-model review if it was skipped). Because nothing gates after it, a fix it commits that regresses the integration suite is automatically reverted, and the run flags the unresolved cross-ticket issue for you.
+- **Concurrency:** by default the whole epic integrates in a **dedicated git worktree** (`.swarm/epics/<id>`), never your main checkout — so you can run swarms for **different epics** in the same repo at once, and your working tree is left untouched. A per-epic lock refuses an accidental second run of the **same** epic; the lock is a single state-cell file written/released with the **Write tool** (not `rm`/`mkdir`), so it never raises a permission prompt that would stall an unattended run. As a deterministic backstop the run captures your main tree's HEAD **and branch** at setup and re-reads them at finish — the summary's `main_tree_safety` field reports one of `ok` (untouched), `CHANGED` (the tree moved during the run — usually your own concurrent work, since ISO mode is built to let you keep using the main checkout; only occasionally another process), or `UNVERIFIED` (the assert couldn't run — never silently reported as `ok`). The framing is a neutral notice for you to judge, not a hijack accusation. (Note: this isolates *git* only — two epics writing the same local database/test backend still need separate data isolation.)
+
+## Avoiding permission prompts (recommended allowlist)
+
+A long unattended run can stall on a single approval prompt. The workflow's subagents run under your **session** permission mode: in `acceptEdits` (the `auto` mode) the Write/Edit tools auto-approve, but **Bash and MCP tools still go through your `allow`/`ask`/`deny` rules**. Pre-approve what the workflow runs by adding a `permissions.allow` block to the **target repo's** `.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh pr:*)",
+      "Bash(pnpm:*)", "Bash(npm:*)", "Bash(npx:*)", "Bash(yarn:*)",
+      "Bash(find:*)", "Bash(mkdir:*)", "Bash(tee:*)",
+      "mcp__codex-review-server__codex_review_and_fix",
+      "mcp__linear-server__get_issue", "mcp__linear-server__list_issues",
+      "mcp__linear-server__list_comments", "mcp__linear-server__create_comment",
+      "mcp__linear-server__update_issue"
+    ]
+  }
+}
+```
+
+- Keep the **test-runner family your repo actually uses** (add `Bash(cargo:*)` / `Bash(go:*)` / `Bash(python:*)` / `Bash(pytest:*)` for non-JS stacks).
+- **`Bash(git:*)`** (not a per-subcommand pattern) is deliberate: the workflow always runs `git -C <dir> …`, and Claude Code matches Bash patterns as a literal prefix with no `-C` awareness, so `Bash(git worktree:*)` would **not** match. It's safe here — the workflow never touches `main`/`master` and never pushes without `--push`.
+- **No `Bash(rm:*)`** is needed: the epic lock is a Write-tool state cell (v5.4.0+), so the workflow issues no `rm`.
+- Using the **claude.ai Linear** connector instead of the MCP server, or running in plain `default` mode (which also needs `Read`/`Glob`/`Grep`/`Write`/`Edit`)? See the full annotated block + variants in [docs/TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md#issue-epic-swarm-workflow-the-dynamic-workflow-halts-midlate-run-waiting-for-an-approval).
 
 ## Cost note
 
