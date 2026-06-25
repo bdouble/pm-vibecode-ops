@@ -120,6 +120,13 @@
  *   • Operator guidance is threaded, not dropped: free text after the epic ID
  *     (plus --skills / --context-file) is injected into every code-touching agent, so
  *     per-epic conventions / skill-loading need no script edit.
+ *   • Epic context reaches every phase (v5.5): besides reading its OWN description AND
+ *     comments, each per-ticket phase (adapt, implement, test, docs, review, codex,
+ *     security) now re-reads the PARENT EPIC's description AND comments via readTicket().
+ *     Cross-cutting context an operator or earlier agent left as an epic-level comment —
+ *     which lives in no single AC, and which a comment added AFTER planning ran or on a
+ *     resume would otherwise miss entirely — is no longer lost. Previously only the
+ *     planning agent read the epic's comments, once, at the start of the run.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * MODEL ROUTING (aggressive Sonnet; Opus where reasoning matters)
@@ -161,7 +168,7 @@ export const meta = {
 // Semver of this workflow file — logged at start (and returned in the summary) so a STALE installed
 // copy is visible at a glance. The 2026-06-22 incident ran the v5.0.0 (pre-isolation) install while the
 // repo already had the fix; a versioned banner would have surfaced "you are not on latest" immediately.
-const VERSION = '5.4.0'
+const VERSION = '5.5.0'
 
 // ── Model routing. Change here to re-tune. ──────────────────────────────────
 // `fable` is also a valid value — operators wanting maximum-capability reasoning
@@ -296,10 +303,14 @@ ${acs ? acs.map((c, i) => `${i + 1}. ${c}`).join('\n') : '(none captured — fet
 Scope note: ${t.scope_note || '(none)'}`
 }
 
-// Comments carry critical details and prior phases' full reports — ALWAYS read both
-// the description AND the comments wherever a ticket is read.
+// Comments carry critical details and prior phases' full reports — ALWAYS read both the
+// description AND the comments, on the sub-ticket AND its parent epic, wherever a ticket is
+// read (v5.5). The planning agent reads the epic's comments once at the start, but free-form
+// epic-level context (cross-cutting conventions the operator or earlier agents added, or a
+// comment posted after planning ran / on resume) lives in no single AC and would otherwise
+// never reach the per-phase workers — so each phase re-reads the epic's comments too.
 function readTicket(t) {
-  return `READ FOR CONTEXT FIRST (read-only): fetch Linear ${t.id} and read BOTH its full description AND all of its comments — comments routinely hold requirements and the complete reports posted by earlier workflow phases; never work from the description (or a one-line summary) alone. ${LINEAR_NOTE}`
+  return `READ FOR CONTEXT FIRST (read-only): fetch Linear ${t.id} and read BOTH its full description AND all of its comments, THEN fetch its PARENT EPIC ${epicId} and read ITS full description AND all of ITS comments too — comments on the ticket AND on the epic routinely hold requirements and the complete reports posted by earlier workflow phases, and epic-level comments often carry cross-cutting context (added by the operator or by earlier agents) that applies to this ticket but is captured in no single acceptance criterion; never work from a description (or a one-line summary) alone. ${LINEAR_NOTE}`
 }
 
 // ── JSON schemas — deliberately SMALL (big prose goes to Linear, not here). ──

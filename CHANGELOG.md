@@ -5,6 +5,13 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.5.0] - 2026-06-25
+
+Minor release — **"epic-swarm-workflow: every phase reads the parent epic's comments."** Confined to `workflows/epic-swarm-workflow.js`, its guard test, and the `workflows/README.md` description.
+
+### Changed
+- **Every per-ticket phase now reads the parent epic's description AND comments, not just the sub-ticket's.** The workflow already required each phase to read both the description and the comments of *its own* sub-ticket (via the shared `readTicket()` helper that the adapt, implement, test, docs, review, codex, and security phases all route through). But the **parent epic's** comments were read only once — by the planning/classification agent at the start of the run. Free-form, cross-cutting context an operator or an earlier agent leaves as an *epic-level* comment (a convention that applies to every ticket, or a note added *after* planning ran or on a resume) lives in no single acceptance criterion, so it never reached the workers. `readTicket()` now directs every phase to also fetch the parent epic (`${epicId}`) and read its full description and all of its comments. Because the read lives in the single chokepoint all phases share, it cannot drift per-phase. A new source-invariant guard test (`source — every per-ticket phase reads the parent epic description AND comments`) locks the behavior in.
+
 ## [5.4.0] - 2026-06-25
 
 Minor release — **"epic-swarm-workflow: no permission-halt + cross-ticket codex."** Two enhancements driven by the latest ProductLobster run (workflow `wf_7f92f89c-cd6`, epic `PRO-1788`, ~13.6h). All changes are confined to `workflows/epic-swarm-workflow.js` and its guard test (plus the command wrapper).
@@ -2394,6 +2401,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[5.5.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.5.0
 [5.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.4.0
 [5.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.3.1
 [5.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.3.0

@@ -275,3 +275,42 @@ test('source — a kept-but-unverified cross-ticket fix warns the operator', () 
   assert.ok(src.includes('const crossKeptUnverified ='), 'an unverified-kept-fix condition must exist')
   assert.ok(/crossKeptUnverified\)\s*nextStepsParts\.push/.test(src), 'a kept-but-unverified cross-ticket fix must push a next_steps warning')
 })
+
+// ── Each phase reads the PARENT EPIC's comments, not just the sub-ticket's (v5.5, 2026-06-25) ──
+// Epic-level comments carry cross-cutting context (operator/agent notes, conventions, or a comment
+// added AFTER planning ran / on resume) that lives in no single AC. The planning agent reads the epic
+// comments once at the start; without this, the per-phase workers never see them. readTicket() is the
+// single chokepoint every per-ticket phase routes through, so the epic-comment read lives THERE (one
+// place, can't drift per-phase) rather than being restated in each phase prompt.
+test('source — every per-ticket phase reads the parent epic description AND comments', () => {
+  const m = src.match(/function readTicket\(t\)\s*\{[\s\S]*?\n\}/)
+  assert.ok(m, 'readTicket(t) helper must exist')
+  const body = m[0]
+  // SUB-TICKET read: both description AND comments (lower-case "its" — distinct from the epic clause).
+  assert.ok(/its full description AND all of its comments/.test(body), 'readTicket must still read the SUB-TICKET description + comments')
+  // EPIC read: the helper must direct the agent to the parent epic AND read BOTH its description and
+  // its comments. Pin the WHOLE clause (description + comments together) — asserting only "comments"
+  // would let the "read ITS full description AND" half silently drop while the test stayed green
+  // (the v5.5 feature is description AND comments, not comments alone).
+  assert.ok(/PARENT EPIC \$\{epicId\} and read ITS full description AND all of ITS comments/.test(body),
+    'readTicket must read the parent epic\'s full DESCRIPTION and all of its comments — not the comments alone')
+  // Chokepoint integrity: every per-ticket work phase routes context-reading through readTicket(t),
+  // so the epic read can't be bypassed by one phase. Count the INTERPOLATION call sites
+  // (`${readTicket(t)}`) — NOT a bare /readTicket\(t\)/ which also matches the `function readTicket(t)`
+  // DEFINITION line and would inflate the count, letting a dropped call site hide under the slack.
+  // Exact count is a deliberate tripwire (cf. RELEASE_LOCK_BRIEF above): dropping a phase's read fails
+  // it, and ADDING a per-ticket phase fails it too until you bump this number — which forces you to
+  // confirm the new phase actually threads readTicket(t). Currently 9: NO-CODE build, SMALL build,
+  // adapt, implement, test, docs, codex, security, plus the shared reviewPrompt builder.
+  const callSites = (src.match(/\$\{readTicket\(t\)\}/g) || []).length
+  assert.equal(callSites, 9, `every per-ticket phase must thread \${readTicket(t)} (expected 9 call sites, found ${callSites}) — if you added/removed a phase, update this count and confirm the new phase reads the epic`)
+  // reviewPrompt backs all three tiers' code reviews. Scope the check to reviewPrompt's OWN body — the
+  // next top-level construct after it is `for (const t of tickets)` — so the match can't borrow a
+  // readTicket(t) from a sibling prompt (a non-greedy /function reviewPrompt[\s\S]*?readTicket\(t\)/
+  // walks past reviewPrompt's closing brace and would stay green even if reviewPrompt dropped its own).
+  const rpStart = src.indexOf('function reviewPrompt')
+  const rpEnd = src.indexOf('for (const t of tickets)', rpStart)
+  assert.ok(rpStart !== -1 && rpEnd > rpStart, 'reviewPrompt and the per-ticket loop must both exist (this test anchors on them)')
+  assert.ok(src.slice(rpStart, rpEnd).includes('${readTicket(t)}'),
+    'the shared reviewPrompt builder must thread ${readTicket(t)} in its OWN body (all three review tiers depend on it for epic context)')
+})
