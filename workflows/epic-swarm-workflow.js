@@ -417,7 +417,9 @@ const CODEX_SCHEMA = {
 }
 // Cross-ticket (epic-level) codex: same skip semantics as the per-ticket CODEX_SCHEMA, plus the
 // integration re-test fields (the epic is already merged, so a fix that breaks the suite must be
-// caught and reverted here — there is no later merge gate to catch it).
+// caught and reverted here — there is no later merge gate to catch it). precodex_sha lets the
+// workflow run an INDEPENDENT correctness re-gate on the kept fix (mirroring the per-ticket "codex
+// output never reaches merge unreviewed" invariant) and reset --hard back to it if that re-gate fails.
 const EPIC_CODEX_SCHEMA = {
   type: 'object', required: ['status'],
   properties: {
@@ -426,6 +428,7 @@ const EPIC_CODEX_SCHEMA = {
     integration_tests: { type: 'string', description: 'PASS | NEW_FAILURES | ENV_BLOCKED | NONE (NONE = no fixes applied OR no test command to verify with)' },
     new_failures: { type: 'array', items: { type: 'string' }, description: 'tests failing after the codex fixes whose FULL identifier is NOT in the baseline' },
     reverted: { type: 'boolean', description: 'true if the codex fix commit introduced NEW failures and was reset --hard so the epic branch is left exactly as the per-ticket merges produced it' },
+    precodex_sha: { type: 'string', description: 'the epic-branch HEAD sha captured BEFORE the codex commit; REQUIRED whenever a fix was committed so the workflow can re-review <precodex_sha>...HEAD and reset --hard back to it if the correctness re-gate fails' },
     report_md: REPORT_MD,
   },
 }
@@ -492,9 +495,15 @@ async function safeAgent(prompt, opts, fallback = null) {
 // only thing lost is `mkdir`'s atomicity on acquire; for a human-launched swarm the race that needs is
 // a sub-second double-launch of the SAME epic (the realistic case — relaunching an epic already running
 // hours later — is still caught by the presence+freshness check), an acceptable trade for never halting.
+// Two forms of the SAME release contract (overwrite to a `RELEASED` first line with the Write tool,
+// NEVER `rm`/`mkdir` — a destructive command's permission prompt would stall an unattended run). FULL
+// is a standalone instruction (releaseEpicLock + finalize); BRIEF drops inline into the setup prompt's
+// abort clauses. Both take the lock-path expression so a release-contract change touches THESE two
+// lines, not the six call sites.
 const RELEASE_LOCK_INSTR = (lockExpr) => `Release the epic lock by OVERWRITING the lock file ${lockExpr} with the Write TOOL (NOT a shell command — \`rm\`/\`mkdir\` are not auto-approvable and a permission prompt would STALL an unattended run; the Write tool auto-approves and creates parent dirs as needed) so its ENTIRE contents become exactly:
 RELEASED
 epic: ${epicId}`
+const RELEASE_LOCK_BRIEF = (lockExpr) => `release the lock (overwrite ${lockExpr} to a \`RELEASED\` first line with the Write tool, NEVER \`rm\` — a permission prompt would stall the run)`
 
 // Release the epic lock via a tiny agent (the workflow JS sandbox has no shell of its own). Used
 // by the early-abort paths AND the finalize step so a lock setup acquired is NEVER leaked by an
@@ -748,27 +757,28 @@ ${flags.dryRun
   ? `3. DRY RUN — acquire NO lock, create NO branch/worktree, install NOTHING: set REPO_ROOT = MAIN_REPO, do ONLY the detection part of step 7 (report the test command you WOULD use, but do NOT run it), and report with baseline_failures = [], lock_path = "". Skip steps 4, 5, 6, and 8 entirely (step 7 is detection-only here).`
   : `3. ACQUIRE THE EPIC LOCK (stops a SECOND concurrent run of THIS SAME epic from colliding on the branch/worktrees/tickets): LOCK = \`<MAIN_REPO>/.swarm/.locks/${epicId}.lock\` — a single FILE used as a STATE CELL (NOT a directory). Do ALL lock reads/writes with the Read and Write TOOLS, NEVER \`mkdir\`/\`rm\`/shell redirection: a destructive shell command is not auto-approvable and its permission prompt would STALL this run (the Write tool auto-approves and creates the \`.swarm/.locks/\` parent dir as needed; the \`find\` below is read-only and allowlisted). Acquire in three checks:
    - INSPECT: Read \`<LOCK>\` (a missing file is EXPECTED and fine). If it exists, also test freshness with \`find <LOCK> -maxdepth 0 -mmin +1440\` (prints the path if its mtime is older than 24h = STALE).
-   - ACQUIRE if the file does NOT exist, OR its first line is \`RELEASED\`, OR it is STALE (find printed it): WRITE \`<LOCK>\` (Write tool) so its contents are exactly:
+   - ACQUIRE if the file does NOT exist, OR its first line is \`RELEASED\`, OR it is STALE (find printed it): first get the current UTC time with \`date -u +%FT%TZ\` (a read-only, auto-approvable command — run it as its OWN Bash call), then WRITE \`<LOCK>\` (Write tool) so its contents are exactly (substitute that timestamp for <UTC_NOW>):
 \`\`\`
 ACTIVE
 epic: ${epicId}
+acquired: <UTC_NOW>
 held-by: this epic-swarm-workflow run (see the run transcript)
 \`\`\`
-     Writing refreshes the file's mtime, which is what the 24h staleness check reads — so a reclaim is automatically "fresh", no special handling. Continue.
+     The \`acquired:\` line is what the LOCKED-refusal diagnostic reports back as lock_holder, so the operator can see WHEN the lock was taken (resume-vs-clear). The 24h staleness check itself reads the file's mtime — which Write refreshes — so a reclaim is automatically "fresh", no special handling. Continue.
    - REFUSE if the file exists AND its first line is \`ACTIVE\` AND it is FRESH (find printed nothing — another run almost certainly owns this epic): STOP — return status=LOCKED, lock_holder = the file's full contents, and a baseline_note telling the operator to resume the in-flight run (preferred) or, if certain none is active, force-release by overwriting \`<LOCK>\` so its first line is \`RELEASED\` (or deleting the file) and re-run. Create NO branch/worktree.
 4. ${ISO
     ? `CREATE-OR-REUSE the dedicated epic-integration worktree EPIC_ROOT = \`<MAIN_REPO>/.swarm/epics/${epicId}\` holding branch epic/${epicId} (IDEMPOTENT — a prior/interrupted run may have created it; NEVER destroy prior epic-branch work):
    a. \`git -C <MAIN_REPO> fetch origin\` — BEST-EFFORT (ignore non-zero / no remote).
-   b. If EPIC_ROOT already appears in \`git -C <MAIN_REPO> worktree list\`: REUSE it — \`git -C <EPIC_ROOT> checkout epic/${epicId}\` (if this checkout FAILS — e.g. a dirty reused tree — release the lock by overwriting <LOCK> to a \`RELEASED\` first line with the Write tool, NEVER \`rm\`, and return status=FAILED). Then go to step 4d to BIND + VERIFY it — do NOT skip 4d on the reuse path.
+   b. If EPIC_ROOT already appears in \`git -C <MAIN_REPO> worktree list\`: REUSE it — \`git -C <EPIC_ROOT> checkout epic/${epicId}\` (if this checkout FAILS — e.g. a dirty reused tree — ${RELEASE_LOCK_BRIEF('<LOCK>')} and return status=FAILED). Then go to step 4d to BIND + VERIFY it — do NOT skip 4d on the reuse path.
    c. Else \`git -C <MAIN_REPO> worktree prune\`, then: if epic/${epicId} exists locally (\`git -C <MAIN_REPO> branch --list epic/${epicId}\`) or on origin (\`git -C <MAIN_REPO> ls-remote --heads origin epic/${epicId}\`), create the worktree FROM it: \`git -C <MAIN_REPO> worktree add <EPIC_ROOT> epic/${epicId}\`. Otherwise create a fresh epic branch off the default: \`git -C <MAIN_REPO> worktree add <EPIC_ROOT> -b epic/${epicId} origin/<default_branch>\` (fall back to local <default_branch> if origin/<default_branch> is unknown).
-   d. (Runs for BOTH the reuse path 4b and the create path 4c.) Confirm \`git -C <EPIC_ROOT> rev-parse --abbrev-ref HEAD\` prints epic/${epicId} and is NOT main/master. REPO_ROOT = EPIC_ROOT for the rest of the run. If creation OR this verification FAILED, release the lock (overwrite <LOCK> to a \`RELEASED\` first line with the Write tool, NEVER \`rm\`) and return status=FAILED with the reason.`
-    : `IN-PLACE: REPO_ROOT = MAIN_REPO. PRECONDITION (this mode mutates the SHARED working tree, so it must not clobber a concurrent agent): refuse to run if the main tree is unsafe to check out. Inspect \`git -C <MAIN_REPO> status --porcelain\` and main_repo_branch (from step 1). If the main tree is DIRTY (uncommitted changes you did not create) OR is on a branch that is NOT main/master, NOT the default branch, and NOT epic/${epicId} (it likely belongs to another agent — checking out would hijack it), then RELEASE THE LOCK (overwrite <LOCK> to a \`RELEASED\` first line with the Write tool, NEVER \`rm\`) and return status=FAILED with a baseline_note explaining the main tree is busy and suggesting the default isolated mode (which never touches the main tree). Otherwise create + checkout the epic branch in the main tree: \`git -C <MAIN_REPO> fetch origin\` (ignore if no remote); if epic/${epicId} exists check it out, else \`git -C <MAIN_REPO> checkout -b epic/${epicId} <origin/default-or-default>\`. NEVER touch main/master. Verify you are not on main/master.`}
+   d. (Runs for BOTH the reuse path 4b and the create path 4c.) Confirm \`git -C <EPIC_ROOT> rev-parse --abbrev-ref HEAD\` prints epic/${epicId} and is NOT main/master. REPO_ROOT = EPIC_ROOT for the rest of the run. If creation OR this verification FAILED, ${RELEASE_LOCK_BRIEF('<LOCK>')} and return status=FAILED with the reason.`
+    : `IN-PLACE: REPO_ROOT = MAIN_REPO. PRECONDITION (this mode mutates the SHARED working tree, so it must not clobber a concurrent agent): refuse to run if the main tree is unsafe to check out. Inspect \`git -C <MAIN_REPO> status --porcelain\` and main_repo_branch (from step 1). If the main tree is DIRTY (uncommitted changes you did not create) OR is on a branch that is NOT main/master, NOT the default branch, and NOT epic/${epicId} (it likely belongs to another agent — checking out would hijack it), then ${RELEASE_LOCK_BRIEF('<LOCK>')} and return status=FAILED with a baseline_note explaining the main tree is busy and suggesting the default isolated mode (which never touches the main tree). Otherwise create + checkout the epic branch in the main tree: \`git -C <MAIN_REPO> fetch origin\` (ignore if no remote); if epic/${epicId} exists check it out, else \`git -C <MAIN_REPO> checkout -b epic/${epicId} <origin/default-or-default>\`. NEVER touch main/master. Verify you are not on main/master.`}
 5. Ensure \`.swarm/\` is gitignored: if \`git -C <REPO_ROOT> check-ignore .swarm/\` fails, append a line ".swarm/" to <REPO_ROOT>/.gitignore via Edit/Write, THEN COMMIT it on the epic branch (\`git -C <REPO_ROOT> add .gitignore\` then \`git -C <REPO_ROOT> commit -m "chore: ignore .swarm scratch"\`) so it is NOT left as a dangling uncommitted edit that a later ticket's merge stage would absorb into an unrelated commit.
 6. PREPARE REPO_ROOT so its tests can run${ISO ? " — a FRESH worktree has NO installed deps and NO generated artifacts" : ''}: detect the package manager from lockfiles and install deps with a dir flag (e.g. \`pnpm -C <REPO_ROOT> install --frozen-lockfile\`, retrying once WITHOUT --frozen-lockfile on a lockfile-drift failure; \`npm --prefix <REPO_ROOT> ci\`; \`yarn --cwd <REPO_ROOT> install\`).${ISO ? " THEN run the repo's CODEGEN — a fresh worktree's gitignored generated output is ABSENT and imports will FAIL without it: run any package.json script named generate/codegen, and \`prisma generate\` if a prisma/schema.prisma exists (e.g. \`pnpm -C <REPO_ROOT> --filter @repo/database generate\` in a pnpm monorepo). If the operator guidance / context file names exact codegen commands, run THOSE." : ' (the main tree is normally already installed — skip the install unless imports fail).'}
 ${flags.contextFile ? `   CONTEXT FILE: read \`${flags.contextFile}\` (resolve relative to MAIN_REPO if not absolute) and return its contents (capped ~4000 chars) in context_text — it carries operator conventions / codegen steps for this epic; if it names setup/codegen commands, run them in step 6. If the file does not exist, say so in baseline_note and continue.\n` : ''}7. Detect the TEST command, expressed to run from ANY directory WITHOUT a \`cd\`, baked against the absolute REPO_ROOT: e.g. \`pnpm -C <REPO_ROOT> test\`, \`npm --prefix <REPO_ROOT> test\`, \`yarn --cwd <REPO_ROOT> test\`, \`cargo test --manifest-path <REPO_ROOT>/Cargo.toml\`, \`go -C <REPO_ROOT> test ./...\`, \`python -m pytest <REPO_ROOT>\`. Substitute the real absolute path. The command MUST NOT require cd (downstream agents run it verbatim under a no-cd shell policy). Empty string if no test setup exists.
 8. BASELINE: if a test command exists, run it ONCE on REPO_ROOT (the epic branch) and record the set of ALREADY-FAILING tests as baseline_failures using FULL test identifiers (file + test name, e.g. "src/auth.test.ts :: rejects expired token"), NOT bare file paths — the merge gate matches on the whole identifier, so a file-only baseline would mask a NEW failure in a file that already had a different failure. If the suite is huge or hangs, capture what you can and note it. If no test command, baseline_failures = [].`}
 
-${flags.dryRun ? '' : 'SAFETY: if at ANY point after acquiring the lock you must return status=FAILED, release the lock FIRST by overwriting <LOCK> to a `RELEASED` first line with the Write tool (NEVER `rm` — its permission prompt would stall the run), so a re-run is not blocked by a lock from a setup that never started a run.\n'}Return status, repo_root (= ${ISO ? 'the dedicated EPIC_ROOT' : 'MAIN_REPO'}), main_repo (= MAIN_REPO), main_repo_head_sha, main_repo_branch, default_branch, epic_branch (epic/${epicId}), test_cmd, pkg_mgr, baseline_failures[], baseline_note, lock_path (= <LOCK>${flags.dryRun ? ', empty in dry run' : ''})${flags.contextFile ? ', context_text' : ''}.`
+${flags.dryRun ? '' : `SAFETY: if at ANY point after acquiring the lock you must return status=FAILED, ${RELEASE_LOCK_BRIEF('<LOCK>')} FIRST, so a re-run is not blocked by a lock from a setup that never started a run.\n`}Return status, repo_root (= ${ISO ? 'the dedicated EPIC_ROOT' : 'MAIN_REPO'}), main_repo (= MAIN_REPO), main_repo_head_sha, main_repo_branch, default_branch, epic_branch (epic/${epicId}), test_cmd, pkg_mgr, baseline_failures[], baseline_note, lock_path (= <LOCK>${flags.dryRun ? ', empty in dry run' : ''})${flags.contextFile ? ', context_text' : ''}.`
 
 const planPrompt = `You are the swarm planning + classification agent for epic ${epicId}. READ-ONLY: do not modify Linear.
 ${LINEAR_NOTE}
@@ -1538,40 +1548,104 @@ Return status (APPROVED | CHANGES_REQUIRED | BLOCKED), critical_high_count.`,
 // Same contract as the per-ticket codex: NON-FATAL — a rate-limit / unavailable codex skips and the run
 // still completes (the epic work is already merged), and it returns status so the summary reports what
 // happened. Difference: there is no later merge gate to catch a bad fix, so anything codex COMMITS is
-// re-verified against the integration suite here and REVERTED on a NEW failure — the epic branch is
-// never left worse than the per-ticket merges produced it. Skipped entirely when nothing merged.
+// (a) re-verified against the integration suite here and REVERTED on a NEW failure, AND (b) put through
+// an INDEPENDENT correctness re-gate below (the per-ticket "codex output never reaches merge unreviewed"
+// invariant) — the epic branch is never left worse than the per-ticket merges produced it. Gated on
+// >1 merged ticket: a single-ticket epic has NO cross-ticket seam (the whole-epic diff IS that one
+// ticket's diff, already reviewed by its per-ticket codex against the same base), so running the
+// slowest/most rate-limited codex path on it would burn budget for zero new signal.
 let crossTicketCodex = null
-let crossCodexSummary = 'not run (nothing merged)'
-if (mergedIds.size > 0) {
+let crossRegateReverted = false // the correctness re-gate (not the integration suite) reverted the kept fix
+let crossCodexSummary = mergedIds.size === 1
+  ? 'not run (single ticket — no cross-ticket seam; its per-ticket codex already reviewed this diff)'
+  : 'not run (nothing merged)'
+if (mergedIds.size > 1) {
   phase('Cross-ticket review')
   const mergedList = [...mergedIds].join(', ')
   crossTicketCodex = await safeAgent(
     `You are the CROSS-TICKET Codex review driver for epic ${epicId}. All ${mergedIds.size} merged ticket(s) (${mergedList}) are now integrated on ${EPIC_BRANCH} in ${REPO_ROOT}. Review the EPIC AS A WHOLE — the combined diff of every merged ticket against ${DEFAULT_BRANCH} (\`git -C ${REPO_ROOT} diff ${DEFAULT_BRANCH}...${EPIC_BRANCH}\`) — to catch CROSS-TICKET integration issues that per-ticket reviews CANNOT see: an interface one ticket changed that another consumes inconsistently, a caller updated in one ticket whose callee changed in another, helpers/types that diverged across tickets, a refactor only partially applied across the epic. Do NOT re-litigate issues local to a single ticket that its own review already passed — stay on the cross-ticket seam.
 ${SHELL_RULES}
 Call \`mcp__codex-review-server__codex_review_and_fix\` (load via ToolSearch if needed) with project_dir=${REPO_ROOT}, base_branch=${DEFAULT_BRANCH} (the FULL epic diff, NOT a single ticket), and a context string: epic "${plan.epic.title}" + merged tickets ${mergedList}. If the codex MCP is unavailable, return status UNAVAILABLE (do NOT fail — the epic work is already merged). Be efficient — do not loop; let Codex do the review pass.
-Parse the JSON: only \`"error":"rate_limit"\` at the TOP LEVEL is a real rate-limit → status RATE_LIMITED (skip, not fatal). The phrase "rate limit" inside a \`"status":"complete"\` output is a code FINDING, not an error. On "complete": Codex auto-fixes unambiguous CROSS-TICKET P1-P3; fix remaining cross-ticket P1/P2 on ${EPIC_BRANCH}; commit on the epic branch (\`git -C ${REPO_ROOT} add -A\`; \`git -C ${REPO_ROOT} commit -m "refactor(${epicId}): apply cross-ticket codex fixes"\`).
+Parse the JSON: only \`"error":"rate_limit"\` at the TOP LEVEL is a real rate-limit → status RATE_LIMITED (skip, not fatal). The phrase "rate limit" inside a \`"status":"complete"\` output is a code FINDING, not an error. On "complete": BEFORE you make ANY commit, capture PRECODEX_SHA = \`git -C ${REPO_ROOT} rev-parse HEAD\` (the EXACT state the per-ticket merges produced — you reset to it if your fixes regress the epic) and RETURN it as precodex_sha. Codex auto-fixes unambiguous CROSS-TICKET P1-P3; fix remaining cross-ticket P1/P2 on ${EPIC_BRANCH}; then stage WITHOUT sweeping untracked scratch — \`git -C ${REPO_ROOT} add -u\` (tracked-file edits) plus \`git -C ${REPO_ROOT} add <path>\` for any NEW file you deliberately created; do NOT \`git add -A\` (it would absorb the gitignored .swarm/ tree or other untracked scratch into the commit). Then make a SINGLE commit \`git -C ${REPO_ROOT} commit -m "refactor(${epicId}): apply cross-ticket codex fixes"\`.
 ${TEST_CMD ? `RE-VERIFY (only if you COMMITTED fixes): run the integration suite VERBATIM — \`${TEST_CMD}\` (it already targets ${REPO_ROOT}; run it as-is, do NOT prepend cd). Tee to \`${REPO_ROOT}/.swarm/test-results/${epicId}-cross-codex.txt\` (\`mkdir -p\` its dir first, as its OWN Bash call). ENV vs FAILURE: if the runner cannot execute at all (tooling/PATH/codegen/lockfile/missing-binary) set integration_tests=ENV_BLOCKED and new_failures=[]. Otherwise current_failures = ALL tests failing now (FULL identifiers: file + test name), compared to this BASELINE of pre-existing failures:
 ${BASELINE.length ? BASELINE.map((f) => `      - ${f}`).join('\n') : '      (none)'}
-new_failures = current failures whose FULL identifier is NOT in that baseline. EMPTY → integration_tests=PASS, KEEP the fix commit. NON-EMPTY → your fixes regressed the epic: REVERT with \`git -C ${REPO_ROOT} reset --hard HEAD~1\` so the epic branch is left EXACTLY as the per-ticket merges produced it, set reverted=true and integration_tests=NEW_FAILURES, and explain the cross-ticket issue you saw in report_md so the operator can resolve it manually. NEVER leave the epic branch in a worse state than before this step. If you committed NO fixes, integration_tests=NONE.` : `No project test command was detected — cross-ticket fixes CANNOT be integration-verified. Apply only fixes you are highly confident are safe; set integration_tests=NONE and say so in report_md.`}
+${NEW_FAILURES_RULE} Then decide: NON-EMPTY new_failures → your fixes regressed the epic: REVERT with \`git -C ${REPO_ROOT} reset --hard <PRECODEX_SHA>\` (the sha you captured BEFORE committing — this drops EVERY commit you made, however many, leaving the branch EXACTLY as the per-ticket merges produced it), set reverted=true and integration_tests=NEW_FAILURES, and explain the cross-ticket issue you saw in report_md so the operator can resolve it manually. EMPTY new_failures AND the suite actually ran → integration_tests=PASS, KEEP the fix commit. The suite could NOT run (ENV_BLOCKED, above) → KEEP the fix commit but report integration_tests=ENV_BLOCKED (UNVERIFIED — the workflow warns the operator to review before close). NEVER leave the epic branch in a worse state than before this step. If you committed NO fixes, integration_tests=NONE.` : `No project test command was detected — cross-ticket fixes CANNOT be integration-verified. Apply only fixes you are highly confident are safe; set integration_tests=NONE and say so in report_md.`}
 ${reportBlock({ id: epicId }, H.codex + ' (cross-ticket)', false)}
-Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count, integration_tests (PASS | NEW_FAILURES | ENV_BLOCKED | NONE), new_failures[], reverted (bool), and report_md (only when status=COMPLETE).`,
+Return status (COMPLETE | RATE_LIMITED | UNAVAILABLE), auto_fixed_count, integration_tests (PASS | NEW_FAILURES | ENV_BLOCKED | NONE), new_failures[], reverted (bool), precodex_sha (the HEAD sha you captured BEFORE committing — REQUIRED whenever you committed any fix, so the workflow can independently re-review and, if needed, revert your commit), and report_md (only when status=COMPLETE).`,
     // retries:0 — like the per-ticket codex this auto-fixes and COMMITS (non-idempotent); a dropped
     // response after a successful pass must not re-churn the epic diff. A genuine miss is non-fatal.
     { schema: EPIC_CODEX_SCHEMA, label: `cross-ticket codex ${epicId}`, phase: 'Cross-ticket review', model: ROUTE.codex, retries: 0 },
   )
   // Post the cross-ticket report to the EPIC issue (postPhase keys only on t.id).
   if (crossTicketCodex && crossTicketCodex.report_md) await postPhase({ id: epicId, title: plan.epic.title }, H.codex + ' (cross-ticket)', crossTicketCodex.report_md, { phase: 'Cross-ticket review' })
-  // One-line, machine-greppable outcome reused by the summary + next_steps. A SKIPPED run is reported
-  // (the operator may want a manual cross-model pass); a COMPLETE run that had to REVERT its fixes means
-  // a real cross-ticket issue remains for manual repair (the fix regressed the integration suite).
+
+  // CORRECTNESS RE-GATE — the per-ticket invariant "codex output never reaches merge unreviewed",
+  // applied at the epic level. The cross-ticket fix is committed straight onto the epic branch with NO
+  // later merge gate, so a KEPT fix gets an INDEPENDENT correctness review of its OWN diff
+  // (precodex_sha...HEAD). A passing integration suite is not enough — it cannot see a semantic / AC
+  // regression. Unlike the per-ticket re-gate we do NOT attempt a fix pass here (a fix-on-fix would
+  // itself be unverified with no gate behind it): not APPROVED ⇒ REVERT to the pre-codex sha so the
+  // unreviewed-and-unapproved fix never ships. Only runs when a fix was actually kept.
+  const keptCrossFix = crossTicketCodex && crossTicketCodex.status === 'COMPLETE' && !crossTicketCodex.reverted && (crossTicketCodex.auto_fixed_count || 0) > 0
+  if (keptCrossFix && crossTicketCodex.precodex_sha) {
+    const sha = crossTicketCodex.precodex_sha
+    const regate = await safeAgent(
+      `ROLE: code-reviewer-agent re-gating the CROSS-TICKET codex fixes for epic ${epicId} on ${EPIC_BRANCH} in ${REPO_ROOT}. The codex pass committed fixes ON TOP of the per-ticket merges; they passed the integration suite but have had NO correctness review, and there is no later merge gate. Review ONLY that fix diff — \`git -C ${REPO_ROOT} diff --name-only ${sha}...HEAD\` for the files and \`git -C ${REPO_ROOT} diff ${sha}...HEAD\` for content. Judge correctness, cross-ticket consistency, and whether any merged ticket's acceptance criteria were broken. READ-ONLY: do NOT edit or commit — if the fixes are not cleanly correct the workflow REVERTS them (a passing suite is not enough).
+${SHELL_RULES}
+PASS RULE: status=APPROVED ONLY if the cross-ticket fix diff is correct and introduces no behavior / AC regression; otherwise CHANGES_REQUESTED with blocking_findings (the fix will be reset to ${sha} and surfaced for manual repair).
+${reportBlock({ id: epicId }, H.codereview + ' (cross-ticket post-codex)', false)}
+Return status (APPROVED | CHANGES_REQUESTED | BLOCKED), blocking_findings[].`,
+      { schema: REVIEW_SCHEMA, label: `cross-ticket re-gate ${epicId}`, phase: 'Cross-ticket review', model: ROUTE.review },
+    )
+    if (regate && regate.report_md) await postPhase({ id: epicId, title: plan.epic.title }, H.codereview + ' (cross-ticket post-codex)', regate.report_md, { phase: 'Cross-ticket review' })
+    if (!gate(regate, 'APPROVED')) {
+      // Fail closed: an unreviewed-and-unapproved cross-ticket fix must not ship. Reset to the exact
+      // per-ticket-merge state (already integration-verified) — to the CAPTURED sha, not HEAD~1, so it
+      // works regardless of how many commits codex made.
+      log(`Cross-ticket codex fix did NOT pass the correctness re-gate (${regate ? regate.status : 'no result'}) — reverting to ${sha} (fail closed).`)
+      await safeAgent(
+        `Revert the cross-ticket codex fix on ${EPIC_BRANCH} in ${REPO_ROOT}: run \`git -C ${REPO_ROOT} reset --hard ${sha}\` as its OWN Bash call so the epic branch is left EXACTLY as the per-ticket merges produced it. Return status only ("DONE").
+${SHELL_RULES}`,
+        { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string' } } }, label: `cross-ticket revert ${epicId}`, phase: 'Cross-ticket review', model: ROUTE.merge },
+      )
+      crossTicketCodex.reverted = true
+      crossRegateReverted = true
+    }
+  } else if (keptCrossFix && !crossTicketCodex.precodex_sha) {
+    // No pre-codex sha ⇒ the re-gate (and an auto-revert) cannot run. Do NOT silently ship unreviewed
+    // code: flag it so the summary + next_steps tell the operator to review the kept fix manually.
+    log(`WARN cross-ticket codex kept a fix but returned no precodex_sha — cannot run the correctness re-gate; flagged for manual review.`)
+    crossTicketCodex.regate_unverified = true
+  }
+
+  // PUSH the kept cross-ticket fix so it reaches origin / the PR. The per-ticket merges already pushed
+  // their own commits; this epic-level commit is otherwise local-only and would be silently dropped on a
+  // --push run (the PR step only runs `gh pr edit/create`, never pushes the branch). Only when a fix
+  // actually survived BOTH the integration gate and the correctness re-gate above.
+  if (flags.push && crossTicketCodex && crossTicketCodex.status === 'COMPLETE' && !crossTicketCodex.reverted && (crossTicketCodex.auto_fixed_count || 0) > 0) {
+    await safeAgent(
+      `Push the epic branch so the kept cross-ticket codex fix reaches origin: run \`git -C ${REPO_ROOT} push origin ${EPIC_BRANCH}\` as its OWN Bash call (ignore "Everything up-to-date"). Return status only ("DONE").
+${SHELL_RULES}`,
+      { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string' } } }, label: `cross-ticket push ${epicId}`, phase: 'Cross-ticket review', model: ROUTE.merge },
+    )
+    log(`Pushed the kept cross-ticket codex fix to origin/${EPIC_BRANCH}.`)
+  }
+
+  // ONE if/else-if chain over the crossTicketCodex outcome → the machine-greppable summary string that
+  // the `cross_ticket_codex` summary field + next_steps reuse. A SKIPPED run is reported (the operator
+  // may want a manual cross-model pass); a COMPLETE run whose fix was REVERTED — by the integration suite
+  // OR the correctness re-gate — means a real cross-ticket issue remains for manual repair; a kept-but-
+  // unverified fix (ENV_BLOCKED / no re-gate) ships code that needs a manual look. The live progress line
+  // is derived FROM that summary (no second discriminant chain to keep in lockstep — the per-ticket codex
+  // likewise collapses to one line); all skips are non-fatal: the epic work is already merged.
   if (!crossTicketCodex) crossCodexSummary = 'SKIPPED — codex returned no result; run a cross-model review of the epic diff manually'
   else if (crossTicketCodex.status === 'RATE_LIMITED') crossCodexSummary = 'SKIPPED — codex rate-limited; re-run later or review the epic diff manually'
   else if (crossTicketCodex.status === 'UNAVAILABLE') crossCodexSummary = 'SKIPPED — codex MCP unavailable; review the epic diff manually'
+  else if (crossRegateReverted) crossCodexSummary = 'COMPLETE — cross-ticket fix REVERTED by the correctness re-gate (an independent review did not approve it); a cross-ticket issue remains for manual repair'
   else if (crossTicketCodex.reverted) crossCodexSummary = `COMPLETE — fixes REVERTED (introduced new integration failures: ${(crossTicketCodex.new_failures || []).slice(0, 5).join('; ') || 'see report'}); a cross-ticket issue remains for manual repair`
+  else if (crossTicketCodex.regate_unverified) crossCodexSummary = `COMPLETE — ${crossTicketCodex.auto_fixed_count || 0} cross-ticket fix(es) KEPT but NOT re-gated (no precodex_sha); review the epic diff manually before /close-epic`
   else crossCodexSummary = `COMPLETE — ${crossTicketCodex.auto_fixed_count || 0} cross-ticket fix(es) applied & kept; integration: ${crossTicketCodex.integration_tests || 'NONE'}`
-  if (!crossTicketCodex) log(`Cross-ticket codex skipped (agent returned no result) — non-fatal; epic work already merged.`)
-  else if (crossTicketCodex.status === 'COMPLETE') log(`Cross-ticket codex COMPLETE${crossTicketCodex.auto_fixed_count ? ` (${crossTicketCodex.auto_fixed_count} fix(es))` : ''} — integration: ${crossTicketCodex.integration_tests || 'NONE'}${crossTicketCodex.reverted ? ' (fixes REVERTED — they regressed the suite)' : ''}.`)
-  else log(`Cross-ticket codex ${crossTicketCodex.status} — skipped, non-fatal.`)
+  log(`Cross-ticket codex — ${crossCodexSummary}`)
 }
 
 // ═══════════════════════════════════ Report ═════════════════════════════════
@@ -1683,10 +1757,15 @@ if (blockedList.length) nextStepsParts.push(`${blockedList.length} ticket(s) BLO
 if (unprocessed.length) nextStepsParts.push(`${unprocessed.length} ticket(s) never processed (${unprocessed.map((u) => u.id).join(', ')}) — re-run to pick them up.`)
 if (!flags.push && (doneIds.length || mergedPending.length)) nextStepsParts.push(`Local-only run — nothing was pushed; re-run with --push to push ${EPIC_BRANCH} and open the PR, or push it yourself.`)
 if (ISO) nextStepsParts.push(`The dedicated epic worktree ${REPO_ROOT} is kept for inspection/PR/close-epic; when fully done, remove it with ${MAIN_REPO && MAIN_REPO !== REPO_ROOT ? `\`git -C ${MAIN_REPO} worktree remove ${REPO_ROOT}\`` : '`git worktree remove` run FROM the main repo (not from inside the worktree itself)'} (keeps the ${EPIC_BRANCH} branch).`)
-// Cross-ticket codex nudge: a reverted COMPLETE run flags an unresolved cross-ticket issue; a SKIP
-// (rate-limit / unavailable / no-result) means the epic diff never got a cross-model pass at all.
-if (crossTicketCodex && crossTicketCodex.status === 'COMPLETE' && crossTicketCodex.reverted) nextStepsParts.push(`Cross-ticket codex found a fix that REGRESSED the integration suite and reverted it — a cross-ticket integration issue likely remains: read the "${H.codex} (cross-ticket)" comment on ${epicId} and resolve it before /close-epic.`)
-else if (mergedIds.size > 0 && (!crossTicketCodex || crossTicketCodex.status !== 'COMPLETE')) nextStepsParts.push(`Cross-ticket codex review did not complete (${crossCodexSummary}) — consider a manual cross-model review of the epic diff before /close-epic.`)
+// Cross-ticket codex nudge: a reverted COMPLETE run (by the integration suite OR the correctness
+// re-gate) flags an unresolved cross-ticket issue; a kept-but-unverified fix (ENV_BLOCKED / no test
+// command / no re-gate) shipped epic-level code that was NOT verified end-to-end; a SKIP (rate-limit /
+// unavailable / no-result) means the epic diff never got a cross-model pass at all. Gated on >1 ticket
+// to match the cross-ticket phase itself — a single-ticket epic intentionally never runs it.
+const crossKeptUnverified = crossTicketCodex && crossTicketCodex.status === 'COMPLETE' && !crossTicketCodex.reverted && (crossTicketCodex.auto_fixed_count || 0) > 0 && (crossTicketCodex.integration_tests === 'ENV_BLOCKED' || crossTicketCodex.integration_tests === 'NONE' || crossTicketCodex.regate_unverified)
+if (crossTicketCodex && crossTicketCodex.status === 'COMPLETE' && crossTicketCodex.reverted) nextStepsParts.push(`Cross-ticket codex's fix was REVERTED (${crossRegateReverted ? 'it failed an independent correctness re-review' : 'it regressed the integration suite'}) — a cross-ticket issue likely remains: read the "${H.codex} (cross-ticket)" comment on ${epicId} and resolve it before /close-epic.`)
+else if (crossKeptUnverified) nextStepsParts.push(`Cross-ticket codex KEPT a fix that was NOT fully verified (${crossTicketCodex.regate_unverified ? 'correctness re-gate could not run — no precodex_sha' : `integration: ${crossTicketCodex.integration_tests}`}) — do a manual cross-model review of the epic diff before /close-epic.`)
+else if (mergedIds.size > 1 && (!crossTicketCodex || crossTicketCodex.status !== 'COMPLETE')) nextStepsParts.push(`Cross-ticket codex review did not complete (${crossCodexSummary}) — consider a manual cross-model review of the epic diff before /close-epic.`)
 if (!nothingDone && blockedList.length === 0 && unprocessed.length === 0) nextStepsParts.push(`All tracked tickets are resolved — run /close-epic ${epicId} once they're confirmed Done.`)
 const summary = {
   version: VERSION,
