@@ -363,3 +363,49 @@ jq -c 'select(.type == "attachment" and .attachmentType == "command_permissions"
   ~/.claude/projects/*/*.jsonl | head -3
 ```
 The listed tools are the actual session allowlist. If `Bash(pnpm:*)` isn't there, add it to the command's frontmatter.
+
+### Issue: `/epic-swarm-workflow` (the dynamic workflow) halts mid/late run waiting for an approval
+
+**Symptom:** A long `/pm-vibecode-ops:epic-swarm-workflow` run stalls — often hours in, near the end — on a single permission prompt and sits there until you notice. The run isn't crashed; it's blocked waiting for you to click *Allow*.
+
+**Root cause:** The dynamic workflow's subagents run under your **session permission mode**, not a command's `allowed-tools` frontmatter (the dynamic workflow has none — the issue above doesn't apply to it). In the usual unattended mode — `acceptEdits` (the `auto` mode toggled with shift+tab) — the **Write/Edit/Read tools auto-approve, but Bash and MCP tools still go through your `allow`/`ask`/`deny` rules**. So any Bash command or MCP tool the workflow runs that isn't on your allowlist raises a prompt and blocks the run. Two specifics bite here:
+
+1. **`Bash(...)` patterns are literal-prefix matches with no awareness of git's `-C` flag.** The workflow always invokes git as `git -C <dir> …` (its no-`cd` shell policy), so a per-subcommand entry like `Bash(git worktree:*)` does **not** match `git -C /path worktree …`. You must allow the `git:*` family.
+2. The project's **test/build command** (run by the merge gate, the in-worktree full-suite check, and the cross-ticket re-verify) and the `.swarm/` **scratch writes** (`mkdir`, `tee` for `test-results`) aren't on a typical allowlist either.
+
+**Fix — recommended allowlist.** Add this to the **target repository's** `.claude/settings.json` (the repo the swarm operates on, not this plugin repo). It pre-approves exactly what the workflow runs:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh pr:*)",
+      "Bash(pnpm:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(yarn:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(tee:*)",
+      "mcp__codex-review-server__codex_review_and_fix",
+      "mcp__linear-server__get_issue",
+      "mcp__linear-server__list_issues",
+      "mcp__linear-server__list_comments",
+      "mcp__linear-server__create_comment",
+      "mcp__linear-server__update_issue"
+    ]
+  }
+}
+```
+
+Adjust for your stack:
+- **Test/build runner:** keep the package-manager family your repo actually uses and drop the rest. For non-JS stacks add the right family — `Bash(cargo:*)`, `Bash(go:*)`, `Bash(python:*)`, `Bash(pytest:*)`.
+- **Linear connector:** the lines above are for the **Linear MCP server**. If you use the **claude.ai Linear** connector instead, swap them for `mcp__claude_ai_Linear__get_issue`, `…list_issues`, `…list_comments`, `…save_comment`, `…save_issue`. (The workflow loads whichever is present.)
+- **`default` permission mode** (not `acceptEdits`/`auto`): also add `"Read"`, `"Glob"`, `"Grep"`, `"Write"`, `"Edit"` so the workflow's file edits and the epic-lock state-cell don't prompt. In `acceptEdits`/`auto` mode those auto-approve and you don't need them.
+
+**Why allow the whole `git:*` family rather than scope it tighter?** Because Bash patterns match the literal command string and can't reliably constrain arguments (Claude Code's own guidance calls argument-scoping patterns fragile), and because the `git -C` form defeats per-subcommand patterns (point 1 above). Allowing `git:*` is safe **for this workflow specifically**: it never checks out or merges to `main`/`master`, and it never pushes unless you pass `--push`. The safety lives in the workflow logic, not the allowlist.
+
+**Note — no `rm` needed.** This list intentionally has **no** `Bash(rm:*)`. As of **v5.4.0** the epic lock is a Write-tool *state cell* (acquired/released by overwriting a file, never `mkdir`/`rm`), so the workflow issues no `rm` at all — releasing the lock used to be the one command that halted unattended runs at finalize. If you still get an `rm` prompt for `.swarm/.locks/…`, you're on a pre-5.4.0 install — check the run summary's `version` field and update.
+
+**Broad alternative:** launching the session in a fully non-prompting mode also avoids the halt, but that lifts the guardrail for *every* tool in the session, not just the workflow's — the scoped allowlist above is the safer default for an unattended run.

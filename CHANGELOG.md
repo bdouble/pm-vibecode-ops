@@ -18,6 +18,9 @@ Minor release — **"epic-swarm-workflow: no permission-halt + cross-ticket code
 ### Changed
 - **Guard tests** (`workflows/epic-swarm-workflow.test.mjs`): assert the lock never uses `rm`/`mkdir` and acquires/releases via the Write-tool state cell; assert the cross-ticket codex pass exists, reviews the full epic diff, skips non-fatally, and reverts a regressing fix.
 
+### Documentation
+- **Recommended allowlist for unattended runs.** A new section in `docs/TROUBLESHOOTING.md` (plus a compact copy in `commands/epic-swarm-workflow.md`) gives the `permissions.allow` block to pre-approve everything the dynamic workflow runs, so a long run never stalls on a prompt. Explains that dynamic-workflow subagents run under the **session** permission mode (in `acceptEdits` only Write/Edit auto-approve; Bash/MCP still hit `allow`/`ask`/`deny`), that `Bash(...)` patterns are **literal-prefix with no `-C` awareness** (so the `git -C <dir> …` form needs the `git:*` family, not `Bash(git worktree:*)`), and that **no `Bash(rm:*)` is required** (the v5.4.0 lock is a Write-tool state cell). Includes stack/connector variants and the broad-mode alternative.
+
 ---
 
 ## [5.3.1] - 2026-06-24

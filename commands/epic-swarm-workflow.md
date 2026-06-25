@@ -57,6 +57,32 @@ The plugin install directory is exposed to this command's shell as `${CLAUDE_PLU
 - **Cross-ticket review:** once all tickets have merged, an epic-level Codex pass reviews the combined epic diff for cross-ticket integration breakage. It is non-fatal — on a Codex rate-limit/outage the run completes anyway and the summary's `cross_ticket_codex` field plus `next_steps` say exactly what happened (so you can run a manual cross-model review if it was skipped). Because nothing gates after it, a fix it commits that regresses the integration suite is automatically reverted, and the run flags the unresolved cross-ticket issue for you.
 - **Concurrency:** by default the whole epic integrates in a **dedicated git worktree** (`.swarm/epics/<id>`), never your main checkout — so you can run swarms for **different epics** in the same repo at once, and your working tree is left untouched. A per-epic lock refuses an accidental second run of the **same** epic; the lock is a single state-cell file written/released with the **Write tool** (not `rm`/`mkdir`), so it never raises a permission prompt that would stall an unattended run. As a deterministic backstop the run captures your main tree's HEAD **and branch** at setup and re-reads them at finish — the summary's `main_tree_safety` field reports one of `ok` (untouched), `CHANGED` (the tree moved during the run — usually your own concurrent work, since ISO mode is built to let you keep using the main checkout; only occasionally another process), or `UNVERIFIED` (the assert couldn't run — never silently reported as `ok`). The framing is a neutral notice for you to judge, not a hijack accusation. (Note: this isolates *git* only — two epics writing the same local database/test backend still need separate data isolation.)
 
+## Avoiding permission prompts (recommended allowlist)
+
+A long unattended run can stall on a single approval prompt. The workflow's subagents run under your **session** permission mode: in `acceptEdits` (the `auto` mode) the Write/Edit tools auto-approve, but **Bash and MCP tools still go through your `allow`/`ask`/`deny` rules**. Pre-approve what the workflow runs by adding a `permissions.allow` block to the **target repo's** `.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh pr:*)",
+      "Bash(pnpm:*)", "Bash(npm:*)", "Bash(npx:*)", "Bash(yarn:*)",
+      "Bash(find:*)", "Bash(mkdir:*)", "Bash(tee:*)",
+      "mcp__codex-review-server__codex_review_and_fix",
+      "mcp__linear-server__get_issue", "mcp__linear-server__list_issues",
+      "mcp__linear-server__list_comments", "mcp__linear-server__create_comment",
+      "mcp__linear-server__update_issue"
+    ]
+  }
+}
+```
+
+- Keep the **test-runner family your repo actually uses** (add `Bash(cargo:*)` / `Bash(go:*)` / `Bash(python:*)` / `Bash(pytest:*)` for non-JS stacks).
+- **`Bash(git:*)`** (not a per-subcommand pattern) is deliberate: the workflow always runs `git -C <dir> …`, and Claude Code matches Bash patterns as a literal prefix with no `-C` awareness, so `Bash(git worktree:*)` would **not** match. It's safe here — the workflow never touches `main`/`master` and never pushes without `--push`.
+- **No `Bash(rm:*)`** is needed: the epic lock is a Write-tool state cell (v5.4.0+), so the workflow issues no `rm`.
+- Using the **claude.ai Linear** connector instead of the MCP server, or running in plain `default` mode (which also needs `Read`/`Glob`/`Grep`/`Write`/`Edit`)? See the full annotated block + variants in [docs/TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md#issue-epic-swarm-workflow-the-dynamic-workflow-halts-midlate-run-waiting-for-an-approval).
+
 ## Cost note
 
 A full run spawns many subagents (roughly 4–8 per ticket, scaled to effort). For a first run, start with `--dry-run` to see the tier classification, then `--max-tickets 1` end-to-end to gauge spend before running a whole epic. The `/workflows` view shows live per-agent token usage and lets you stop the run at any time without losing completed work.
