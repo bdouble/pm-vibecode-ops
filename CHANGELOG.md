@@ -5,6 +5,21 @@ All notable changes to PM Vibe Code Operations will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.0] - 2026-06-25
+
+Minor release — **"epic-swarm-workflow: no permission-halt + cross-ticket codex."** Two enhancements driven by the latest ProductLobster run (workflow `wf_7f92f89c-cd6`, epic `PRO-1788`, ~13.6h). All changes are confined to `workflows/epic-swarm-workflow.js` and its guard test (plus the command wrapper).
+
+### Fixed
+- **The epic lock no longer halts an unattended run on a permission prompt.** Forensics of the run showed the *only* destructive shell command the entire 13.6h issued was `rm -rf <repo>/.swarm/.locks/<id>.lock` to **release the lock** at finalize — and `rm` is not (and should not be) on any allowlist, so in acceptEdits (`auto`) mode that single `rm` raised a permission request and the workflow **stalled until the operator noticed**. The lock is now a single-FILE **state cell** acquired/released with the **Write tool** (which auto-approves in acceptEdits mode and creates parent dirs), never `mkdir`/`rm`: acquire writes `ACTIVE …`, release overwrites to `RELEASED …`, and freshness is the file's mtime via the allowlisted, read-only `find -mmin +1440` (24h staleness). The only property lost is `mkdir`'s atomicity on acquire; for a human-launched swarm the race that protected against is a sub-second double-launch of the *same* epic (the realistic case — relaunching an epic that is already running — is still caught by the presence+freshness check), an acceptable trade for never halting. The old dir-mtime "born stale" reclaim gotcha disappears (a `Write` refreshes the file mtime directly).
+
+### Added
+- **Cross-ticket (epic-level) codex review + fix.** After every ticket has merged, one codex pass now reviews the **whole epic diff** (epic branch vs the default branch) to catch integration issues no per-ticket review can see — a contract one ticket changed and another consumes inconsistently, a caller/callee split across tickets, helpers/types that diverged, a half-applied refactor. It honors the same **non-fatal skip contract** as the per-ticket codex (a top-level `rate_limit` → `RATE_LIMITED`, MCP down → `UNAVAILABLE`; the run completes and `cross_ticket_codex` in the summary + `next_steps` report exactly what happened). Because there is **no later merge gate** to catch a bad epic-level fix, anything codex commits is re-verified against the integration suite and **reverted (`reset --hard HEAD~1`) on any NEW failure**, leaving the epic branch exactly as the per-ticket merges produced it. The report posts to the **epic** issue under `## Cross-Model Review Report (cross-ticket)`. A new `Cross-ticket review` phase surfaces it in `/workflows` progress. Skipped entirely when nothing merged.
+
+### Changed
+- **Guard tests** (`workflows/epic-swarm-workflow.test.mjs`): assert the lock never uses `rm`/`mkdir` and acquires/releases via the Write-tool state cell; assert the cross-ticket codex pass exists, reviews the full epic diff, skips non-fatally, and reverts a regressing fix.
+
+---
+
 ## [5.3.1] - 2026-06-24
 
 Patch release — **"epic-swarm-workflow v5.3.0 self-review hardening."** An xhigh multi-agent code review of the v5.3.0 PR (#8) found that the new default `safeAgent` re-dispatch (`retries: 1`), introduced to absorb a transient mid-response drop, was applied **indiscriminately to non-idempotent, side-effecting agents** — so a first dispatch that *succeeded but lost its response* would re-run and produce a duplicate Linear comment, a false `BLOCKED_EMPTY_DIFF` on already-merged work, a false "already owned" lock abort, or a wasted codex pass — re-introducing the exact lost-work/cascade-skip class v5.3.0 set out to eliminate. This release makes the side-effecting agents **idempotent under re-dispatch** (so the retry stays safe) rather than disabling the retry, and closes a cluster of related correctness gaps the review surfaced. All changes are confined to `workflows/epic-swarm-workflow.js` and its guard test.
@@ -2375,6 +2390,7 @@ This changelog will be updated with each new release. See [CONTRIBUTING.md](CONT
 [3.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.2.0
 [3.1.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.1
 [3.1.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v3.1.0
+[5.4.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.4.0
 [5.3.1]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.3.1
 [5.3.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.3.0
 [5.2.0]: https://github.com/bdouble/pm-vibecode-ops/releases/tag/v5.2.0

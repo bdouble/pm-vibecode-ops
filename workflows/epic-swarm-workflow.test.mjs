@@ -204,3 +204,35 @@ test('source — first phase transitions the ticket to In Progress via the poste
   assert.ok(src.includes("{ state: 'In Progress'"), 'the first phase must set In Progress through postPhase')
   assert.ok(src.includes('linear_reporting:'), 'the summary must surface the Linear-reporting tally')
 })
+
+// ── No permission-halt: the epic lock is a Write-tool state cell, never `rm`/`mkdir` (2026-06-25) ──
+// Motivation: in the ProductLobster run wf_7f92f89c-cd6 the ONLY destructive shell command the whole
+// run issued was `rm -rf <…>/.swarm/.locks/<id>.lock` to release the lock; `rm` is not auto-approvable,
+// so in acceptEdits ("auto") mode it raised a permission prompt and the run HALTED at finalize.
+test('source — epic lock acquire/release uses the Write tool, never rm/mkdir (no permission-halt)', () => {
+  assert.ok(!src.includes('rm -rf <LOCK>'), 'no `rm -rf <LOCK>` may remain — it raises a permission prompt that stalls the run')
+  assert.ok(!src.includes('mkdir <LOCK>'), 'no `mkdir <LOCK>` may remain — acquire must use the Write tool')
+  assert.ok(!/rm -rf \$\{LOCK_PATH\}/.test(src), 'finalize must not `rm` the lock')
+  assert.ok(!/rm -rf \$\{lockPath\}/.test(src), 'releaseEpicLock must not `rm` the lock')
+  assert.ok(src.includes('const RELEASE_LOCK_INSTR ='), 'a shared Write-based release instruction must exist')
+  assert.ok(src.includes('OVERWRITING the lock file'), 'release must overwrite the lock via the Write tool, not delete it')
+  assert.ok(src.includes('used as a STATE CELL'), 'the lock must be documented as a single-file state cell')
+  // Freshness is still an allowlisted, read-only `find -mmin` check (24h staleness), not a dir mtime.
+  assert.ok(src.includes('find <LOCK> -maxdepth 0 -mmin +1440'), 'acquire must keep the read-only 24h staleness check')
+  assert.ok(src.includes('first line is'), 'acquire must key on the RELEASED/ACTIVE first line of the state cell')
+})
+
+// ── Cross-ticket (epic-level) codex review + fix (point-2, 2026-06-25) ──
+test('source — a cross-ticket codex pass reviews the whole epic diff after merge', () => {
+  assert.ok(src.includes('const EPIC_CODEX_SCHEMA ='), 'EPIC_CODEX_SCHEMA must exist')
+  assert.ok(src.includes('CROSS-TICKET Codex review driver'), 'the cross-ticket codex driver prompt must exist')
+  assert.ok(src.includes("phase('Cross-ticket review')"), 'a Cross-ticket review phase must exist')
+  assert.ok(src.includes('if (mergedIds.size > 0) {'), 'cross-ticket codex must be gated on something having merged')
+  assert.ok(src.includes('base_branch=${DEFAULT_BRANCH} (the FULL epic diff'), 'it must review the full epic diff vs the default branch, not one ticket')
+  // Same non-fatal skip contract as the per-ticket codex (rate-limit / unavailable → skip, report out).
+  assert.ok(src.includes('"error":"rate_limit"'), 'rate-limit detection must mirror the per-ticket codex')
+  assert.ok(/RATE_LIMITED.*UNAVAILABLE/.test(src), 'the cross-ticket codex must be able to skip non-fatally')
+  // No later merge gate, so a regressing fix is re-verified and reverted.
+  assert.ok(src.includes('reset --hard HEAD~1'), 'a cross-ticket fix that regresses the suite must be reverted')
+  assert.ok(src.includes('cross_ticket_codex:'), 'the summary must report the cross-ticket codex outcome')
+})
